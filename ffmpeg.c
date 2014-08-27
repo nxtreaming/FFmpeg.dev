@@ -155,6 +155,8 @@ static struct termios oldtty;
 static int restore_tty;
 #endif
 
+static int64_t last_valid_pkt_time;
+
 static void free_input_threads(void);
 
 
@@ -419,6 +421,15 @@ static int read_key(void)
 
 static int decode_interrupt_cb(void *ctx)
 {
+    int64_t tmp_time = last_valid_pkt_time;
+
+    if (tmp_time != AV_NOPTS_VALUE) {
+        //we use 20s as threshold
+        if (av_gettime_relative() > (tmp_time + 20 * 1000000)) {
+            av_log(NULL, AV_LOG_WARNING, "callback checking:timeout...\n");
+            return 1;
+         }
+    }
     return received_nb_signals > transcode_init_done;
 }
 
@@ -3364,6 +3375,7 @@ static int process_input(int file_index)
         return AVERROR(EAGAIN);
     }
 
+    last_valid_pkt_time = av_gettime_relative();
     reset_eagain();
 
     if (do_pkt_dump) {
@@ -3799,6 +3811,7 @@ int main(int argc, char **argv)
     int ret;
     int64_t ti;
 
+    last_valid_pkt_time = AV_NOPTS_VALUE;
     register_exit(ffmpeg_cleanup);
 
     setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */

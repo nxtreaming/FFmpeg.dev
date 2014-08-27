@@ -449,19 +449,22 @@ static int flv_write_trailer(AVFormatContext *s)
             put_avc_eos_tag(pb, sc->last_ts);
     }
 
-    file_size = avio_tell(pb);
+    if (pb->seekable) {
+        file_size = avio_tell(pb);
 
-    /* update information */
-    if (avio_seek(pb, flv->duration_offset, SEEK_SET) < 0)
-        av_log(s, AV_LOG_WARNING, "Failed to update header with correct duration.\n");
-    else
-        put_amf_double(pb, flv->duration / (double)1000);
-    if (avio_seek(pb, flv->filesize_offset, SEEK_SET) < 0)
-        av_log(s, AV_LOG_WARNING, "Failed to update header with correct filesize.\n");
-    else
-        put_amf_double(pb, file_size);
+        /* update information */
+        if (avio_seek(pb, flv->duration_offset, SEEK_SET) < 0)
+            av_log(s, AV_LOG_WARNING, "Failed to update header with correct duration.\n");
+        else
+            put_amf_double(pb, flv->duration / (double)1000);
+        if (avio_seek(pb, flv->filesize_offset, SEEK_SET) < 0)
+            av_log(s, AV_LOG_WARNING, "Failed to update header with correct filesize.\n");
+        else
+            put_amf_double(pb, file_size);
 
-    avio_seek(pb, file_size, SEEK_SET);
+        avio_seek(pb, file_size, SEEK_SET);
+    }
+
     return 0;
 }
 
