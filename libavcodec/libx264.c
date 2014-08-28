@@ -386,8 +386,6 @@ static av_cold int X264_init(AVCodecContext *avctx)
 
     x4->params.b_deblocking_filter        = avctx->flags & CODEC_FLAG_LOOP_FILTER;
 
-    x4->params.rc.f_pb_factor             = avctx->b_quant_factor;
-    x4->params.analyse.i_chroma_qp_offset = avctx->chromaoffset; 
     if (avctx->level > 0)
         x4->params.i_level_idc = avctx->level;
 
