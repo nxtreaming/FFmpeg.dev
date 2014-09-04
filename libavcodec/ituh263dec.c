@@ -481,14 +481,16 @@ static int h263_decode_block(MpegEncContext * s, int16_t * block,
 retry:
     {
     OPEN_READER(re, &s->gb);
+    i--; // offset by -1 to allow direct indexing of scan_table
     for(;;) {
         UPDATE_CACHE(re, &s->gb);
         GET_RL_VLC(level, run, re, &s->gb, rl->rl_vlc[0], TEX_VLC_BITS, 2, 0);
-        if (run == 66 && level){
-            av_log(s->avctx, AV_LOG_ERROR, "illegal ac vlc code at %dx%d\n", s->mb_x, s->mb_y);
-            return -1;
-        }
         if (run == 66) {
+            if (level){
+                CLOSE_READER(re, &s->gb);
+                av_log(s->avctx, AV_LOG_ERROR, "illegal ac vlc code at %dx%d\n", s->mb_x, s->mb_y);
+                return -1;
+            }
             /* escape */
             if (CONFIG_FLV_DECODER && s->h263_flv > 1) {
                 int is11 = SHOW_UBITS(re, &s->gb, 1);
@@ -529,16 +531,16 @@ retry:
             SKIP_COUNTER(re, &s->gb, 1);
         }
         i += run;
-        if (i > 64){
-            // redo update without last flag
-            i = i - run + ((run-1)&63);
+        if (i >= 64){
+            CLOSE_READER(re, &s->gb);
+            // redo update without last flag, revert -1 offset
+            i = i - run + ((run-1)&63) + 1;
             if (i < 64) {
                 // only last marker, no overrun
                 block[scan_table[i]] = level;
                 break;
             }
             if(s->alt_inter_vlc && rl == &ff_h263_rl_inter && !s->mb_intra){
-                CLOSE_READER(re, &s->gb);
                 //Looks like a hack but no, it's the way it is supposed to work ...
                 rl = &ff_rl_intra_aic;
                 i = 0;
@@ -549,10 +551,9 @@ retry:
             av_log(s->avctx, AV_LOG_ERROR, "run overflow at %dx%d i:%d\n", s->mb_x, s->mb_y, s->mb_intra);
             return -1;
         }
-        j = scan_table[i-1];
+        j = scan_table[i];
         block[j] = level;
     }
-    CLOSE_READER(re, &s->gb);
     }
 not_coded:
     if (s->mb_intra && s->h263_aic) {
