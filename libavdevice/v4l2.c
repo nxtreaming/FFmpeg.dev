@@ -264,12 +264,12 @@ static void list_framesizes(AVFormatContext *ctx, uint32_t pixelformat)
 }
 #endif
 
-static void list_formats(AVFormatContext *ctx, int fd, int type)
+static void list_formats(AVFormatContext *ctx, int type)
 {
     const struct video_data *s = ctx->priv_data;
     struct v4l2_fmtdesc vfd = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE };
 
-    while(!v4l2_ioctl(fd, VIDIOC_ENUM_FMT, &vfd)) {
+    while(!v4l2_ioctl(s->fd, VIDIOC_ENUM_FMT, &vfd)) {
         enum AVCodecID codec_id = avpriv_fmt_v4l2codec(vfd.pixelformat);
         enum AVPixelFormat pix_fmt = avpriv_fmt_v4l2ff(vfd.pixelformat, codec_id);
 
@@ -399,10 +399,23 @@ static void dummy_release_buffer(AVPacket *pkt)
 }
 #endif
 
+static int enqueue_buffer(struct video_data *s, struct v4l2_buffer *buf)
+{
+    int res = 0;
+
+    if (v4l2_ioctl(s->fd, VIDIOC_QBUF, buf) < 0) {
+        res = AVERROR(errno);
+        av_log(NULL, AV_LOG_ERROR, "ioctl(VIDIOC_QBUF): %s\n", av_err2str(res));
+    } else {
+        avpriv_atomic_int_add_and_fetch(&s->buffers_queued, 1);
+    }
+
+    return res;
+}
+
 static void mmap_release_buffer(void *opaque, uint8_t *data)
 {
     struct v4l2_buffer buf = { 0 };
-    int res;
     struct buff_data *buf_descriptor = opaque;
     struct video_data *s = buf_descriptor->s;
 
@@ -411,13 +424,7 @@ static void mmap_release_buffer(void *opaque, uint8_t *data)
     buf.index = buf_descriptor->index;
     av_free(buf_descriptor);
 
-    if (v4l2_ioctl(s->fd, VIDIOC_QBUF, &buf) < 0) {
-        res = AVERROR(errno);
-        av_log(NULL, AV_LOG_ERROR, "ioctl(VIDIOC_QBUF): %s\n",
-               av_err2str(res));
-    }
-
-    avpriv_atomic_int_add_and_fetch(&s->buffers_queued, 1);
+    enqueue_buffer(s, &buf);
 }
 
 #if HAVE_CLOCK_GETTIME && defined(CLOCK_MONOTONIC)
@@ -520,6 +527,7 @@ static int mmap_read_frame(AVFormatContext *ctx, AVPacket *pkt)
         av_log(ctx, AV_LOG_ERROR,
                "The v4l2 frame is %d bytes, but %d bytes are expected\n",
                buf.bytesused, s->frame_size);
+        enqueue_buffer(s, &buf);
         return AVERROR_INVALIDDATA;
     }
 
@@ -529,19 +537,16 @@ static int mmap_read_frame(AVFormatContext *ctx, AVPacket *pkt)
         res = av_new_packet(pkt, buf.bytesused);
         if (res < 0) {
             av_log(ctx, AV_LOG_ERROR, "Error allocating a packet.\n");
-            if (v4l2_ioctl(s->fd, VIDIOC_QBUF, &buf) == 0)
-                avpriv_atomic_int_add_and_fetch(&s->buffers_queued, 1);
+            enqueue_buffer(s, &buf);
             return res;
         }
         memcpy(pkt->data, s->buf_start[buf.index], buf.bytesused);
 
-        if (v4l2_ioctl(s->fd, VIDIOC_QBUF, &buf) < 0) {
-            res = AVERROR(errno);
-            av_log(ctx, AV_LOG_ERROR, "ioctl(VIDIOC_QBUF): %s\n", av_err2str(res));
+        res = enqueue_buffer(s, &buf);
+        if (res) {
             av_free_packet(pkt);
             return res;
         }
-        avpriv_atomic_int_add_and_fetch(&s->buffers_queued, 1);
     } else {
         struct buff_data *buf_descriptor;
 
@@ -559,8 +564,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
              * allocate a buffer for memcpying into it
              */
             av_log(ctx, AV_LOG_ERROR, "Failed to allocate a buffer descriptor\n");
-            if (v4l2_ioctl(s->fd, VIDIOC_QBUF, &buf) == 0)
-                avpriv_atomic_int_add_and_fetch(&s->buffers_queued, 1);
+            enqueue_buffer(s, &buf);
 
             return AVERROR(ENOMEM);
         }
@@ -571,8 +575,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
                                     buf_descriptor, 0);
         if (!pkt->buf) {
             av_log(ctx, AV_LOG_ERROR, "Failed to create a buffer\n");
-            if (v4l2_ioctl(s->fd, VIDIOC_QBUF, &buf) == 0)
-                avpriv_atomic_int_add_and_fetch(&s->buffers_queued, 1);
+            enqueue_buffer(s, &buf);
             av_freep(&buf_descriptor);
             return AVERROR(ENOMEM);
         }
@@ -857,7 +860,7 @@ static int v4l2_read_header(AVFormatContext *ctx)
            s->channel, input.name, (uint64_t)input.std);
 
     if (s->list_format) {
-        list_formats(ctx, s->fd, s->list_format);
+        list_formats(ctx, s->list_format);
         res = AVERROR_EXIT;
         goto fail;
     }
