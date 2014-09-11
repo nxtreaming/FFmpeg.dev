@@ -479,6 +479,7 @@ static int tee_write_packet(AVFormatContext *avf, AVPacket *pkt)
 
         filter_packet(avf2, &pkt2, avf2, tee->slaves[i].bsfs[s2]);
         if ((ret = av_interleaved_write_frame(avf2, &pkt2)) < 0)
+            av_log(avf2, AV_LOG_WARNING, "***tee muxer error:%s:%s***\n", avf2->filename, av_err2str(ret));
             if (!ret_all)
                 ret_all = ret;
     }
