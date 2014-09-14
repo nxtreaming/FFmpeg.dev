@@ -162,6 +162,8 @@ static int img_read_probe(AVProbeData *p)
             return AVPROBE_SCORE_MAX;
         else if (is_glob(p->filename))
             return AVPROBE_SCORE_MAX;
+        else if (p->buf_size == 0)
+            return 0;
         else if (av_match_ext(p->filename, "raw") || av_match_ext(p->filename, "gif"))
             return 5;
         else
@@ -574,7 +576,7 @@ static int bmp_probe(AVProbeData *p)
         return 0;
 
     if (!AV_RN32(b + 6)) {
-        return AVPROBE_SCORE_EXTENSION + 1;
+        return AVPROBE_SCORE_EXTENSION - 1; // lower than extension as bmp pipe has bugs
     } else {
         return AVPROBE_SCORE_EXTENSION / 4;
     }
