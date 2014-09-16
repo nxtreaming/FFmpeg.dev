@@ -155,7 +155,8 @@ static struct termios oldtty;
 static int restore_tty;
 #endif
 
-static int64_t last_valid_pkt_time;
+static int64_t read_packet_time;
+int64_t open_stream_time;
 
 static void free_input_threads(void);
 
@@ -421,14 +422,22 @@ static int read_key(void)
 
 static int decode_interrupt_cb(void *ctx)
 {
-    int64_t tmp_time = last_valid_pkt_time;
+    int64_t read_time = read_packet_time;
+    int64_t open_time = open_stream_time;
 
-    if (tmp_time != AV_NOPTS_VALUE) {
-        //we use 20s as threshold
-        if (av_gettime_relative() > (tmp_time + 20 * 1000000)) {
-            av_log(NULL, AV_LOG_WARNING, "callback checking:timeout...\n");
+    if (read_time != AV_NOPTS_VALUE) {
+        // we use 10s as threshold
+        if (av_gettime_relative() > (read_time + 10 * 1000000)) {
+            av_log(NULL, AV_LOG_WARNING, "read packet callback timeout...\n");
             return 1;
          }
+    }
+    if (open_time != AV_NOPTS_VALUE) {
+        // we use 20s as threshold
+        if (av_gettime_relative() > (open_time + 20 * 1000000)) {
+            av_log(NULL, AV_LOG_WARNING, "open stream callback timeout...\n");
+            return 1;
+        }
     }
     return received_nb_signals > transcode_init_done;
 }
@@ -3379,7 +3388,7 @@ static int process_input(int file_index)
         return AVERROR(EAGAIN);
     }
 
-    last_valid_pkt_time = av_gettime_relative();
+    read_packet_time = av_gettime_relative();
     reset_eagain();
 
     if (do_pkt_dump) {
@@ -3816,7 +3825,8 @@ int main(int argc, char **argv)
     int ret;
     int64_t ti;
 
-    last_valid_pkt_time = AV_NOPTS_VALUE;
+    read_packet_time = AV_NOPTS_VALUE;
+    open_stream_time = AV_NOPTS_VALUE;
     register_exit(ffmpeg_cleanup);
 
     setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */

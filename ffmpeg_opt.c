@@ -40,6 +40,7 @@
 #include "libavutil/parseutils.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/pixfmt.h"
+#include "libavutil/time.h"
 
 #define MATCH_PER_STREAM_OPT(name, type, outvar, fmtctx, st)\
 {\
@@ -863,8 +864,10 @@ static int open_input_file(OptionsContext *o, const char *filename)
     ic->interrupt_callback = int_cb;
 
     av_log(NULL, AV_LOG_INFO, "Try to open input stream: %s\n", filename);
+    open_stream_time = av_gettime_relative();
     /* open the input file with generic avformat function */
     err = avformat_open_input(&ic, filename, file_iformat, &o->g->format_opts);
+    open_stream_time = AV_NOPTS_VALUE;
     if (err < 0) {
         print_error(filename, err);
         exit_program(1);
