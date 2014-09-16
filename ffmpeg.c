@@ -155,8 +155,8 @@ static struct termios oldtty;
 static int restore_tty;
 #endif
 
-static int64_t read_packet_time;
-int64_t open_stream_time;
+static volatile int64_t read_packet_time;
+volatile int64_t open_stream_time;
 
 static void free_input_threads(void);
 

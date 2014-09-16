@@ -491,7 +491,7 @@ extern int frame_bits_per_raw_sample;
 extern AVIOContext *progress_avio;
 extern float max_error_rate;
 
-extern int64_t open_stream_time;
+extern volatile int64_t open_stream_time;
 
 extern const AVIOInterruptCB int_cb;
 
