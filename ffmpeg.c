@@ -433,8 +433,8 @@ static int decode_interrupt_cb(void *ctx)
          }
     }
     if (open_time != AV_NOPTS_VALUE) {
-        // we use 20s as threshold
-        if (av_gettime_relative() > (open_time + 20 * 1000000)) {
+        // we use 15s as threshold
+        if (av_gettime_relative() > (open_time + 15 * 1000000)) {
             av_log(NULL, AV_LOG_WARNING, "open stream callback timeout...\n");
             return 1;
         }
