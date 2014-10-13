@@ -112,6 +112,7 @@ static int64_t update_size(AVIOContext *pb, int64_t pos)
 static int supports_edts(MOVMuxContext *mov)
 {
     // EDTS with fragments is tricky as we don't know the duration when its written
+    // also we might end up having to write the EDTS before the first packet, which would fail
     return (mov->use_editlist<0 && !(mov->flags & FF_MOV_FLAG_FRAGMENT)) || mov->use_editlist>0;
 }
 
@@ -2186,7 +2187,8 @@ static int mov_write_tapt_tag(AVIOContext *pb, MOVTrack *track)
 }
 
 // This box seems important for the psp playback ... without it the movie seems to hang
-static int mov_write_edts_tag(AVIOContext *pb, MOVTrack *track)
+static int mov_write_edts_tag(AVIOContext *pb, MOVMuxContext *mov,
+                              MOVTrack *track)
 {
     int64_t duration = av_rescale_rnd(track->track_duration, MOV_TIMESCALE,
                                       track->timescale, AV_ROUND_UP);
@@ -2211,6 +2213,11 @@ static int mov_write_edts_tag(AVIOContext *pb, MOVTrack *track)
 
     avio_wb32(pb, entry_count);
     if (delay > 0) { /* add an empty edit to delay presentation */
+        /* In the positive delay case, the delay includes the cts
+         * offset, and the second edit list entry below trims out
+         * the same amount from the actual content. This makes sure
+         * that the offsetted last sample is included in the edit
+         * list duration as well. */
         if (version == 1) {
             avio_wb64(pb, delay);
             avio_wb64(pb, -1);
@@ -2220,10 +2227,24 @@ static int mov_write_edts_tag(AVIOContext *pb, MOVTrack *track)
         }
         avio_wb32(pb, 0x00010000);
     } else {
+        /* Avoid accidentally ending up with start_ct = -1 which has got a
+         * special meaning. Normally start_ct should end up positive or zero
+         * here, but use FFMIN in case dts is a a small positive integer
+         * rounded to 0 when represented in MOV_TIMESCALE units. */
         av_assert0(av_rescale_rnd(track->cluster[0].dts, MOV_TIMESCALE, track->timescale, AV_ROUND_DOWN) <= 0);
-        start_ct  = -FFMIN(track->cluster[0].dts, 0); //FFMIN needed due to rounding
+        start_ct  = -FFMIN(track->cluster[0].dts, 0);
+        /* Note, this delay is calculated from the pts of the first sample,
+         * ensuring that we don't reduce the duration for cases with
+         * dts<0 pts=0. */
         duration += delay;
     }
+
+    /* For fragmented files, we don't know the full length yet. Setting
+     * duration to 0 allows us to only specify the offset, including
+     * the rest of the content (from all future fragments) without specifying
+     * an explicit duration. */
+    if (mov->flags & FF_MOV_FLAG_FRAGMENT)
+        duration = 0;
 
     /* duration */
     if (version == 1) {
@@ -2336,7 +2357,7 @@ static int mov_write_trak_tag(AVIOContext *pb, MOVMuxContext *mov,
     ffio_wfourcc(pb, "trak");
     mov_write_tkhd_tag(pb, mov, track, st);
     if (supports_edts(mov))
-        mov_write_edts_tag(pb, track);  // PSP Movies and several other cases require edts box
+        mov_write_edts_tag(pb, mov, track);  // PSP Movies and several other cases require edts box
     if (track->tref_tag)
         mov_write_tref_tag(pb, track);
     mov_write_mdia_tag(pb, track);
@@ -3655,7 +3676,7 @@ static int mov_flush_fragment(AVFormatContext *s)
             }
             info = &track->frag_info[track->nb_frag_info - 1];
             info->offset   = avio_tell(s->pb);
-            info->time     = mov->tracks[i].frag_start;
+            info->time     = track->frag_start;
             info->duration = duration;
             mov_write_tfrf_tags(s->pb, mov, track);
 
@@ -3828,8 +3849,14 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
     if (!trk->entry && trk->start_dts == AV_NOPTS_VALUE && !supports_edts(mov)) {
         trk->cluster[trk->entry].dts = trk->start_dts = 0;
     }
-    if (trk->start_dts == AV_NOPTS_VALUE)
+    if (trk->start_dts == AV_NOPTS_VALUE) {
         trk->start_dts = pkt->dts;
+        if (pkt->dts && mov->flags & FF_MOV_FLAG_EMPTY_MOOV)
+            av_log(s, AV_LOG_WARNING,
+                   "Track %d starts with a nonzero dts %"PRId64". This "
+                   "currently isn't handled correctly in combination with "
+                   "empty_moov.\n", pkt->stream_index, pkt->dts);
+    }
     trk->track_duration = pkt->dts - trk->start_dts + pkt->duration;
     trk->last_sample_is_subtitle_end = 0;
 
