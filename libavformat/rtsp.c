@@ -1737,13 +1737,14 @@ redirect:
             goto fail;
         }
     } else {
+        int ret;
         /* open the tcp connection */
         ff_url_join(tcpname, sizeof(tcpname), lower_rtsp_proto, NULL,
                     host, port,
                     "?timeout=%d", rt->stimeout);
-        if (ffurl_open(&rt->rtsp_hd, tcpname, AVIO_FLAG_READ_WRITE,
-                       &s->interrupt_callback, NULL) < 0) {
-            err = AVERROR(EIO);
+        if ((ret = ffurl_open(&rt->rtsp_hd, tcpname, AVIO_FLAG_READ_WRITE,
+                       &s->interrupt_callback, NULL)) < 0) {
+            err = ret;
             goto fail;
         }
         rt->rtsp_hd_out = rt->rtsp_hd;
@@ -1797,6 +1798,8 @@ redirect:
         err = ff_rtsp_setup_input_streams(s, reply);
     else if (CONFIG_RTSP_MUXER)
         err = ff_rtsp_setup_output_streams(s, host);
+    else
+        av_assert0(0);
     if (err)
         goto fail;
 
