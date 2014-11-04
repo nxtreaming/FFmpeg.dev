@@ -299,11 +299,17 @@ static void add_pid_to_pmt(MpegTSContext *ts, unsigned int programid,
                            unsigned int pid)
 {
     struct Program *p = get_program(ts, programid);
+    int i;
     if (!p)
         return;
 
     if (p->nb_pids >= MAX_PIDS_PER_PROGRAM)
         return;
+
+    for (i = 0; i < MAX_PIDS_PER_PROGRAM; i++)
+        if (p->pids[i] == pid)
+            return;
+
     p->pids[p->nb_pids++] = pid;
 }
 
@@ -1797,10 +1803,10 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
 
     if (h->tid != PMT_TID)
         return;
-    if (ts->skip_changes)
-        return;
 
-    clear_program(ts, h->id);
+    if (!ts->skip_clear)
+        clear_program(ts, h->id);
+
     pcr_pid = get16(&p, p_end);
     if (pcr_pid < 0)
         return;
