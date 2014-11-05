@@ -306,7 +306,7 @@ static void add_pid_to_pmt(MpegTSContext *ts, unsigned int programid,
     if (p->nb_pids >= MAX_PIDS_PER_PROGRAM)
         return;
 
-    for (i = 0; i < MAX_PIDS_PER_PROGRAM; i++)
+    for (i = 0; i < p->nb_pids; i++)
         if (p->pids[i] == pid)
             return;
 
@@ -1798,8 +1798,8 @@ static void pmt_cb(MpegTSFilter *filter, const uint8_t *section, int section_len
     if (parse_section_header(h, &p, p_end) < 0)
         return;
 
-    av_dlog(ts->stream, "sid=0x%x sec_num=%d/%d\n",
-            h->id, h->sec_num, h->last_sec_num);
+    av_dlog(ts->stream, "sid=0x%x sec_num=%d/%d version=%d\n",
+            h->id, h->sec_num, h->last_sec_num, h->version);
 
     if (h->tid != PMT_TID)
         return;
