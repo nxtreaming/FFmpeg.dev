@@ -533,8 +533,12 @@ int ff_mjpeg_decode_sof(MJpegDecodeContext *s)
         else              s->avctx->pix_fmt = AV_PIX_FMT_YUV420P16;
         s->avctx->color_range = s->cs_itu601 ? AVCOL_RANGE_MPEG : AVCOL_RANGE_JPEG;
         if (pix_fmt_id == 0x42111100) {
+            if (s->bits > 8)
+                goto unk_pixfmt;
             s->upscale_h = 6;
         } else if (pix_fmt_id == 0x24111100) {
+            if (s->bits > 8)
+                goto unk_pixfmt;
             s->upscale_v = 6;
         }
         break;
@@ -546,7 +550,7 @@ int ff_mjpeg_decode_sof(MJpegDecodeContext *s)
         break;
     default:
 unk_pixfmt:
-        av_log(s->avctx, AV_LOG_ERROR, "Unhandled pixel format 0x%x\n", pix_fmt_id);
+        av_log(s->avctx, AV_LOG_ERROR, "Unhandled pixel format 0x%x bits:%d\n", pix_fmt_id, s->bits);
         s->upscale_h = s->upscale_v = 0;
         return AVERROR_PATCHWELCOME;
     }
@@ -2111,6 +2115,8 @@ the_end:
                    avctx->pix_fmt == AV_PIX_FMT_YUVJ420P ||
                    avctx->pix_fmt == AV_PIX_FMT_YUV420P  ||
                    avctx->pix_fmt == AV_PIX_FMT_YUV420P16||
+                   avctx->pix_fmt == AV_PIX_FMT_YUVA420P  ||
+                   avctx->pix_fmt == AV_PIX_FMT_YUVA420P16||
                    avctx->pix_fmt == AV_PIX_FMT_GBRP     ||
                    avctx->pix_fmt == AV_PIX_FMT_GBRAP
                   );
@@ -2152,6 +2158,8 @@ the_end:
                    avctx->pix_fmt == AV_PIX_FMT_YUV440P  ||
                    avctx->pix_fmt == AV_PIX_FMT_YUVJ440P ||
                    avctx->pix_fmt == AV_PIX_FMT_YUVA444P ||
+                   avctx->pix_fmt == AV_PIX_FMT_YUVA420P  ||
+                   avctx->pix_fmt == AV_PIX_FMT_YUVA420P16||
                    avctx->pix_fmt == AV_PIX_FMT_GBRP     ||
                    avctx->pix_fmt == AV_PIX_FMT_GBRAP
                    );
