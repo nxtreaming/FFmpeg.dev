@@ -299,6 +299,7 @@ static int open_file(AVFormatContext *avf, unsigned fileno)
         avformat_close_input(&cat->avf);
         return ret;
     }
+    av_log(avf, AV_LOG_WARNING, "Open input url: %s\n", file->url);
     cat->cur_file = file;
     if (file->start_time == AV_NOPTS_VALUE)
         file->start_time = !fileno ? 0 :
