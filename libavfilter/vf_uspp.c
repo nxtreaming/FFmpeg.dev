@@ -45,7 +45,7 @@ typedef struct {
     int qscale_type;
     int temp_stride[3];
     uint8_t *src[3];
-    int16_t *temp[3];
+    uint16_t *temp[3];
     int outbuf_size;
     uint8_t *outbuf;
     AVCodecContext *avctx_enc[BLOCK*BLOCK];
@@ -152,7 +152,7 @@ static const uint8_t offset[511][2] = {
     { 3, 4}, {11, 4}, { 3,12}, {11,12}, { 7, 0}, {15, 0}, { 7, 8}, {15, 8},
 };
 
-static void store_slice_c(uint8_t *dst, const int16_t *src,
+static void store_slice_c(uint8_t *dst, const uint16_t *src,
                           int dst_stride, int src_stride,
                           int width, int height, int log2_scale)
 {
@@ -187,6 +187,7 @@ static inline int norm_qscale(int qscale, int type)
     case FF_QSCALE_TYPE_MPEG2: return qscale >> 1;
     case FF_QSCALE_TYPE_H264:  return qscale >> 2;
     case FF_QSCALE_TYPE_VP56:  return (63 - qscale + 2) >> 2;
+    default: av_assert0(0);
     }
     return qscale;
 }
@@ -293,6 +294,7 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_YUV410P,
         AV_PIX_FMT_YUVJ444P,
         AV_PIX_FMT_YUVJ420P,
+        AV_PIX_FMT_GRAY8,
         AV_PIX_FMT_NONE
     };
     ff_set_common_formats(ctx, ff_make_format_list(pix_fmts));
