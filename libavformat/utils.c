@@ -594,6 +594,8 @@ static int update_wrap_reference(AVFormatContext *s, AVStream *st, int stream_in
         int default_stream_index = av_find_default_stream_index(s);
         if (s->streams[default_stream_index]->pts_wrap_reference == AV_NOPTS_VALUE) {
             for (i = 0; i < s->nb_streams; i++) {
+                if (av_find_program_from_stream(s, NULL, i))
+                    continue;
                 s->streams[i]->pts_wrap_reference = pts_wrap_reference;
                 s->streams[i]->pts_wrap_behavior = pts_wrap_behavior;
             }
@@ -745,7 +747,7 @@ void ff_compute_frame_duration(AVFormatContext *s, int *pnum, int *pden, AVStrea
     *pden = 0;
     switch (st->codec->codec_type) {
     case AVMEDIA_TYPE_VIDEO:
-        if (st->r_frame_rate.num && !pc) {
+        if (st->r_frame_rate.num && !pc && s->iformat) {
             *pnum = st->r_frame_rate.den;
             *pden = st->r_frame_rate.num;
         } else if (st->time_base.num * 1000LL > st->time_base.den) {
@@ -2328,6 +2330,11 @@ static void estimate_timings_from_bit_rate(AVFormatContext *ic)
                     break;
                 }
                 bit_rate += st->codec->bit_rate;
+            } else if (st->codec->codec_type == AVMEDIA_TYPE_VIDEO && st->codec_info_nb_frames > 1) {
+                // If we have a videostream with packets but without a bitrate
+                // then consider the sum not known
+                bit_rate = 0;
+                break;
             }
         }
         ic->bit_rate = bit_rate;
