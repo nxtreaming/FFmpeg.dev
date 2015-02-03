@@ -2825,8 +2825,8 @@ static int get_std_framerate(int i)
  * And there are "variable" fps files this needs to detect as well. */
 static int tb_unreliable(AVCodecContext *c)
 {
-    if (c->time_base.den >= 101L * c->time_base.num ||
-        c->time_base.den <    5L * c->time_base.num ||
+    if (c->time_base.den >= 101LL * c->time_base.num ||
+        c->time_base.den <    5LL * c->time_base.num ||
         // c->codec_tag == AV_RL32("DIVX") ||
         // c->codec_tag == AV_RL32("XVID") ||
         c->codec_tag == AV_RL32("mp4v") ||
@@ -4095,7 +4095,8 @@ int avformat_network_init(void)
     ff_network_inited_globally = 1;
     if ((ret = ff_network_init()) < 0)
         return ret;
-    ff_tls_init();
+    if ((ret = ff_tls_init()) < 0)
+        return ret;
 #endif
     return 0;
 }
