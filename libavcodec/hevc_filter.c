@@ -246,7 +246,7 @@ static void restore_tqb_pixels(HEVCContext *s,
 
 static void sao_filter_CTB(HEVCContext *s, int x, int y)
 {
-    static const uint8_t band_tab[8] = { 0, 1, 2, 2, 3, 3, 4, 4 };
+    static const uint8_t sao_tab[8] = { 0, 1, 2, 2, 3, 3, 4, 4 };
     HEVCLocalContext *lc = s->HEVClc;
     int c_idx;
     int edges[4];  // 0 left 1 top 2 right 3 bottom
@@ -312,23 +312,30 @@ static void sao_filter_CTB(HEVCContext *s, int x, int y)
         int ctb_size_v = (1 << (s->sps->log2_ctb_size)) >> s->sps->vshift[c_idx];
         int width    = FFMIN(ctb_size_h, (s->sps->width  >> s->sps->hshift[c_idx]) - x0);
         int height   = FFMIN(ctb_size_v, (s->sps->height >> s->sps->vshift[c_idx]) - y0);
-        int tab      = band_tab[(FFALIGN(width, 8) >> 3) - 1];
+        int tab      = sao_tab[(FFALIGN(width, 8) >> 3) - 1];
         uint8_t *src = &s->frame->data[c_idx][y0 * stride_src + (x0 << s->sps->pixel_shift)];
         int stride_dst;
         uint8_t *dst;
 
         switch (sao->type_idx[c_idx]) {
         case SAO_BAND:
+            copy_CTB_to_hv(s, src, stride_src, x0, y0, width, height, c_idx,
+                           x_ctb, y_ctb);
+            if (s->pps->transquant_bypass_enable_flag ||
+                (s->sps->pcm.loop_filter_disable_flag && s->sps->pcm_enabled_flag)) {
             dst = lc->edge_emu_buffer;
             stride_dst = 2*MAX_PB_SIZE;
             copy_CTB(dst, src, width << s->sps->pixel_shift, height, stride_dst, stride_src);
-            copy_CTB_to_hv(s, src, stride_src, x0, y0, width, height, c_idx,
-                           x_ctb, y_ctb);
             s->hevcdsp.sao_band_filter[tab](src, dst, stride_src, stride_dst,
                                             sao->offset_val[c_idx], sao->band_position[c_idx],
                                             width, height);
             restore_tqb_pixels(s, src, dst, stride_src, stride_dst,
                                x, y, width, height, c_idx);
+            } else {
+            s->hevcdsp.sao_band_filter[tab](src, src, stride_src, stride_src,
+                                            sao->offset_val[c_idx], sao->band_position[c_idx],
+                                            width, height);
+            }
             sao->type_idx[c_idx] = SAO_APPLIED;
             break;
         case SAO_EDGE:
@@ -427,7 +434,9 @@ static void sao_filter_CTB(HEVCContext *s, int x, int y)
 
             copy_CTB_to_hv(s, src, stride_src, x0, y0, width, height, c_idx,
                            x_ctb, y_ctb);
-            s->hevcdsp.sao_edge_filter[restore](src, dst,
+            s->hevcdsp.sao_edge_filter[tab](src, dst, stride_src, sao->offset_val[c_idx],
+                                            sao->eo_class[c_idx], width, height);
+            s->hevcdsp.sao_edge_restore[restore](src, dst,
                                                 stride_src, stride_dst,
                                                 sao,
                                                 edges, width,

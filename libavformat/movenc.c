@@ -322,6 +322,7 @@ struct eac3_info {
     } substream[1]; /* TODO: support 8 independent substreams */
 };
 
+#if CONFIG_AC3_PARSER
 static int handle_eac3(MOVMuxContext *mov, AVPacket *pkt, MOVTrack *track)
 {
     GetBitContext gbc;
@@ -442,6 +443,7 @@ concatenate:
 
     return pkt->size;
 }
+#endif
 
 static int mov_write_eac3_tag(AVIOContext *pb, MOVTrack *track)
 {
@@ -1035,7 +1037,8 @@ static int mov_write_avid_tag(AVIOContext *pb, MOVTrack *track)
     ffio_wfourcc(pb, "ACLR");
     ffio_wfourcc(pb, "ACLR");
     ffio_wfourcc(pb, "0001");
-    if (track->enc->color_range == AVCOL_RANGE_MPEG) { /* Legal range (16-235) */
+    if (track->enc->color_range == AVCOL_RANGE_MPEG || /* Legal range (16-235) */
+        track->enc->color_range == AVCOL_RANGE_UNSPECIFIED) {
         avio_wb32(pb, 1); /* Corresponds to 709 in official encoder */
     } else { /* Full range (0-255) */
         avio_wb32(pb, 2); /* Corresponds to RGB in official encoder */
@@ -4188,13 +4191,15 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
         } else {
             size = ff_hevc_annexb2mp4(pb, pkt->data, pkt->size, 0, NULL);
         }
-    } else if (CONFIG_AC3_PARSER && enc->codec_id == AV_CODEC_ID_EAC3) {
+#if CONFIG_AC3_PARSER
+    } else if (enc->codec_id == AV_CODEC_ID_EAC3) {
         size = handle_eac3(mov, pkt, trk);
         if (size < 0)
             return size;
         else if (!size)
             goto end;
         avio_write(pb, pkt->data, size);
+#endif
     } else {
         avio_write(pb, pkt->data, size);
     }
