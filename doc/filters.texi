@@ -917,6 +917,7 @@ audio, the data is treated as if all the planes were concatenated.
 A list of Adler-32 checksums for each data plane.
 @end table
 
+@anchor{astats}
 @section astats
 
 Display time domain statistical information about the audio channels.
@@ -1393,6 +1394,24 @@ than the signal (making it, in some ways, similar to squelch):
 compand=.1|.1:.1|.1:-45.1/-45.1|-45/-900|0/-900:.01:45:-90:.1
 @end example
 @end itemize
+
+@section dcshift
+Apply a DC shift to the audio.
+
+This can be useful to remove a DC offset (caused perhaps by a hardware problem
+in the recording chain) from the audio. The effect of a DC offset is reduced
+headroom and hence volume. The @ref{astats} filter can be used to determine if
+a signal has a DC offset.
+
+@table @option
+@item shift
+Set the DC shift, allowed range is [-1, 1]. It indicates the amount to shift
+the audio.
+
+@item limitergain
+Optional. It should have a value much less than 1 (e.g. 0.05 or 0.02) and is
+used to prevent clipping.
+@end table
 
 @section earwax
 
@@ -7418,6 +7437,11 @@ much, but it will increase the amount of blurring needed to cover over
 the image and will destroy more information than necessary, and extra
 pixels will slow things down on a large logo.
 
+@section repeatfields
+
+This filter uses the repeat_field flag from the Video ES headers and hard repeats
+fields based on its value.
+
 @section rotate
 
 Rotate video by an arbitrary angle expressed in radians.
@@ -8554,6 +8578,10 @@ useful if not UTF-8.
 
 @item stream_index, si
 Set subtitles stream index. @code{subtitles} filter only.
+
+@item force_style
+Override default style or script info parameters of the subtitles. It accepts a
+string containing ASS style format @code{KEY=VALUE} couples separated by ",".
 @end table
 
 If the first key is not specified, it is assumed that the first value
@@ -8578,6 +8606,12 @@ subtitles=video.mkv
 To render the second subtitles stream from that file, use:
 @example
 subtitles=video.mkv:si=1
+@end example
+
+To make the subtitles stream from @file{sub.srt} appear in transparent green
+@code{DejaVu Serif}, use:
+@example
+subtitles=sub.srt:force_style='FontName=DejaVu Serif,PrimaryColour=&HAA00FF00'
 @end example
 
 @section super2xsai
