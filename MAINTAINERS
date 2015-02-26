@@ -166,6 +166,7 @@ Codecs:
   dca.c                                 Kostya Shishkov, Benjamin Larsson
   dnxhd*                                Baptiste Coudurier
   dpcm.c                                Mike Melanson
+  dss_sp.c                              Oleksij Rempel, Michael Niedermayer
   dv.c                                  Roman Shaposhnik
   dvbsubdec.c                           Anshul Maheshwari
   dxa.c                                 Kostya Shishkov
@@ -401,6 +402,7 @@ Muxers/Demuxers:
   cdxl.c                                Paul B Mahol
   crc.c                                 Michael Niedermayer
   daud.c                                Reimar Doeffinger
+  dss.c                                 Oleksij Rempel, Michael Niedermayer
   dtshddec.c                            Paul B Mahol
   dv.c                                  Roman Shaposhnik
   dxa.c                                 Kostya Shishkov
@@ -465,9 +467,12 @@ Muxers/Demuxers:
   rmdec.c, rmenc.c                      Ronald S. Bultje, Kostya Shishkov
   rtmp*                                 Kostya Shishkov
   rtp.c, rtpenc.c                       Martin Storsjo
+  rtpdec_ac3.*                          Gilles Chanteperdrix
+  rtpdec_dv.*                           Thomas Volkert
   rtpdec_h261.*, rtpenc_h261.*          Thomas Volkert
   rtpdec_hevc.*, rtpenc_hevc.*          Thomas Volkert
   rtpdec_asf.*                          Ronald S. Bultje
+  rtpdec_vp9.c                          Thomas Volkert
   rtpenc_mpv.*, rtpenc_aac.*            Martin Storsjo
   rtsp.c                                Luca Barbato
   sbgdec.c                              Nicolas George
