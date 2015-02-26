@@ -722,6 +722,7 @@ static int decode_init_thread_copy(AVCodecContext *avctx)
     memset(h->sps_buffers, 0, sizeof(h->sps_buffers));
     memset(h->pps_buffers, 0, sizeof(h->pps_buffers));
 
+    h->avctx               = avctx;
     h->rbsp_buffer[0]      = NULL;
     h->rbsp_buffer[1]      = NULL;
     h->rbsp_buffer_size[0] = 0;
@@ -1083,6 +1084,8 @@ void ff_h264_flush_change(H264Context *h)
                 h->delayed_pic[j++] = h->delayed_pic[i];
         h->delayed_pic[j] = NULL;
     }
+    ff_h264_unref_picture(h, &h->last_pic_for_ec);
+
     h->first_field = 0;
     ff_h264_reset_sei(h);
     h->recovery_frame = -1;

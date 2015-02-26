@@ -4402,6 +4402,41 @@ Default is @code{1.0}.
 
 @end table
 
+@subsection Commands
+The filter supports the following commands:
+
+@table @option
+@item contrast
+Set the contrast expression.
+
+@item brightness
+Set the brightness expression.
+
+@item saturation
+Set the saturation expression.
+
+@item gamma
+Set the gamma expression.
+
+@item gamma_r
+Set the gamma_r expression.
+
+@item gamma_g
+Set gamma_g expression.
+
+@item gamma_b
+Set gamma_b expression.
+
+@item gamma_weight
+Set gamma_weight expression.
+
+The command accepts the same syntax of the corresponding option.
+
+If the specified expression is not valid, it is kept at its current
+value.
+
+@end table
+
 @section extractplanes
 
 Extract color channel components from input video stream into
@@ -6909,6 +6944,116 @@ pad="2*iw:2*ih:ow-iw:oh-ih"
 @end example
 @end itemize
 
+@anchor{palettegen}
+@section palettegen
+
+Generate one palette for a whole video stream.
+
+It accepts the following options:
+
+@table @option
+@item max_colors
+Set the maximum number of colors to quantize in the palette.
+Note: the palette will still contain 256 colors; the unused palette entries
+will be black.
+
+@item reserve_transparent
+Create a palette of 255 colors maximum and reserve the last one for
+transparency. Reserving the transparency color is useful for GIF optimization.
+If not set, the maximum of colors in the palette will be 256. You probably want
+to disable this option for a standalone image.
+Set by default.
+
+@item stats_mode
+Set statistics mode.
+
+It accepts the following values:
+@table @samp
+@item full
+Compute full frame histograms.
+@item diff
+Compute histograms only for the part that differs from previous frame. This
+might be relevant to give more importance to the moving part of your input if
+the background is static.
+@end table
+
+Default value is @var{full}.
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Generate a representative palette of a given video using @command{ffmpeg}:
+@example
+ffmpeg -i input.mkv -vf palettegen palette.png
+@end example
+@end itemize
+
+@section paletteuse
+
+Use a palette to downsample an input video stream.
+
+The filter takes two inputs: one video stream and a palette. The palette must
+be a 256 pixels image.
+
+It accepts the following options:
+
+@table @option
+@item dither
+Select dithering mode. Available algorithms are:
+@table @samp
+@item bayer
+Ordered 8x8 bayer dithering (deterministic)
+@item heckbert
+Dithering as defined by Paul Heckbert in 1982 (simple error diffusion).
+Note: this dithering is sometimes considered "wrong" and is included as a
+reference.
+@item floyd_steinberg
+Floyd and Steingberg dithering (error diffusion)
+@item sierra2
+Frankie Sierra dithering v2 (error diffusion)
+@item sierra2_4a
+Frankie Sierra dithering v2 "Lite" (error diffusion)
+@end table
+
+Default is @var{sierra2_4a}.
+
+@item bayer_scale
+When @var{bayer} dithering is selected, this option defines the scale of the
+pattern (how much the crosshatch pattern is visible). A low value means more
+visible pattern for less banding, and higher value means less visible pattern
+at the cost of more banding.
+
+The option must be an integer value in the range [0,5]. Default is @var{2}.
+
+@item diff_mode
+If set, define the zone to process
+
+@table @samp
+@item rectangle
+Only the changing rectangle will be reprocessed. This is similar to GIF
+cropping/offsetting compression mechanism. This option can be useful for speed
+if only a part of the image is changing, and has use cases such as limiting the
+scope of the error diffusal @option{dither} to the rectangle that bounds the
+moving scene (it leads to more deterministic output if the scene doesn't change
+much, and as a result less moving noise and better GIF compression).
+@end table
+
+Default is @var{none}.
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Use a palette (generated for example with @ref{palettegen}) to encode a GIF
+using @command{ffmpeg}:
+@example
+ffmpeg -i input.mkv -i palette.png -lavfi paletteuse output.gif
+@end example
+@end itemize
+
 @section perspective
 
 Correct perspective of video not recorded perpendicular to the screen.
@@ -7675,8 +7820,8 @@ complete list of values. If not explicitly specified the filter applies
 the default flags.
 
 @item size, s
-Set the video size. For the syntax of this option, check the "Video size"
-section in the ffmpeg-utils manual.
+Set the video size. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 
 @item in_color_matrix
 @item out_color_matrix
@@ -8073,8 +8218,8 @@ The sample aspect ratio of the input frame, expressed in the form
 @var{num}/@var{den}.
 
 @item s
-The size of the input frame. For the syntax of this option, check the "Video size"
-section in the ffmpeg-utils manual.
+The size of the input frame. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 
 @item i
 The type of interlaced mode ("P" for "progressive", "T" for top field first, "B"
@@ -8567,10 +8712,10 @@ Set the filename of the subtitle file to read. It must be specified.
 
 @item original_size
 Specify the size of the original video, the video for which the ASS file
-was composed. For the syntax of this option, check the "Video size" section in
-the ffmpeg-utils manual. Due to a misdesign in ASS aspect ratio arithmetic,
-this is necessary to correctly scale the fonts if the aspect ratio has been
-changed.
+was composed. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Due to a misdesign in ASS aspect ratio arithmetic, this is necessary to
+correctly scale the fonts if the aspect ratio has been changed.
 
 @item charenc
 Set subtitles input character encoding. @code{subtitles} filter only. Only
@@ -8704,7 +8849,8 @@ The filter accepts the following options:
 
 @item layout
 Set the grid size (i.e. the number of lines and columns). For the syntax of
-this option, check the "Video size" section in the ffmpeg-utils manual.
+this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 
 @item nb_frames
 Set the maximum number of frames to render in the given area. It must be less
@@ -9762,8 +9908,8 @@ It accepts the following parameters:
 
 @item video_size
 Specify the size (width and height) of the buffered video frames. For the
-syntax of this option, check the "Video size" section in the ffmpeg-utils
-manual.
+syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 
 @item width
 The input video width.
@@ -9863,8 +10009,8 @@ Set the cellular automaton rule, it is a number ranging from 0 to 255.
 Default value is 110.
 
 @item size, s
-Set the size of the output video. For the syntax of this option, check
-the "Video size" section in the ffmpeg-utils manual.
+Set the size of the output video. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 
 If @option{filename} or @option{pattern} is specified, the size is set
 by default to the width of the specified initial state row, and the
@@ -10064,7 +10210,7 @@ This source accepts the following parameters:
 
 @item size
 The size of the video to generate. For the syntax of this option, check the
-"Video size" section in the ffmpeg-utils manual.
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 
 @item framerate
 The framerate of the generated video. It may be a string of the form
@@ -10153,7 +10299,7 @@ a dead cell.
 
 @item size, s
 Set the size of the output video. For the syntax of this option, check the
-"Video size" section in the ffmpeg-utils manual.
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
 
 If @option{filename} is specified, the size is set by default to the
 same size of the input file. If @option{size} is set, it must contain
@@ -10264,8 +10410,8 @@ coded on a @code{1/(N*N)} scale.
 
 @item size, s
 Specify the size of the sourced video. For the syntax of this option, check the
-"Video size" section in the ffmpeg-utils manual. The default value is
-"320x240".
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+The default value is @code{320x240}.
 
 This option is not available with the @code{haldclutsrc} filter.
 
@@ -10391,8 +10537,9 @@ Same as above but not rotated.
 Default value is @samp{lissajous}.
 
 @item size, s
-Set the video size for the output. For the syntax of this option, check the "Video size"
-section in the ffmpeg-utils manual. Default value is @code{400x400}.
+Set the video size for the output. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default value is @code{400x400}.
 
 @item rate, r
 Set the output frame rate. Default value is @code{25}.
@@ -10532,8 +10679,9 @@ activated. Default is @code{0}.
 
 @item size
 Set the video size. This option is for video only. For the syntax of this
-option, check the "Video size" section in the ffmpeg-utils manual. Default
-and minimum resolution is @code{640x480}.
+option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default and minimum resolution is @code{640x480}.
 
 @item meter
 Set the EBU scale meter. Default is @code{9}. Common values are @code{9} and
@@ -11355,9 +11503,9 @@ The filter accepts the following options:
 
 @table @option
 @item size, s
-Specify the video size for the output. For the syntax of this option, check
-the "Video size" section in the ffmpeg-utils manual. Default value is
-@code{640x512}.
+Specify the video size for the output. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default value is @code{640x512}.
 
 @item slide
 Specify how the spectrum should slide along the window.
@@ -11469,9 +11617,9 @@ The filter accepts the following options:
 
 @table @option
 @item size, s
-Specify the video size for the output. For the syntax of this option, check
-the "Video size" section in the ffmpeg-utils manual. Default value
-is "600x240".
+Specify the video size for the output. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default value is @code{600x240}.
 
 @item mode
 Set display mode.

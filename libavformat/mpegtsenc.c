@@ -30,6 +30,7 @@
 #include "libavcodec/internal.h"
 
 #include "avformat.h"
+#include "avio_internal.h"
 #include "internal.h"
 #include "mpegts.h"
 
@@ -1202,7 +1203,7 @@ static void mpegts_write_pes(AVFormatContext *s, AVStream *st,
 
 int ff_check_h264_startcode(AVFormatContext *s, const AVStream *st, const AVPacket *pkt)
 {
-    if (pkt->size < 5 || AV_RB32(pkt->data) != 0x0000001) {
+    if (pkt->size < 5 || AV_RB32(pkt->data) != 0x0000001 && AV_RB24(pkt->data) != 0x000001) {
         if (!st->nb_frames) {
             av_log(s, AV_LOG_ERROR, "H.264 bitstream malformed, "
                    "no startcode found, use the video bitstream filter 'h264_mp4toannexb' to fix it "
@@ -1327,9 +1328,7 @@ static int mpegts_write_packet_internal(AVFormatContext *s, AVPacket *pkt)
 
             ret = av_write_frame(ts_st->amux, &pkt2);
             if (ret < 0) {
-                avio_close_dyn_buf(ts_st->amux->pb, &data);
-                ts_st->amux->pb = NULL;
-                av_free(data);
+                ffio_free_dyn_buf(&ts_st->amux->pb);
                 return ret;
             }
             size            = avio_close_dyn_buf(ts_st->amux->pb, &data);
