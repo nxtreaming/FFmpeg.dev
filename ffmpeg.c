@@ -1202,8 +1202,8 @@ static void do_video_stats(OutputStream *ost, int frame_size)
     enc = ost->enc_ctx;
     if (enc->codec_type == AVMEDIA_TYPE_VIDEO) {
         frame_number = ost->st->nb_frames;
-        fprintf(vstats_file, "frame= %5d q= %2.1f ", frame_number, enc->coded_frame->quality / (float)FF_QP2LAMBDA);
-        if (enc->flags&CODEC_FLAG_PSNR)
+        fprintf(vstats_file, "frame= %5d q= %2.1f ", frame_number, enc->coded_frame ? enc->coded_frame->quality / (float)FF_QP2LAMBDA : 0);
+        if (enc->coded_frame && (enc->flags&CODEC_FLAG_PSNR))
             fprintf(vstats_file, "PSNR= %6.2f ", psnr(enc->coded_frame->error[0] / (enc->width * enc->height * 255.0 * 255.0)));
 
         fprintf(vstats_file,"f_size= %6d ", frame_size);
@@ -1216,7 +1216,7 @@ static void do_video_stats(OutputStream *ost, int frame_size)
         avg_bitrate = (double)(ost->data_size * 8) / ti1 / 1000.0;
         fprintf(vstats_file, "s_size= %8.0fkB time= %0.3f br= %7.1fkbits/s avg_br= %7.1fkbits/s ",
                (double)ost->data_size / 1024, ti1, bitrate, avg_bitrate);
-        fprintf(vstats_file, "type= %c\n", av_get_picture_type_char(enc->coded_frame->pict_type));
+        fprintf(vstats_file, "type= %c\n", enc->coded_frame ? av_get_picture_type_char(enc->coded_frame->pict_type) : 'I');
     }
 }
 
@@ -2380,7 +2380,7 @@ static enum AVPixelFormat get_format(AVCodecContext *s, const enum AVPixelFormat
                        "%s hwaccel requested for input stream #%d:%d, "
                        "but cannot be initialized.\n", hwaccel->name,
                        ist->file_index, ist->st->index);
-                exit_program(1);
+                return AV_PIX_FMT_NONE;
             }
             continue;
         }
@@ -2867,6 +2867,7 @@ static int transcode_init(void)
                     int idx = av_find_nearest_q_idx(ost->frame_rate, ost->enc->supported_framerates);
                     ost->frame_rate = ost->enc->supported_framerates[idx];
                 }
+                // reduce frame rate for mpeg4 to be within the spec limits
                 if (enc_ctx->codec_id == AV_CODEC_ID_MPEG4) {
                     av_reduce(&ost->frame_rate.num, &ost->frame_rate.den,
                               ost->frame_rate.num, ost->frame_rate.den, 65535);
@@ -3376,6 +3377,7 @@ static int check_keyboard_interaction(int64_t cur_time)
 static void *input_thread(void *arg)
 {
     InputFile *f = arg;
+    unsigned flags = f->non_blocking ? AV_THREAD_MESSAGE_NONBLOCK : 0;
     int ret = 0;
 
     while (1) {
@@ -3391,7 +3393,15 @@ static void *input_thread(void *arg)
             break;
         }
         av_dup_packet(&pkt);
-        ret = av_thread_message_queue_send(f->in_thread_queue, &pkt, 0);
+        ret = av_thread_message_queue_send(f->in_thread_queue, &pkt, flags);
+        if (flags && ret == AVERROR(EAGAIN)) {
+            flags = 0;
+            ret = av_thread_message_queue_send(f->in_thread_queue, &pkt, flags);
+            av_log(f->ctx, AV_LOG_WARNING,
+                   "Thread message queue blocking; consider raising the "
+                   "thread_queue_size option (current value: %d)\n",
+                   f->thread_queue_size);
+        }
         if (ret < 0) {
             if (ret != AVERROR_EOF)
                 av_log(f->ctx, AV_LOG_ERROR,
@@ -3440,7 +3450,7 @@ static int init_input_threads(void)
             strcmp(f->ctx->iformat->name, "lavfi"))
             f->non_blocking = 1;
         ret = av_thread_message_queue_alloc(&f->in_thread_queue,
-                                            8, sizeof(AVPacket));
+                                            f->thread_queue_size, sizeof(AVPacket));
         if (ret < 0)
             return ret;
 

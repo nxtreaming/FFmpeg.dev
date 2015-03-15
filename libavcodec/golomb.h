@@ -215,9 +215,7 @@ static inline int get_se_golomb(GetBitContext *gb)
 static inline int get_se_golomb_long(GetBitContext *gb)
 {
     unsigned int buf = get_ue_golomb_long(gb);
-    int sign;
-
-    sign = (buf & 1) - 1;
+    int sign = (buf & 1) - 1;
     return ((buf >> 1) ^ sign) + 1;
 }
 
@@ -259,8 +257,7 @@ static inline int dirac_get_se_golomb(GetBitContext *gb)
     uint32_t ret = svq3_get_ue_golomb(gb);
 
     if (ret) {
-        int sign;
-        sign = -get_bits1(gb);
+        int sign = -get_bits1(gb);
         ret = (ret ^ sign) - sign;
     }
 
@@ -284,7 +281,7 @@ static inline int get_ur_golomb(GetBitContext *gb, int k, int limit,
 
     if (log > 31 - limit) {
         buf >>= log - k;
-        buf  += (30 - log) << k;
+        buf  += (30U - log) << k;
         LAST_SKIP_BITS(re, gb, 32 + k - log);
         CLOSE_READER(re, gb);
 
@@ -320,7 +317,7 @@ static inline int get_ur_golomb_jpegls(GetBitContext *gb, int k, int limit,
     if (log - k >= 32 - MIN_CACHE_BITS + (MIN_CACHE_BITS == 32) &&
         32 - log < limit) {
         buf >>= log - k;
-        buf  += (30 - log) << k;
+        buf  += (30U - log) << k;
         LAST_SKIP_BITS(re, gb, 32 + k - log);
         CLOSE_READER(re, gb);
 
@@ -363,11 +360,7 @@ static inline int get_sr_golomb(GetBitContext *gb, int k, int limit,
                                 int esc_len)
 {
     int v = get_ur_golomb(gb, k, limit, esc_len);
-    int sign;
-
-    v++;
-    sign = (v & 1) - 1;
-    return ((v >> 1) ^ sign) - sign;
+    return (v >> 1) ^ -(v & 1);
 }
 
 /**

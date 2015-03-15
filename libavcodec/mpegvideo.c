@@ -2952,12 +2952,12 @@ int ff_mpv_lowest_referenced_row(MpegEncContext *s, int dir)
     }
 
     for (i = 0; i < mvs; i++) {
-        my = s->mv[dir][i][1]<<qpel_shift;
+        my = s->mv[dir][i][1];
         my_max = FFMAX(my_max, my);
         my_min = FFMIN(my_min, my);
     }
 
-    off = (FFMAX(-my_min, my_max) + 63) >> 6;
+    off = ((FFMAX(-my_min, my_max)<<qpel_shift) + 63) >> 6;
 
     return FFMIN(FFMAX(s->mb_y + off, 0), s->mb_height-1);
 unhandled:
@@ -3313,9 +3313,9 @@ void ff_init_block_index(MpegEncContext *s){ //FIXME maybe rename
     s->block_index[5]= s->mb_stride*(s->mb_y + s->mb_height + 2) + s->b8_stride*s->mb_height*2 + s->mb_x - 1;
     //block_index is not used by mpeg2, so it is not affected by chroma_format
 
-    s->dest[0] = s->current_picture.f->data[0] + ((s->mb_x - 1) <<  mb_size);
-    s->dest[1] = s->current_picture.f->data[1] + ((s->mb_x - 1) << (mb_size - s->chroma_x_shift));
-    s->dest[2] = s->current_picture.f->data[2] + ((s->mb_x - 1) << (mb_size - s->chroma_x_shift));
+    s->dest[0] = s->current_picture.f->data[0] + (int)((s->mb_x - 1U) <<  mb_size);
+    s->dest[1] = s->current_picture.f->data[1] + (int)((s->mb_x - 1U) << (mb_size - s->chroma_x_shift));
+    s->dest[2] = s->current_picture.f->data[2] + (int)((s->mb_x - 1U) << (mb_size - s->chroma_x_shift));
 
     if(!(s->pict_type==AV_PICTURE_TYPE_B && s->avctx->draw_horiz_band && s->picture_structure==PICT_FRAME))
     {
