@@ -1283,6 +1283,8 @@ static int estimate_best_b_count(MpegEncContext *s)
     int64_t best_rd  = INT64_MAX;
     int best_b_count = -1;
 
+    if (!c)
+        return AVERROR(ENOMEM);
     av_assert0(scale >= 0 && scale <= 3);
 
     //emms_c();
@@ -3706,8 +3708,11 @@ static int encode_picture(MpegEncContext *s, int picture_number)
             ff_msmpeg4_encode_picture_header(s, picture_number);
         else if (CONFIG_MPEG4_ENCODER && s->h263_pred)
             ff_mpeg4_encode_picture_header(s, picture_number);
-        else if (CONFIG_RV10_ENCODER && s->codec_id == AV_CODEC_ID_RV10)
-            ff_rv10_encode_picture_header(s, picture_number);
+        else if (CONFIG_RV10_ENCODER && s->codec_id == AV_CODEC_ID_RV10) {
+            ret = ff_rv10_encode_picture_header(s, picture_number);
+            if (ret < 0)
+                return ret;
+        }
         else if (CONFIG_RV20_ENCODER && s->codec_id == AV_CODEC_ID_RV20)
             ff_rv20_encode_picture_header(s, picture_number);
         else if (CONFIG_FLV_ENCODER && s->codec_id == AV_CODEC_ID_FLV1)

@@ -384,7 +384,7 @@ static av_cold int initFilter(int16_t **outFilter, int32_t **filterPos,
             int j;
             (*filterPos)[i] = xx;
             for (j = 0; j < filterSize; j++) {
-                int64_t d = (FFABS(((int64_t)xx << 17) - xDstInSrc)) << 13;
+                int64_t d = (FFABS(((int64_t)xx * (1 << 17)) - xDstInSrc)) << 13;
                 double floatd;
                 int64_t coeff;
 
@@ -1184,7 +1184,7 @@ av_cold int sws_init_context(SwsContext *c, SwsFilter *srcFilter,
     c->chrDstW = FF_CEIL_RSHIFT(dstW, c->chrDstHSubSample);
     c->chrDstH = FF_CEIL_RSHIFT(dstH, c->chrDstVSubSample);
 
-    FF_ALLOC_OR_GOTO(c, c->formatConvBuffer, FFALIGN(srcW*2+78, 16) * 2, fail);
+    FF_ALLOCZ_OR_GOTO(c, c->formatConvBuffer, FFALIGN(srcW*2+78, 16) * 2, fail);
 
     c->srcBpc = 1 + desc_src->comp[0].depth_minus1;
     if (c->srcBpc < 8)

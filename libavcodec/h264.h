@@ -866,7 +866,7 @@ int ff_h264_decode_mb_cabac(H264Context *h);
 
 void ff_h264_init_cabac_states(H264Context *h);
 
-void h264_init_dequant_tables(H264Context *h);
+void ff_h264_init_dequant_tables(H264Context *h);
 
 void ff_h264_direct_dist_scale_factor(H264Context *const h);
 void ff_h264_direct_ref_list_init(H264Context *const h);
@@ -949,7 +949,7 @@ static const uint8_t scan8[16 * 3 + 3] = {
     0 +  0 * 8, 0 +  5 * 8, 0 + 10 * 8
 };
 
-static av_always_inline uint32_t pack16to32(int a, int b)
+static av_always_inline uint32_t pack16to32(unsigned a, unsigned b)
 {
 #if HAVE_BIGENDIAN
     return (b & 0xFFFF) + (a << 16);
@@ -958,7 +958,7 @@ static av_always_inline uint32_t pack16to32(int a, int b)
 #endif
 }
 
-static av_always_inline uint16_t pack8to16(int a, int b)
+static av_always_inline uint16_t pack8to16(unsigned a, unsigned b)
 {
 #if HAVE_BIGENDIAN
     return (b & 0xFF) + (a << 8);

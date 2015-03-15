@@ -2,6 +2,11 @@ Entries are sorted chronologically from oldest to youngest within each release,
 releases are sorted from youngest to oldest.
 
 version <next>:
+- FFT video filter
+- TDSC decoder
+
+
+version 2.6:
 - nvenc encoder
 - 10bit spp filter
 - colorlevels filter
@@ -35,6 +40,7 @@ version <next>:
 - Fix stsd atom corruption in DNxHD QuickTimes
 - Canopus HQX decoder
 - RTP depacketization of T.140 text (RFC 4103)
+- Port MIPS optimizations to 64-bit
 
 
 version 2.5:

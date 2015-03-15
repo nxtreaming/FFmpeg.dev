@@ -338,7 +338,7 @@ struct WriterContext {
     unsigned int nb_section_frame;  ///< number of the frame  section in case we are in "packets_and_frames" section
     unsigned int nb_section_packet_frame; ///< nb_section_packet or nb_section_frame according if is_packets_and_frames
 
-    StringValidation string_validation;
+    int string_validation;
     char *string_validation_replacement;
     unsigned int string_validation_utf8_flags;
 };
@@ -2094,6 +2094,8 @@ static int show_stream(WriterContext *w, AVFormatContext *fmt_ctx, int stream_id
         case AVMEDIA_TYPE_VIDEO:
             print_int("width",        dec_ctx->width);
             print_int("height",       dec_ctx->height);
+            print_int("coded_width",  dec_ctx->coded_width);
+            print_int("coded_height", dec_ctx->coded_height);
             print_int("has_b_frames", dec_ctx->has_b_frames);
             sar = av_guess_sample_aspect_ratio(fmt_ctx, stream, NULL);
             if (sar.den) {

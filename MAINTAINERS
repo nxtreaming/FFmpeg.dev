@@ -471,6 +471,7 @@ Muxers/Demuxers:
   rtpdec_dv.*                           Thomas Volkert
   rtpdec_h261.*, rtpenc_h261.*          Thomas Volkert
   rtpdec_hevc.*, rtpenc_hevc.*          Thomas Volkert
+  rtpdec_mpa_robust.*                   Gilles Chanteperdrix
   rtpdec_asf.*                          Ronald S. Bultje
   rtpdec_vp9.c                          Thomas Volkert
   rtpenc_mpv.*, rtpenc_aac.*            Martin Storsjo
@@ -544,10 +545,10 @@ x86                                     Michael Niedermayer
 Releases
 ========
 
+2.6                                     Michael Niedermayer
 2.5                                     Michael Niedermayer
 2.4                                     Michael Niedermayer
 2.2                                     Michael Niedermayer
-1.2                                     Michael Niedermayer
 
 If you want to maintain an older release, please contact us
 
