@@ -89,6 +89,7 @@ OBJS-$(CONFIG_MPEGVIDEO)               += mpegvideo.o mpegvideodsp.o    \
 OBJS-$(CONFIG_MPEGVIDEOENC)            += mpegvideo_enc.o mpeg12data.o  \
                                           motion_est.o ratecontrol.o    \
                                           mpegvideoencdsp.o
+OBJS-$(CONFIG_NVENC)                   += nvenc.o
 OBJS-$(CONFIG_PIXBLOCKDSP)             += pixblockdsp.o
 OBJS-$(CONFIG_QPELDSP)                 += qpeldsp.o
 OBJS-$(CONFIG_QSV)                     += qsv.o
@@ -193,7 +194,7 @@ OBJS-$(CONFIG_CSCD_DECODER)            += cscd.o
 OBJS-$(CONFIG_CYUV_DECODER)            += cyuv.o
 OBJS-$(CONFIG_DCA_DECODER)             += dcadec.o dca.o dcadsp.o      \
                                           dcadata.o dca_exss.o         \
-                                          synth_filter.o
+                                          dca_xll.o synth_filter.o
 OBJS-$(CONFIG_DCA_ENCODER)             += dcaenc.o dca.o dcadata.o
 OBJS-$(CONFIG_DIRAC_DECODER)           += diracdec.o dirac.o diracdsp.o \
                                           dirac_arith.o mpeg12data.o dirac_dwt.o
@@ -356,7 +357,6 @@ OBJS-$(CONFIG_MXPEG_DECODER)           += mxpegdec.o
 OBJS-$(CONFIG_NELLYMOSER_DECODER)      += nellymoserdec.o nellymoser.o
 OBJS-$(CONFIG_NELLYMOSER_ENCODER)      += nellymoserenc.o nellymoser.o
 OBJS-$(CONFIG_NUV_DECODER)             += nuv.o rtjpeg.o
-OBJS-$(CONFIG_NVENC_ENCODER)           += nvenc.o
 OBJS-$(CONFIG_ON2AVC_DECODER)          += on2avc.o on2avcdata.o
 OBJS-$(CONFIG_OPUS_DECODER)            += opusdec.o opus.o opus_celt.o \
                                           opus_silk.o vorbis_data.o
@@ -732,6 +732,7 @@ OBJS-$(CONFIG_ELBG_FILTER)             += elbg.o
 # external codec libraries
 OBJS-$(CONFIG_LIBAACPLUS_ENCODER)         += libaacplus.o
 OBJS-$(CONFIG_LIBCELT_DECODER)            += libcelt_dec.o
+OBJS-$(CONFIG_LIBDCADEC_DECODER)          += libdcadec.o
 OBJS-$(CONFIG_LIBFAAC_ENCODER)            += libfaac.o
 OBJS-$(CONFIG_LIBFDK_AAC_DECODER)         += libfdk-aacdec.o
 OBJS-$(CONFIG_LIBFDK_AAC_ENCODER)         += libfdk-aacenc.o
