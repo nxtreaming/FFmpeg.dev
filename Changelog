@@ -4,6 +4,14 @@ releases are sorted from youngest to oldest.
 version <next>:
 - FFT video filter
 - TDSC decoder
+- DTS lossless extension (XLL) decoding (not lossless, disabled by default)
+- showwavespic filter
+- DTS decoding through libdcadec
+- Drop support for nvenc API before 5.0
+- nvenc H265 encoder
+- Detelecine filter
+- Intel QSV-accelerated H.264 encoding
+- MMAL-accelerated H.264 decoding
 
 
 version 2.6:
