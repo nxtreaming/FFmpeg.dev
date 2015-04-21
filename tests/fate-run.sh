@@ -220,6 +220,29 @@ pixfmts(){
     test=$outertest
 }
 
+gapless(){
+    sample=$(target_path $1)
+    extra_args=$2
+
+    decfile1="${outdir}/${test}.out-1"
+    decfile2="${outdir}/${test}.out-2"
+    decfile3="${outdir}/${test}.out-3"
+    cleanfiles="$cleanfiles $decfile1 $decfile2 $decfile3"
+
+    # test packet data
+    ffmpeg $extra_args -i "$sample" -flags +bitexact -c:a copy -f framecrc -y $decfile1
+    do_md5sum $decfile1
+    # test decoded (and cut) data
+    ffmpeg $extra_args -i "$sample" -flags +bitexact -f wav md5:
+    # the same as above again, with seeking to the start
+    ffmpeg $extra_args -ss 0 -seek_timestamp 1 -i "$sample" -flags +bitexact -c:a copy -f framecrc -y $decfile2
+    do_md5sum $decfile2
+    ffmpeg $extra_args -ss 0 -seek_timestamp 1 -i "$sample" -flags +bitexact -f wav md5:
+    # test packet data, with seeking to a specific position
+    ffmpeg $extra_args -ss 5 -seek_timestamp 1 -i "$sample" -flags +bitexact -c:a copy -f framecrc -y $decfile3
+    do_md5sum $decfile3
+}
+
 mkdir -p "$outdir"
 
 # Disable globbing: command arguments may contain globbing characters and
@@ -252,7 +275,13 @@ else
     err=1
 fi
 
-echo "${test}:${sig:-$err}:$($base64 <$cmpfile):$($base64 <$errfile)" >$repfile
+if [ $err -eq 0 ]; then
+    unset cmpo erro
+else
+    cmpo="$($base64 <$cmpfile)"
+    erro="$($base64 <$errfile)"
+fi
+echo "${test}:${sig:-$err}:$cmpo:$erro" >$repfile
 
 if test $err != 0 && test $gen != "no" ; then
     echo "GEN     $ref"

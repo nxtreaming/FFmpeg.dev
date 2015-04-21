@@ -418,6 +418,9 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,
     if (options)
         av_dict_copy(&tmp, *options, 0);
 
+    if (s->pb) // must be before any goto fail
+        s->flags |= AVFMT_FLAG_CUSTOM_IO;
+
     if ((ret = av_opt_set_dict(s, &tmp)) < 0)
         goto fail;
 
@@ -1085,10 +1088,12 @@ static void compute_pkt_fields(AVFormatContext *s, AVStream *st,
         pkt->pts > pkt->dts)
         presentation_delayed = 1;
 
-    av_dlog(NULL,
+    if (s->debug & FF_FDEBUG_TS)
+        av_log(s, AV_LOG_TRACE,
             "IN delayed:%d pts:%s, dts:%s cur_dts:%s st:%d pc:%p duration:%d delay:%d onein_oneout:%d\n",
             presentation_delayed, av_ts2str(pkt->pts), av_ts2str(pkt->dts), av_ts2str(st->cur_dts),
             pkt->stream_index, pc, pkt->duration, delay, onein_oneout);
+
     /* Interpolate PTS and DTS if they are not present. We skip H264
      * currently because delay and has_b_frames are not reliably set. */
     if ((delay == 0 || (delay == 1 && pc)) &&
@@ -1151,7 +1156,8 @@ static void compute_pkt_fields(AVFormatContext *s, AVStream *st,
     if (pkt->dts > st->cur_dts)
         st->cur_dts = pkt->dts;
 
-    av_dlog(NULL, "OUTdelayed:%d/%d pts:%s, dts:%s cur_dts:%s\n",
+    if (s->debug & FF_FDEBUG_TS)
+        av_log(s, AV_LOG_TRACE, "OUTdelayed:%d/%d pts:%s, dts:%s cur_dts:%s\n",
             presentation_delayed, delay, av_ts2str(pkt->pts), av_ts2str(pkt->dts), av_ts2str(st->cur_dts));
 
     /* update flags */
@@ -1223,7 +1229,7 @@ static int parse_packet(AVFormatContext *s, AVPacket *pkt, int stream_index)
         }
 
         /* set the duration */
-        out_pkt.duration = 0;
+        out_pkt.duration = (st->parser->flags & PARSER_FLAG_COMPLETE_FRAMES) ? pkt->duration : 0;
         if (st->codec->codec_type == AVMEDIA_TYPE_AUDIO) {
             if (st->codec->sample_rate > 0) {
                 out_pkt.duration =
@@ -1415,7 +1421,7 @@ static int read_frame_internal(AVFormatContext *s, AVPacket *pkt)
             if (p) {
                 AV_WL32(p, st->skip_samples);
                 AV_WL32(p + 4, discard_padding);
-                av_log(s, AV_LOG_DEBUG, "demuxer injecting skip %d\n", st->skip_samples);
+                av_log(s, AV_LOG_DEBUG, "demuxer injecting skip %d / discard %d\n", st->skip_samples, discard_padding);
             }
             st->skip_samples = 0;
         }
@@ -1596,6 +1602,9 @@ int av_find_default_stream_index(AVFormatContext *s)
             else
                 score += 50;
         }
+
+        if (st->discard != AVDISCARD_ALL)
+            score += 200;
 
         if (score > best_score) {
             best_score = score;
@@ -1795,7 +1804,7 @@ int ff_seek_frame_binary(AVFormatContext *s, int stream_index,
     if (stream_index < 0)
         return -1;
 
-    av_dlog(s, "read_seek: %d %s\n", stream_index, av_ts2str(target_ts));
+    av_log(s, AV_LOG_TRACE, "read_seek: %d %s\n", stream_index, av_ts2str(target_ts));
 
     ts_max =
     ts_min = AV_NOPTS_VALUE;
@@ -1815,7 +1824,7 @@ int ff_seek_frame_binary(AVFormatContext *s, int stream_index,
         if (e->timestamp <= target_ts || e->pos == e->min_distance) {
             pos_min = e->pos;
             ts_min  = e->timestamp;
-            av_dlog(s, "using cached pos_min=0x%"PRIx64" dts_min=%s\n",
+            av_log(s, AV_LOG_TRACE, "using cached pos_min=0x%"PRIx64" dts_min=%s\n",
                     pos_min, av_ts2str(ts_min));
         } else {
             av_assert1(index == 0);
@@ -1830,7 +1839,7 @@ int ff_seek_frame_binary(AVFormatContext *s, int stream_index,
             pos_max   = e->pos;
             ts_max    = e->timestamp;
             pos_limit = pos_max - e->min_distance;
-            av_dlog(s, "using cached pos_max=0x%"PRIx64" pos_limit=0x%"PRIx64
+            av_log(s, AV_LOG_TRACE, "using cached pos_max=0x%"PRIx64" pos_limit=0x%"PRIx64
                     " dts_max=%s\n", pos_max, pos_limit, av_ts2str(ts_max));
         }
     }
@@ -1900,7 +1909,7 @@ int64_t ff_gen_search(AVFormatContext *s, int stream_index, int64_t target_ts,
     int no_change;
     int ret;
 
-    av_dlog(s, "gen_seek: %d %s\n", stream_index, av_ts2str(target_ts));
+    av_log(s, AV_LOG_TRACE, "gen_seek: %d %s\n", stream_index, av_ts2str(target_ts));
 
     if (ts_min == AV_NOPTS_VALUE) {
         pos_min = s->internal->data_offset;
@@ -1929,7 +1938,7 @@ int64_t ff_gen_search(AVFormatContext *s, int stream_index, int64_t target_ts,
 
     no_change = 0;
     while (pos_min < pos_limit) {
-        av_dlog(s,
+        av_log(s, AV_LOG_TRACE,
                 "pos_min=0x%"PRIx64" pos_max=0x%"PRIx64" dts_min=%s dts_max=%s\n",
                 pos_min, pos_max, av_ts2str(ts_min), av_ts2str(ts_max));
         av_assert0(pos_limit <= pos_max);
@@ -1960,7 +1969,7 @@ int64_t ff_gen_search(AVFormatContext *s, int stream_index, int64_t target_ts,
             no_change++;
         else
             no_change = 0;
-        av_dlog(s, "%"PRId64" %"PRId64" %"PRId64" / %s %s %s"
+        av_log(s, AV_LOG_TRACE, "%"PRId64" %"PRId64" %"PRId64" / %s %s %s"
                 " target:%s limit:%"PRId64" start:%"PRId64" noc:%d\n",
                 pos_min, pos, pos_max,
                 av_ts2str(ts_min), av_ts2str(ts), av_ts2str(ts_max), av_ts2str(target_ts),
@@ -1987,7 +1996,7 @@ int64_t ff_gen_search(AVFormatContext *s, int stream_index, int64_t target_ts,
     ts_min  = ff_read_timestamp(s, stream_index, &pos_min, INT64_MAX, read_timestamp);
     pos_min++;
     ts_max = ff_read_timestamp(s, stream_index, &pos_min, INT64_MAX, read_timestamp);
-    av_dlog(s, "pos=0x%"PRIx64" %s<=%s<=%s\n",
+    av_log(s, AV_LOG_TRACE, "pos=0x%"PRIx64" %s<=%s<=%s\n",
             pos, av_ts2str(ts_min), av_ts2str(target_ts), av_ts2str(ts_max));
 #endif
     *ts_ret = ts;
@@ -2541,11 +2550,11 @@ static void estimate_timings(AVFormatContext *ic, int64_t old_offset)
         AVStream av_unused *st;
         for (i = 0; i < ic->nb_streams; i++) {
             st = ic->streams[i];
-            av_dlog(ic, "%d: start_time: %0.3f duration: %0.3f\n", i,
+            av_log(ic, AV_LOG_TRACE, "%d: start_time: %0.3f duration: %0.3f\n", i,
                     (double) st->start_time / AV_TIME_BASE,
                     (double) st->duration   / AV_TIME_BASE);
         }
-        av_dlog(ic,
+        av_log(ic, AV_LOG_TRACE,
                 "stream: start_time: %0.3f duration: %0.3f bitrate=%d kb/s\n",
                 (double) ic->start_time / AV_TIME_BASE,
                 (double) ic->duration   / AV_TIME_BASE,
@@ -2841,6 +2850,7 @@ static int tb_unreliable(AVCodecContext *c)
         c->codec_tag == AV_RL32("mp4v") ||
         c->codec_id == AV_CODEC_ID_MPEG2VIDEO ||
         c->codec_id == AV_CODEC_ID_GIF ||
+        c->codec_id == AV_CODEC_ID_HEVC ||
         c->codec_id == AV_CODEC_ID_H264)
         return 1;
     return 0;
@@ -2982,7 +2992,7 @@ void ff_rfps_calculate(AVFormatContext *ic)
                         num = get_std_framerate(j);
                     }
                     if (error < 0.02)
-                        av_log(NULL, AV_LOG_DEBUG, "rfps: %f %f\n", get_std_framerate(j) / 12.0/1001, error);
+                        av_log(ic, AV_LOG_DEBUG, "rfps: %f %f\n", get_std_framerate(j) / 12.0/1001, error);
                 }
             }
             // do not increase frame rate by more than 1 % in order to match a standard rate.
@@ -3133,9 +3143,13 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
                 fps_analyze_framecount = 0;
             /* variable fps and no guess at the real fps */
             if (!(st->r_frame_rate.num && st->avg_frame_rate.num) &&
-                st->info->duration_count < fps_analyze_framecount &&
-                st->codec->codec_type == AVMEDIA_TYPE_VIDEO)
-                break;
+                st->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+                int count = (ic->iformat->flags & AVFMT_NOTIMESTAMPS) ?
+                    st->info->codec_info_duration_fields/2 :
+                    st->info->duration_count;
+                if (count < fps_analyze_framecount)
+                    break;
+            }
             if (st->parser && st->parser->parser->split &&
                 !st->codec->extradata)
                 break;
@@ -3723,7 +3737,7 @@ AVProgram *av_new_program(AVFormatContext *ac, int id)
     AVProgram *program = NULL;
     int i;
 
-    av_dlog(ac, "new_program: id=0x%04x\n", id);
+    av_log(ac, AV_LOG_TRACE, "new_program: id=0x%04x\n", id);
 
     for (i = 0; i < ac->nb_programs; i++)
         if (ac->programs[i]->id == id)
@@ -4075,9 +4089,9 @@ int ff_find_stream_index(AVFormatContext *s, int id)
 int64_t ff_iso8601_to_unix_time(const char *datestr)
 {
     struct tm time1 = { 0 }, time2 = { 0 };
-    char *ret1, *ret2;
-    ret1 = av_small_strptime(datestr, "%Y - %m - %d %H:%M:%S", &time1);
-    ret2 = av_small_strptime(datestr, "%Y - %m - %dT%H:%M:%S", &time2);
+    const char *ret1, *ret2;
+    ret1 = av_small_strptime(datestr, "%Y - %m - %d %T", &time1);
+    ret2 = av_small_strptime(datestr, "%Y - %m - %dT%T", &time2);
     if (ret2 && !ret1)
         return av_timegm(&time2);
     else

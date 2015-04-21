@@ -12,6 +12,12 @@ version <next>:
 - Detelecine filter
 - Intel QSV-accelerated H.264 encoding
 - MMAL-accelerated H.264 decoding
+- basic APNG encoder and muxer
+- unpack DivX-style packed B-frames in MPEG-4 bitstream filter
+- WebM Live Chunk Muxer
+- nvenc level and tier options
+- chorus filter
+- Canopus HQ/HQA decoder
 
 
 version 2.6:

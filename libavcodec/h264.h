@@ -36,7 +36,7 @@
 #include "h264dsp.h"
 #include "h264pred.h"
 #include "h264qpel.h"
-#include "internal.h" // for avpriv_find_start_code()
+#include "internal.h"
 #include "mpegutils.h"
 #include "parser.h"
 #include "qpeldsp.h"
@@ -69,7 +69,7 @@
 
 #ifdef ALLOW_INTERLACE
 #define MB_MBAFF(h)    (h)->mb_mbaff
-#define MB_FIELD(h)    (h)->mb_field_decoding_flag
+#define MB_FIELD(sl)  (sl)->mb_field_decoding_flag
 #define FRAME_MBAFF(h) (h)->mb_aff_frame
 #define FIELD_PICTURE(h) ((h)->picture_structure != PICT_FRAME)
 #define LEFT_MBS 2
@@ -78,7 +78,7 @@
 #define LEFT(i)  (i)
 #else
 #define MB_MBAFF(h)      0
-#define MB_FIELD(h)      0
+#define MB_FIELD(sl)     0
 #define FRAME_MBAFF(h)   0
 #define FIELD_PICTURE(h) 0
 #undef  IS_INTERLACED
@@ -411,6 +411,7 @@ typedef struct H264SliceContext {
     int mb_xy;
     int resync_mb_x;
     int resync_mb_y;
+    int mb_index_end;
     int mb_skip_run;
     int is_complex;
 
@@ -788,6 +789,8 @@ typedef struct H264Context {
     int parse_history_count;
     int parse_last_mb;
 
+    int enable_er;
+
     AVBufferPool *qscale_table_pool;
     AVBufferPool *mb_type_pool;
     AVBufferPool *motion_val_pool;
@@ -809,7 +812,7 @@ int ff_h264_decode_sei(H264Context *h);
 /**
  * Decode SPS
  */
-int ff_h264_decode_seq_parameter_set(H264Context *h);
+int ff_h264_decode_seq_parameter_set(H264Context *h, int ignore_truncation);
 
 /**
  * compute profile from sps
@@ -1014,7 +1017,7 @@ static av_always_inline int pred_intra_mode(const H264Context *h,
     const int top    = sl->intra4x4_pred_mode_cache[index8 - 8];
     const int min    = FFMIN(left, top);
 
-    tprintf(h->avctx, "mode:%d %d min:%d\n", left, top, min);
+    ff_tlog(h->avctx, "mode:%d %d min:%d\n", left, top, min);
 
     if (min < 0)
         return DC_PRED;

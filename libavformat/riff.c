@@ -164,6 +164,7 @@ const AVCodecTag ff_codec_bmp_tags[] = {
     { AV_CODEC_ID_MPEG2VIDEO,   MKTAG('E', 'M', '2', 'V') },
     /* Matrox MPEG-2 intra-only */
     { AV_CODEC_ID_MPEG2VIDEO,   MKTAG('M', '7', '0', '1') },
+    { AV_CODEC_ID_MPEG2VIDEO,   MKTAG('M', '7', '0', '5') },
     { AV_CODEC_ID_MPEG2VIDEO,   MKTAG('m', 'p', 'g', 'v') },
     { AV_CODEC_ID_MPEG1VIDEO,   MKTAG('B', 'W', '1', '0') },
     { AV_CODEC_ID_MPEG1VIDEO,   MKTAG('X', 'M', 'P', 'G') }, /* Xing MPEG intra only */
@@ -365,6 +366,7 @@ const AVCodecTag ff_codec_bmp_tags[] = {
     { AV_CODEC_ID_FIC,          MKTAG('F', 'I', 'C', 'V') },
     { AV_CODEC_ID_HQX,          MKTAG('C', 'H', 'Q', 'X') },
     { AV_CODEC_ID_TDSC,         MKTAG('T', 'D', 'S', 'C') },
+    { AV_CODEC_ID_HQ_HQA,       MKTAG('C', 'U', 'V', 'C') },
     { AV_CODEC_ID_NONE,         0 }
 };
 
@@ -404,6 +406,7 @@ const AVCodecTag ff_codec_wav_tags[] = {
     { AV_CODEC_ID_ADPCM_G726,      0x0064 },
     { AV_CODEC_ID_ADPCM_IMA_WAV,   0x0069 },
     { AV_CODEC_ID_METASOUND,       0x0075 },
+    { AV_CODEC_ID_G729,            0x0083 },
     { AV_CODEC_ID_AAC,             0x00ff },
     { AV_CODEC_ID_G723_1,          0x0111 },
     { AV_CODEC_ID_SIPR,            0x0130 },

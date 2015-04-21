@@ -334,6 +334,7 @@ static int mp3_read_header(AVFormatContext *s)
     AVStream *st;
     int64_t off;
     int ret;
+    int i;
 
     st = avformat_new_stream(s, NULL);
     if (!st)
@@ -362,6 +363,10 @@ static int mp3_read_header(AVFormatContext *s)
     ret = ff_replaygain_export(st, s->metadata);
     if (ret < 0)
         return ret;
+
+    // the seek index is relative to the end of the xing vbr headers
+    for (i = 0; i < st->nb_index_entries; i++)
+        st->index_entries[i].pos += avio_tell(s->pb);
 
     /* the parameters will be extracted from the compressed bitstream */
     return 0;
@@ -428,19 +433,14 @@ static int mp3_seek(AVFormatContext *s, int stream_index, int64_t timestamp,
     int best_score;
 
     if (   mp3->is_cbr
+        && (mp3->usetoc <= 0 || !mp3->xing_toc)
         && st->duration > 0
         && mp3->header_filesize > s->internal->data_offset
         && mp3->frames) {
-        int64_t filesize = avio_size(s->pb);
-        int64_t duration;
-        if (filesize <= s->internal->data_offset)
-            filesize = mp3->header_filesize;
-        filesize -= s->internal->data_offset;
-        duration = av_rescale(st->duration, filesize, mp3->header_filesize - s->internal->data_offset);
         ie = &ie1;
-        timestamp = av_clip64(timestamp, 0, duration);
+        timestamp = av_clip64(timestamp, 0, st->duration);
         ie->timestamp = timestamp;
-        ie->pos       = av_rescale(timestamp, filesize, duration) + s->internal->data_offset;
+        ie->pos       = av_rescale(timestamp, mp3->header_filesize, st->duration) + s->internal->data_offset;
     } else if (mp3->xing_toc) {
         if (ret < 0)
             return ret;
@@ -489,6 +489,12 @@ static int mp3_seek(AVFormatContext *s, int stream_index, int64_t timestamp,
     ret = avio_seek(s->pb, best_pos, SEEK_SET);
     if (ret < 0)
         return ret;
+
+    if (mp3->is_cbr && ie == &ie1) {
+        int frame_duration = av_rescale(st->duration, 1, mp3->frames);
+        ie1.timestamp = frame_duration * av_rescale(best_pos - s->internal->data_offset, mp3->frames, mp3->header_filesize);
+    }
+
     ff_update_cur_dts(s, st, ie->timestamp);
     st->skip_samples = ie->timestamp <= 0 ? mp3->start_pad + 528 + 1 : 0;
     return 0;
