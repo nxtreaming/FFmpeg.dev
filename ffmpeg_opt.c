@@ -921,7 +921,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
 
     timestamp = (o->start_time == AV_NOPTS_VALUE) ? 0 : o->start_time;
     /* add the stream start time */
-    if (ic->start_time != AV_NOPTS_VALUE)
+    if (!o->seek_timestamp && ic->start_time != AV_NOPTS_VALUE)
         timestamp += ic->start_time;
 
     /* if seeking requested, we execute it */
@@ -2040,8 +2040,8 @@ loop_end:
         ost->stream_copy               = 0;
         ost->attachment_filename       = o->attachments[i];
         ost->finished                  = 1;
-        ost->enc_ctx->extradata      = attachment;
-        ost->enc_ctx->extradata_size = len;
+        ost->st->codec->extradata      = attachment;
+        ost->st->codec->extradata_size = len;
 
         p = strrchr(o->attachments[i], '/');
         av_dict_set(&ost->st->metadata, "filename", (p && *p) ? p + 1 : o->attachments[i], AV_DICT_DONT_OVERWRITE);
@@ -2867,6 +2867,9 @@ const OptionDef options[] = {
     { "ss",             HAS_ARG | OPT_TIME | OPT_OFFSET |
                         OPT_INPUT | OPT_OUTPUT,                      { .off = OFFSET(start_time) },
         "set the start time offset", "time_off" },
+    { "seek_timestamp", HAS_ARG | OPT_INT | OPT_OFFSET |
+                        OPT_INPUT,                                   { .off = OFFSET(seek_timestamp) },
+        "enable/disable seeking by timestamp with -ss" },
     { "accurate_seek",  OPT_BOOL | OPT_OFFSET | OPT_EXPERT |
                         OPT_INPUT,                                   { .off = OFFSET(accurate_seek) },
         "enable/disable accurate seeking with -ss" },
@@ -3042,7 +3045,7 @@ const OptionDef options[] = {
                       OPT_INPUT | OPT_OUTPUT,                                    { .off = OFFSET(top_field_first) },
         "top=1/bottom=0/auto=-1 field first", "" },
     { "vtag",         OPT_VIDEO | HAS_ARG | OPT_EXPERT  | OPT_PERFILE |
-                      OPT_OUTPUT,                                                { .func_arg = opt_old2new },
+                      OPT_INPUT | OPT_OUTPUT,                                    { .func_arg = opt_old2new },
         "force video tag/fourcc", "fourcc/tag" },
     { "qphist",       OPT_VIDEO | OPT_BOOL | OPT_EXPERT ,                        { &qp_hist },
         "show QP histogram" },

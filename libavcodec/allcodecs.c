@@ -108,7 +108,7 @@ void avcodec_register_all(void)
     REGISTER_ENCDEC (AMV,               amv);
     REGISTER_DECODER(ANM,               anm);
     REGISTER_DECODER(ANSI,              ansi);
-    REGISTER_DECODER(APNG,              apng);
+    REGISTER_ENCDEC (APNG,              apng);
     REGISTER_ENCDEC (ASV1,              asv1);
     REGISTER_ENCDEC (ASV2,              asv2);
     REGISTER_DECODER(AURA,              aura);
@@ -178,6 +178,7 @@ void avcodec_register_all(void)
     REGISTER_DECODER(H264_VDPAU,        h264_vdpau);
     REGISTER_DECODER(HEVC,              hevc);
     REGISTER_DECODER(HNM4_VIDEO,        hnm4_video);
+    REGISTER_DECODER(HQ_HQA,            hq_hqa);
     REGISTER_DECODER(HQX,               hqx);
     REGISTER_ENCDEC (HUFFYUV,           huffyuv);
     REGISTER_DECODER(IDCIN,             idcin);
@@ -605,6 +606,7 @@ void avcodec_register_all(void)
     REGISTER_BSF(MJPEG2JPEG,            mjpeg2jpeg);
     REGISTER_BSF(MJPEGA_DUMP_HEADER,    mjpega_dump_header);
     REGISTER_BSF(MP3_HEADER_DECOMPRESS, mp3_header_decompress);
+    REGISTER_BSF(MPEG4_UNPACK_BFRAMES,  mpeg4_unpack_bframes);
     REGISTER_BSF(MOV2TEXTSUB,           mov2textsub);
     REGISTER_BSF(NOISE,                 noise);
     REGISTER_BSF(REMOVE_EXTRADATA,      remove_extradata);

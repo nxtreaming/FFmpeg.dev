@@ -40,6 +40,7 @@
 #include "libavutil/intreadwrite.h"
 #include "libavutil/lzo.h"
 #include "libavutil/mathematics.h"
+#include "libavutil/opt.h"
 #include "libavutil/time_internal.h"
 
 #include "libavcodec/bytestream.h"
@@ -260,6 +261,7 @@ typedef struct MatroskaLevel1Element {
 } MatroskaLevel1Element;
 
 typedef struct MatroskaDemuxContext {
+    const AVClass *class;
     AVFormatContext *ctx;
 
     /* EBML stuff */
@@ -307,6 +309,9 @@ typedef struct MatroskaDemuxContext {
 
     /* File has SSA subtitles which prevent incremental cluster parsing. */
     int contains_ssa;
+
+    /* WebM DASH Manifest live flag/ */
+    int is_live;
 } MatroskaDemuxContext;
 
 typedef struct MatroskaBlock {
@@ -698,7 +703,7 @@ static int ebml_level_end(MatroskaDemuxContext *matroska)
             return 1;
         }
     }
-    return 0;
+    return (matroska->is_live && matroska->ctx->pb->eof_reached) ? 1 : 0;
 }
 
 /*
@@ -949,8 +954,11 @@ static int ebml_parse(MatroskaDemuxContext *matroska, EbmlSyntax *syntax,
     if (!matroska->current_id) {
         uint64_t id;
         int res = ebml_read_num(matroska, matroska->ctx->pb, 4, &id);
-        if (res < 0)
-            return res;
+        if (res < 0) {
+            // in live mode, finish parsing if EOF is reached.
+            return (matroska->is_live && matroska->ctx->pb->eof_reached &&
+                    res == AVERROR_EOF) ? 1 : res;
+        }
         matroska->current_id = id | 1 << 7 * res;
     }
     return ebml_parse_id(matroska, syntax, matroska->current_id, data);
@@ -2072,12 +2080,15 @@ static int matroska_read_header(AVFormatContext *s)
     matroska->cues_parsing_deferred = 1;
 
     /* First read the EBML header. */
-    if (ebml_parse(matroska, ebml_syntax, &ebml) ||
-        ebml.version         > EBML_VERSION      ||
+    if (ebml_parse(matroska, ebml_syntax, &ebml) || !ebml.doctype) {
+        av_log(matroska->ctx, AV_LOG_ERROR, "EBML header parsing failed\n");
+        ebml_free(ebml_syntax, &ebml);
+        return AVERROR_INVALIDDATA;
+    }
+    if (ebml.version         > EBML_VERSION      ||
         ebml.max_size        > sizeof(uint64_t)  ||
         ebml.id_length       > sizeof(uint32_t)  ||
-        ebml.doctype_version > 3                 ||
-        !ebml.doctype) {
+        ebml.doctype_version > 3) {
         av_log(matroska->ctx, AV_LOG_ERROR,
                "EBML header using unsupported features\n"
                "(EBML version %"PRIu64", doctype %s, doc version %"PRIu64")\n",
@@ -2142,20 +2153,42 @@ static int matroska_read_header(AVFormatContext *s)
             av_dict_set(&st->metadata, "filename", attachments[j].filename, 0);
             av_dict_set(&st->metadata, "mimetype", attachments[j].mime, 0);
             st->codec->codec_id   = AV_CODEC_ID_NONE;
-            st->codec->codec_type = AVMEDIA_TYPE_ATTACHMENT;
-            if (ff_alloc_extradata(st->codec, attachments[j].bin.size))
-                break;
-            memcpy(st->codec->extradata, attachments[j].bin.data,
-                   attachments[j].bin.size);
 
-            for (i = 0; ff_mkv_mime_tags[i].id != AV_CODEC_ID_NONE; i++) {
-                if (!strncmp(ff_mkv_mime_tags[i].str, attachments[j].mime,
-                             strlen(ff_mkv_mime_tags[i].str))) {
-                    st->codec->codec_id = ff_mkv_mime_tags[i].id;
+            for (i = 0; ff_mkv_image_mime_tags[i].id != AV_CODEC_ID_NONE; i++) {
+                if (!strncmp(ff_mkv_image_mime_tags[i].str, attachments[j].mime,
+                             strlen(ff_mkv_image_mime_tags[i].str))) {
+                    st->codec->codec_id = ff_mkv_image_mime_tags[i].id;
                     break;
                 }
             }
+
             attachments[j].stream = st;
+
+            if (st->codec->codec_id != AV_CODEC_ID_NONE) {
+                st->disposition      |= AV_DISPOSITION_ATTACHED_PIC;
+                st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
+
+                av_init_packet(&st->attached_pic);
+                if ((res = av_new_packet(&st->attached_pic, attachments[j].bin.size)) < 0)
+                    return res;
+                memcpy(st->attached_pic.data, attachments[j].bin.data, attachments[j].bin.size);
+                st->attached_pic.stream_index = st->index;
+                st->attached_pic.flags       |= AV_PKT_FLAG_KEY;
+            } else {
+                st->codec->codec_type = AVMEDIA_TYPE_ATTACHMENT;
+                if (ff_alloc_extradata(st->codec, attachments[j].bin.size))
+                    break;
+                memcpy(st->codec->extradata, attachments[j].bin.data,
+                       attachments[j].bin.size);
+
+                for (i = 0; ff_mkv_mime_tags[i].id != AV_CODEC_ID_NONE; i++) {
+                    if (!strncmp(ff_mkv_mime_tags[i].str, attachments[j].mime,
+                                strlen(ff_mkv_mime_tags[i].str))) {
+                        st->codec->codec_id = ff_mkv_mime_tags[i].id;
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -3396,32 +3429,46 @@ static int webm_dash_manifest_read_header(AVFormatContext *s)
         return -1;
     }
 
-    // initialization range
-    // 5 is the offset of Cluster ID.
-    av_dict_set_int(&s->streams[0]->metadata, INITIALIZATION_RANGE, avio_tell(s->pb) - 5, 0);
+    if (!matroska->is_live) {
+        buf = av_asprintf("%g", matroska->duration);
+        if (!buf) return AVERROR(ENOMEM);
+        av_dict_set(&s->streams[0]->metadata, DURATION, buf, 0);
+        av_free(buf);
+
+        // initialization range
+        // 5 is the offset of Cluster ID.
+        av_dict_set_int(&s->streams[0]->metadata, INITIALIZATION_RANGE, avio_tell(s->pb) - 5, 0);
+    }
 
     // basename of the file
     buf = strrchr(s->filename, '/');
     av_dict_set(&s->streams[0]->metadata, FILENAME, buf ? ++buf : s->filename, 0);
-
-    // duration
-    buf = av_asprintf("%g", matroska->duration);
-    if (!buf) return AVERROR(ENOMEM);
-    av_dict_set(&s->streams[0]->metadata, DURATION, buf, 0);
-    av_free(buf);
 
     // track number
     tracks = matroska->tracks.elem;
     av_dict_set_int(&s->streams[0]->metadata, TRACK_NUMBER, tracks[0].num, 0);
 
     // parse the cues and populate Cue related fields
-    return webm_dash_manifest_cues(s);
+    return matroska->is_live ? 0 : webm_dash_manifest_cues(s);
 }
 
 static int webm_dash_manifest_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     return AVERROR_EOF;
 }
+
+#define OFFSET(x) offsetof(MatroskaDemuxContext, x)
+static const AVOption options[] = {
+    { "live", "flag indicating that the input is a live file that only has the headers.", OFFSET(is_live), AV_OPT_TYPE_INT, {.i64 = 0}, 0, 1, AV_OPT_FLAG_DECODING_PARAM },
+    { NULL },
+};
+
+static const AVClass webm_dash_class = {
+    .class_name = "WebM DASH Manifest demuxer",
+    .item_name  = av_default_item_name,
+    .option     = options,
+    .version    = LIBAVUTIL_VERSION_INT,
+};
 
 AVInputFormat ff_matroska_demuxer = {
     .name           = "matroska,webm",
@@ -3443,4 +3490,5 @@ AVInputFormat ff_webm_dash_manifest_demuxer = {
     .read_header    = webm_dash_manifest_read_header,
     .read_packet    = webm_dash_manifest_read_packet,
     .read_close     = matroska_read_close,
+    .priv_class     = &webm_dash_class,
 };
