@@ -1083,6 +1083,15 @@ typedef struct AVStream {
     int skip_samples;
 
     /**
+     * If not 0, the number of samples that should be skipped from the start of
+     * the stream (the samples are removed from packets with pts==0, which also
+     * assumes negative timestamps do not happen).
+     * Intended for use with formats such as mp3 with ad-hoc gapless audio
+     * support.
+     */
+    int64_t start_skip_samples;
+
+    /**
      * If not 0, the first audio sample that should be discarded from the stream.
      * This is broken by design (needs global sample count), but can't be
      * avoided for broken by design formats such as mp3 with ad-hoc gapless
@@ -1382,6 +1391,7 @@ typedef struct AVFormatContext {
 #define AVFMT_FLAG_SORT_DTS    0x10000 ///< try to interleave outputted packets by dts (using this flag can slow demuxing down)
 #define AVFMT_FLAG_PRIV_OPT    0x20000 ///< Enable use of private options by delaying codec open (this could be made default once all code is converted)
 #define AVFMT_FLAG_KEEP_SIDE_DATA 0x40000 ///< Don't merge side data but keep it separate.
+#define AVFMT_FLAG_FAST_SEEK   0x80000 ///< Enable fast, but inaccurate seeks for some formats
 
     /**
      * @deprecated deprecated in favor of probesize2
