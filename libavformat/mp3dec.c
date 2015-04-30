@@ -110,7 +110,7 @@ static void read_xing_toc(AVFormatContext *s, int64_t filesize, int64_t duration
 {
     int i;
     MP3DecContext *mp3 = s->priv_data;
-    int fill_index = mp3->usetoc && duration > 0;
+    int fill_index = mp3->usetoc == 1 && duration > 0;
 
     if (!filesize &&
         !(filesize = avio_size(s->pb))) {
@@ -147,6 +147,7 @@ static void mp3_parse_info_tag(AVFormatContext *s, AVStream *st,
     MP3DecContext *mp3 = s->priv_data;
     static const int64_t xing_offtbl[2][2] = {{32, 17}, {17,9}};
     uint64_t fsize = avio_size(s->pb);
+    fsize = fsize >= avio_tell(s->pb) ? fsize - avio_tell(s->pb) : 0;
 
     /* Check for Xing / Info tag */
     avio_skip(s->pb, xing_offtbl[c->lsf == 1][c->nb_channels == 1]);
@@ -166,6 +167,8 @@ static void mp3_parse_info_tag(AVFormatContext *s, AVStream *st,
         delta = FFMAX(fsize, mp3->header_filesize) - min;
         if (fsize > mp3->header_filesize && delta > min >> 4) {
             mp3->frames = 0;
+            av_log(s, AV_LOG_WARNING,
+                   "invalid concatenated file detected - using bitrate for duration\n");
         } else if (delta > min >> 4) {
             av_log(s, AV_LOG_WARNING,
                    "filesize and duration do not match (growing file?)\n");
@@ -228,13 +231,13 @@ static void mp3_parse_info_tag(AVFormatContext *s, AVStream *st,
 
         mp3->start_pad = v>>12;
         mp3->  end_pad = v&4095;
-        st->skip_samples = mp3->start_pad + 528 + 1;
+        st->start_skip_samples = mp3->start_pad + 528 + 1;
         if (mp3->frames) {
             st->first_discard_sample = -mp3->end_pad + 528 + 1 + mp3->frames * (int64_t)spf;
             st->last_discard_sample = mp3->frames * (int64_t)spf;
         }
         if (!st->start_time)
-            st->start_time = av_rescale_q(st->skip_samples,
+            st->start_time = av_rescale_q(st->start_skip_samples,
                                             (AVRational){1, c->sample_rate},
                                             st->time_base);
         av_log(s, AV_LOG_DEBUG, "pad %d %d\n", mp3->start_pad, mp3->  end_pad);
@@ -336,6 +339,9 @@ static int mp3_read_header(AVFormatContext *s)
     int ret;
     int i;
 
+    if (mp3->usetoc < 0)
+        mp3->usetoc = (s->flags & AVFMT_FLAG_FAST_SEEK) ? 0 : 2;
+
     st = avformat_new_stream(s, NULL);
     if (!st)
         return AVERROR(ENOMEM);
@@ -432,8 +438,11 @@ static int mp3_seek(AVFormatContext *s, int stream_index, int64_t timestamp,
     int64_t best_pos;
     int best_score;
 
+    if (mp3->usetoc == 2)
+        return -1; // generic index code
+
     if (   mp3->is_cbr
-        && (mp3->usetoc <= 0 || !mp3->xing_toc)
+        && (mp3->usetoc == 0 || !mp3->xing_toc)
         && st->duration > 0
         && mp3->header_filesize > s->internal->data_offset
         && mp3->frames) {
@@ -447,8 +456,6 @@ static int mp3_seek(AVFormatContext *s, int stream_index, int64_t timestamp,
 
         ie = &st->index_entries[ret];
     } else {
-        st->skip_samples = timestamp <= 0 ? mp3->start_pad + 528 + 1 : 0;
-
         return -1;
     }
 
@@ -496,12 +503,11 @@ static int mp3_seek(AVFormatContext *s, int stream_index, int64_t timestamp,
     }
 
     ff_update_cur_dts(s, st, ie->timestamp);
-    st->skip_samples = ie->timestamp <= 0 ? mp3->start_pad + 528 + 1 : 0;
     return 0;
 }
 
 static const AVOption options[] = {
-    { "usetoc", "use table of contents", offsetof(MP3DecContext, usetoc), AV_OPT_TYPE_INT, {.i64 = -1}, -1, 1, AV_OPT_FLAG_DECODING_PARAM},
+    { "usetoc", "use table of contents", offsetof(MP3DecContext, usetoc), AV_OPT_TYPE_INT, {.i64 = -1}, -1, 2, AV_OPT_FLAG_DECODING_PARAM},
     { NULL },
 };
 
