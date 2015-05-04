@@ -78,7 +78,7 @@ typedef struct SVQ3Context {
     H264Picture *last_pic;
     int halfpel_flag;
     int thirdpel_flag;
-    int unknown_flag;
+    int has_watermark;
     int next_slice_index;
     uint32_t watermark_key;
     uint8_t *buf;
@@ -843,7 +843,7 @@ static int svq3_decode_slice_header(AVCodecContext *avctx)
     /* unknown fields */
     skip_bits1(&h->gb);
 
-    if (s->unknown_flag)
+    if (s->has_watermark)
         skip_bits1(&h->gb);
 
     skip_bits1(&h->gb);
@@ -902,6 +902,8 @@ static av_cold int svq3_decode_init(AVCodecContext *avctx)
     // we will overwrite it later during decoding
     av_frame_free(&h->cur_pic.f);
 
+    av_frame_free(&h->last_pic_for_ec.f);
+
     ff_h264dsp_init(&h->h264dsp, 8, 1);
     av_assert0(h->sps.bit_depth_chroma == 0);
     ff_h264_pred_init(&h->hpc, AV_CODEC_ID_SVQ3, 8, 1);
@@ -931,7 +933,7 @@ static av_cold int svq3_decode_init(AVCodecContext *avctx)
 
     s->halfpel_flag  = 1;
     s->thirdpel_flag = 1;
-    s->unknown_flag  = 0;
+    s->has_watermark = 0;
 
     /* prowl for the "SEQH" marker in the extradata */
     extradata     = (unsigned char *)avctx->extradata;
@@ -950,6 +952,7 @@ static av_cold int svq3_decode_init(AVCodecContext *avctx)
     if (marker_found) {
         GetBitContext gb;
         int frame_size_code;
+        int unk0, unk1, unk2, unk3, unk4;
 
         size = AV_RB32(&extradata[4]);
         if (size > extradata_end - extradata - 8) {
@@ -999,24 +1002,27 @@ static av_cold int svq3_decode_init(AVCodecContext *avctx)
         s->thirdpel_flag = get_bits1(&gb);
 
         /* unknown fields */
-        skip_bits1(&gb);
-        skip_bits1(&gb);
-        skip_bits1(&gb);
-        skip_bits1(&gb);
+        unk0 = get_bits1(&gb);
+        unk1 = get_bits1(&gb);
+        unk2 = get_bits1(&gb);
+        unk3 = get_bits1(&gb);
 
         h->low_delay = get_bits1(&gb);
 
         /* unknown field */
-        skip_bits1(&gb);
+        unk4 = get_bits1(&gb);
+
+        av_log(avctx, AV_LOG_DEBUG, "Unknown fields %d %d %d %d %d\n",
+               unk0, unk1, unk2, unk3, unk4);
 
         if (skip_1stop_8data_bits(&gb) < 0) {
             ret = AVERROR_INVALIDDATA;
             goto fail;
         }
 
-        s->unknown_flag  = get_bits1(&gb);
+        s->has_watermark  = get_bits1(&gb);
         avctx->has_b_frames = !h->low_delay;
-        if (s->unknown_flag) {
+        if (s->has_watermark) {
 #if CONFIG_ZLIB
             unsigned watermark_width  = svq3_get_ue_golomb(&gb);
             unsigned watermark_height = svq3_get_ue_golomb(&gb);
