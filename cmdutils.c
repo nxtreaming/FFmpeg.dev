@@ -2231,6 +2231,8 @@ int show_sinks(void *optctx, const char *opt, const char *arg)
     return ret;
 }
 
+#endif
+
 double get_rotation(AVStream *st)
 {
     AVDictionaryEntry *rotate_tag = av_dict_get(st->metadata, "rotate", NULL, 0);
@@ -2252,4 +2254,3 @@ double get_rotation(AVStream *st)
     return theta;
 }
 
-#endif
