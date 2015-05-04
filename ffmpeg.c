@@ -3730,6 +3730,9 @@ static int process_input(int file_index)
                  delta >  1LL*dts_error_threshold*AV_TIME_BASE) {
                 av_log(NULL, AV_LOG_WARNING, "DTS %"PRId64", next:%"PRId64" st:%d invalid dropping\n", pkt.dts, ist->next_dts, pkt.stream_index);
                 pkt.dts = AV_NOPTS_VALUE;
+                ret = AVERROR_EXIT;
+                av_log(NULL, AV_LOG_ERROR, "DTS is wrong, the demuxer could be broken or reset, try to terminate.\n");
+                goto discard_packet:
             }
             if (pkt.pts != AV_NOPTS_VALUE){
                 int64_t pkt_pts = av_rescale_q(pkt.pts, ist->st->time_base, AV_TIME_BASE_Q);
@@ -3738,6 +3741,9 @@ static int process_input(int file_index)
                      delta >  1LL*dts_error_threshold*AV_TIME_BASE) {
                     av_log(NULL, AV_LOG_WARNING, "PTS %"PRId64", next:%"PRId64" invalid dropping st:%d\n", pkt.pts, ist->next_dts, pkt.stream_index);
                     pkt.pts = AV_NOPTS_VALUE;
+                    ret = AVERROR_EXIT;
+                    av_log(NULL, AV_LOG_ERROR, "PTS is wrong, the demuxer could be broken or reset, try to terminate.\n");
+                    goto discard_packet;
                 }
             }
         }
@@ -3765,10 +3771,11 @@ static int process_input(int file_index)
             exit_program(1);
     }
 
+    ret = 0;
 discard_packet:
     av_free_packet(&pkt);
 
-    return 0;
+    return ret;
 }
 
 /**
