@@ -3732,7 +3732,7 @@ static int process_input(int file_index)
                 pkt.dts = AV_NOPTS_VALUE;
                 ret = AVERROR_EXIT;
                 av_log(NULL, AV_LOG_ERROR, "DTS is wrong, the demuxer could be broken or reset, try to terminate.\n");
-                goto discard_packet:
+                goto discard_packet;
             }
             if (pkt.pts != AV_NOPTS_VALUE){
                 int64_t pkt_pts = av_rescale_q(pkt.pts, ist->st->time_base, AV_TIME_BASE_Q);
