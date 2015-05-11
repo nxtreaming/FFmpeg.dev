@@ -75,7 +75,6 @@ av_cold int ff_init_hscaler_mmxext(int dstW, int xInc, uint8_t *filterCode,
         "add                         $8, %%"REG_a"      \n\t"
         // End
         "9:                                             \n\t"
-        // "int $3                                         \n\t"
         "lea       " LOCAL_MANGLE(0b) ", %0             \n\t"
         "lea       " LOCAL_MANGLE(1b) ", %1             \n\t"
         "lea       " LOCAL_MANGLE(2b) ", %2             \n\t"
@@ -113,7 +112,6 @@ av_cold int ff_init_hscaler_mmxext(int dstW, int xInc, uint8_t *filterCode,
         "add                         $8, %%"REG_a"      \n\t"
         // End
         "9:                                             \n\t"
-        // "int                       $3                   \n\t"
         "lea       " LOCAL_MANGLE(0b) ", %0             \n\t"
         "lea       " LOCAL_MANGLE(1b) ", %1             \n\t"
         "lea       " LOCAL_MANGLE(2b) ", %2             \n\t"
@@ -329,8 +327,8 @@ void ff_hcscale_fast_mmxext(SwsContext *c, int16_t *dst1, int16_t *dst2,
         CALL_MMXEXT_FILTER_CODE
         CALL_MMXEXT_FILTER_CODE
         "xor          %%"REG_a", %%"REG_a"  \n\t" // i
-        "mov                 %5, %%"REG_c"  \n\t" // src
-        "mov                 %6, %%"REG_D"  \n\t" // buf2
+        "mov                 %5, %%"REG_c"  \n\t" // src2
+        "mov                 %6, %%"REG_D"  \n\t" // dst2
         PREFETCH"   (%%"REG_c")             \n\t"
         PREFETCH" 32(%%"REG_c")             \n\t"
         PREFETCH" 64(%%"REG_c")             \n\t"
