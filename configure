@@ -1577,6 +1577,9 @@ ARCH_EXT_LIST_MIPS="
     mipsdspr1
     mipsdspr2
     msa
+"
+
+ARCH_EXT_LIST_LOONGSON="
     loongson3
 "
 
@@ -1617,7 +1620,7 @@ ARCH_EXT_LIST="
     $ARCH_EXT_LIST_PPC
     $ARCH_EXT_LIST_X86
     $ARCH_EXT_LIST_MIPS
-    loongson
+    $ARCH_EXT_LIST_LOONGSON
 "
 
 ARCH_FEATURES="
@@ -2018,7 +2021,6 @@ setend_deps="arm"
 
 map 'eval ${v}_inline_deps=inline_asm' $ARCH_EXT_LIST_ARM
 
-loongson_deps="mips"
 mipsfpu_deps="mips"
 mipsdspr1_deps="mips"
 mipsdspr2_deps="mips"
@@ -4301,11 +4303,10 @@ case $target_os in
         SLIBNAME_WITH_VERSION='$(SLIBPREF)$(NAME)-$(LIBVERSION)$(SLIBSUF)'
         SLIBNAME_WITH_MAJOR='$(SLIBPREF)$(shell echo $(NAME) | cut -c1-6)$(LIBMAJOR)$(SLIBSUF)'
         SLIB_CREATE_DEF_CMD='echo LIBRARY $(SLIBNAME_WITH_MAJOR) INITINSTANCE TERMINSTANCE > $(SUBDIR)$(NAME).def; \
-            echo PROTMODE >> $(SUBDIR)$(NAME).def; \
             echo CODE PRELOAD MOVEABLE DISCARDABLE >> $(SUBDIR)$(NAME).def; \
             echo DATA PRELOAD MOVEABLE MULTIPLE NONSHARED >> $(SUBDIR)$(NAME).def; \
             echo EXPORTS >> $(SUBDIR)$(NAME).def; \
-            emxexp -o $(OBJS) >> $(SUBDIR)$(NAME).def'
+            emxexp $(OBJS) >> $(SUBDIR)$(NAME).def'
         SLIB_EXTRA_CMD='emximp -o $(SUBDIR)$(LIBPREF)$(NAME)_dll.a $(SUBDIR)$(NAME).def; \
             emximp -o $(SUBDIR)$(LIBPREF)$(NAME)_dll.lib $(SUBDIR)$(NAME).def;'
         SLIB_INSTALL_EXTRA_LIB='$(LIBPREF)$(NAME)_dll.a $(LIBPREF)$(NAME)_dll.lib'
@@ -4685,8 +4686,6 @@ EOF
     [ $target_os != win32 ] && enabled_all armv6t2 shared !pic && enable_weak_pic
 
 elif enabled mips; then
-
-    check_inline_asm loongson '"dmult.g $1, $2, $3"'
 
     # Enable minimum ISA based on selected options
     if enabled mips64 && (enabled mipsdspr1 || enabled mipsdspr2); then
