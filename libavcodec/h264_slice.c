@@ -397,9 +397,9 @@ static void copy_picture_range(H264Picture **to, H264Picture **from, int count,
     int i;
 
     for (i = 0; i < count; i++) {
-        av_assert1((IN_RANGE(from[i], old_base, sizeof(*old_base)) ||
+        av_assert1((IN_RANGE(from[i], old_base, 1) ||
                 IN_RANGE(from[i], old_base->DPB,
-                         sizeof(H264Picture) * H264_MAX_PICTURE_COUNT) ||
+                         H264_MAX_PICTURE_COUNT) ||
                 !from[i]));
         to[i] = REBASE_PICTURE(from[i], new_base, old_base);
     }
@@ -863,6 +863,7 @@ static void init_scan_tables(H264Context *h)
 static enum AVPixelFormat get_pixel_format(H264Context *h, int force_callback)
 {
 #define HWACCEL_MAX (CONFIG_H264_DXVA2_HWACCEL + \
+                     CONFIG_H264_D3D11VA_HWACCEL + \
                      CONFIG_H264_VAAPI_HWACCEL + \
                      (CONFIG_H264_VDA_HWACCEL * 2) + \
                      CONFIG_H264_VDPAU_HWACCEL)
@@ -934,6 +935,9 @@ static enum AVPixelFormat get_pixel_format(H264Context *h, int force_callback)
         } else {
 #if CONFIG_H264_DXVA2_HWACCEL
             *fmt++ = AV_PIX_FMT_DXVA2_VLD;
+#endif
+#if CONFIG_H264_D3D11VA_HWACCEL
+            *fmt++ = AV_PIX_FMT_D3D11VA_VLD;
 #endif
 #if CONFIG_H264_VAAPI_HWACCEL
             *fmt++ = AV_PIX_FMT_VAAPI_VLD;
@@ -1330,6 +1334,7 @@ int ff_h264_decode_slice_header(H264Context *h, H264SliceContext *sl)
 
     if (h->context_initialized &&
         (must_reinit || needs_reinit)) {
+        h->context_initialized = 0;
         if (sl != h->slice_ctx) {
             av_log(h->avctx, AV_LOG_ERROR,
                    "changing width %d -> %d / height %d -> %d on "

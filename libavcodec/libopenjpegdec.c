@@ -83,8 +83,24 @@ static const enum AVPixelFormat libopenjpeg_all_pix_fmts[]  = {
 typedef struct LibOpenJPEGContext {
     AVClass *class;
     opj_dparameters_t dec_params;
+    opj_event_mgr_t event_mgr;
     int lowqual;
 } LibOpenJPEGContext;
+
+static void error_callback(const char *msg, void *data)
+{
+    av_log(data, AV_LOG_ERROR, "%s", msg);
+}
+
+static void warning_callback(const char *msg, void *data)
+{
+    av_log(data, AV_LOG_WARNING, "%s", msg);
+}
+
+static void info_callback(const char *msg, void *data)
+{
+    av_log(data, AV_LOG_DEBUG, "%s", msg);
+}
 
 static inline int libopenjpeg_matches_pix_fmt(const opj_image_t *image, enum AVPixelFormat pix_fmt)
 {
@@ -286,7 +302,11 @@ static int libopenjpeg_decode_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR, "Error initializing decoder.\n");
         return AVERROR_UNKNOWN;
     }
-    opj_set_event_mgr((opj_common_ptr) dec, NULL, NULL);
+    memset(&ctx->event_mgr, 0, sizeof(ctx->event_mgr));
+    ctx->event_mgr.info_handler    = info_callback;
+    ctx->event_mgr.error_handler   = error_callback;
+    ctx->event_mgr.warning_handler = warning_callback;
+    opj_set_event_mgr((opj_common_ptr) dec, &ctx->event_mgr, avctx);
     ctx->dec_params.cp_limit_decoding = LIMIT_TO_MAIN_HEADER;
     ctx->dec_params.cp_layer          = ctx->lowqual;
     // Tie decoder with decoding parameters
@@ -356,6 +376,15 @@ static int libopenjpeg_decode_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR, "Error decoding codestream.\n");
         ret = AVERROR_UNKNOWN;
         goto done;
+    }
+
+    for (i = 0; i < image->numcomps; i++) {
+        if (!image->comps[i].data) {
+            av_log(avctx, AV_LOG_ERROR,
+                   "Image component %d contains no data.\n", i);
+            ret = AVERROR_INVALIDDATA;
+            goto done;
+        }
     }
 
     desc       = av_pix_fmt_desc_get(avctx->pix_fmt);
