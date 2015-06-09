@@ -43,9 +43,10 @@
 #include "mpeg12data.h"
 #include "mpegutils.h"
 #include "mpegvideo.h"
+#include "mpegvideodata.h"
 #include "thread.h"
 #include "version.h"
-#include "vdpau_internal.h"
+#include "vdpau_compat.h"
 #include "xvmc_internal.h"
 
 typedef struct Mpeg1Context {
@@ -843,7 +844,7 @@ static int mpeg_decode_mb(MpegEncContext *s, int16_t block[12][64])
             ff_xvmc_pack_pblocks(s, -1); // inter are always full blocks
 
         if (s->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
-            if (s->flags2 & CODEC_FLAG2_FAST) {
+            if (s->avctx->flags2 & CODEC_FLAG2_FAST) {
                 for (i = 0; i < 6; i++)
                     mpeg2_fast_decode_block_intra(s, *s->pblocks[i], i);
             } else {
@@ -1063,7 +1064,7 @@ static int mpeg_decode_mb(MpegEncContext *s, int16_t block[12][64])
                 ff_xvmc_pack_pblocks(s, cbp);
 
             if (s->codec_id == AV_CODEC_ID_MPEG2VIDEO) {
-                if (s->flags2 & CODEC_FLAG2_FAST) {
+                if (s->avctx->flags2 & CODEC_FLAG2_FAST) {
                     for (i = 0; i < 6; i++) {
                         if (cbp & 32)
                             mpeg2_fast_decode_block_non_intra(s, *s->pblocks[i], i);
@@ -1085,7 +1086,7 @@ static int mpeg_decode_mb(MpegEncContext *s, int16_t block[12][64])
                     }
                 }
             } else {
-                if (s->flags2 & CODEC_FLAG2_FAST) {
+                if (s->avctx->flags2 & CODEC_FLAG2_FAST) {
                     for (i = 0; i < 6; i++) {
                         if (cbp & 32)
                             mpeg1_fast_decode_block_inter(s, *s->pblocks[i], i);
@@ -1141,10 +1142,6 @@ static av_cold int mpeg_decode_init(AVCodecContext *avctx)
     s->repeat_field                = 0;
     s->mpeg_enc_ctx.codec_id       = avctx->codec->id;
     avctx->color_range             = AVCOL_RANGE_MPEG;
-    if (avctx->codec->id == AV_CODEC_ID_MPEG1VIDEO)
-        avctx->chroma_sample_location = AVCHROMA_LOC_CENTER;
-    else
-        avctx->chroma_sample_location = AVCHROMA_LOC_LEFT;
     return 0;
 }
 
@@ -1207,6 +1204,9 @@ static const enum AVPixelFormat mpeg2_hwaccel_pixfmt_list_420[] = {
 #endif
 #if CONFIG_MPEG2_DXVA2_HWACCEL
     AV_PIX_FMT_DXVA2_VLD,
+#endif
+#if CONFIG_MPEG2_D3D11VA_HWACCEL
+    AV_PIX_FMT_D3D11VA_VLD,
 #endif
 #if CONFIG_MPEG2_VAAPI_HWACCEL
     AV_PIX_FMT_VAAPI_VLD,
@@ -1366,6 +1366,8 @@ static int mpeg_decode_postinit(AVCodecContext *avctx)
             // MPEG-1 fps
             avctx->framerate = ff_mpeg12_frame_rate_tab[s->frame_rate_index];
             avctx->ticks_per_frame     = 1;
+
+            avctx->chroma_sample_location = AVCHROMA_LOC_CENTER;
         } else { // MPEG-2
             // MPEG-2 fps
             av_reduce(&s->avctx->framerate.num,
@@ -1374,6 +1376,12 @@ static int mpeg_decode_postinit(AVCodecContext *avctx)
                       ff_mpeg12_frame_rate_tab[s->frame_rate_index].den * s1->frame_rate_ext.den,
                       1 << 30);
             avctx->ticks_per_frame = 2;
+
+            switch (s->chroma_format) {
+            case 1: avctx->chroma_sample_location = AVCHROMA_LOC_LEFT; break;
+            case 2:
+            case 3: avctx->chroma_sample_location = AVCHROMA_LOC_TOPLEFT; break;
+            }
         } // MPEG-2
 
         avctx->pix_fmt = mpeg_get_pixelformat(avctx);
@@ -1465,7 +1473,7 @@ static void mpeg_decode_sequence_extension(Mpeg1Context *s1)
     s->avctx->rc_buffer_size += get_bits(&s->gb, 8) * 1024 * 16 << 10;
 
     s->low_delay = get_bits1(&s->gb);
-    if (s->flags & CODEC_FLAG_LOW_DELAY)
+    if (s->avctx->flags & CODEC_FLAG_LOW_DELAY)
         s->low_delay = 1;
 
     s1->frame_rate_ext.num = get_bits(&s->gb, 2) + 1;
@@ -2188,7 +2196,7 @@ static int mpeg1_decode_sequence(AVCodecContext *avctx,
     s->avctx->codec_id      = AV_CODEC_ID_MPEG1VIDEO;
     s->out_format           = FMT_MPEG1;
     s->swap_uv              = 0; // AFAIK VCR2 does not have SEQ_HEADER
-    if (s->flags & CODEC_FLAG_LOW_DELAY)
+    if (s->avctx->flags & CODEC_FLAG_LOW_DELAY)
         s->low_delay = 1;
 
     if (s->avctx->debug & FF_DEBUG_PICT_INFO)
@@ -2641,7 +2649,7 @@ static int decode_chunks(AVCodecContext *avctx, AVFrame *picture,
                         }
                     }
                 }
-                if (s2->pict_type == AV_PICTURE_TYPE_I || (s2->flags2 & CODEC_FLAG2_SHOW_ALL))
+                if (s2->pict_type == AV_PICTURE_TYPE_I || (s2->avctx->flags2 & CODEC_FLAG2_SHOW_ALL))
                     s->sync = 1;
                 if (!s2->next_picture_ptr) {
                     /* Skip P-frames if we do not have a reference frame or
@@ -2762,7 +2770,7 @@ static int mpeg_decode_frame(AVCodecContext *avctx, void *data,
         return buf_size;
     }
 
-    if (s2->flags & CODEC_FLAG_TRUNCATED) {
+    if (s2->avctx->flags & CODEC_FLAG_TRUNCATED) {
         int next = ff_mpeg1_find_frame_end(&s2->parse_context, buf,
                                            buf_size, NULL);
 

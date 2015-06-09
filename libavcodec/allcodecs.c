@@ -76,6 +76,7 @@ void avcodec_register_all(void)
     /* hardware accelerators */
     REGISTER_HWACCEL(H263_VAAPI,        h263_vaapi);
     REGISTER_HWACCEL(H263_VDPAU,        h263_vdpau);
+    REGISTER_HWACCEL(H264_D3D11VA,      h264_d3d11va);
     REGISTER_HWACCEL(H264_DXVA2,        h264_dxva2);
     REGISTER_HWACCEL(H264_MMAL,         h264_mmal);
     REGISTER_HWACCEL(H264_QSV,          h264_qsv);
@@ -83,18 +84,22 @@ void avcodec_register_all(void)
     REGISTER_HWACCEL(H264_VDA,          h264_vda);
     REGISTER_HWACCEL(H264_VDA_OLD,      h264_vda_old);
     REGISTER_HWACCEL(H264_VDPAU,        h264_vdpau);
+    REGISTER_HWACCEL(HEVC_D3D11VA,      hevc_d3d11va);
     REGISTER_HWACCEL(HEVC_DXVA2,        hevc_dxva2);
     REGISTER_HWACCEL(MPEG1_XVMC,        mpeg1_xvmc);
     REGISTER_HWACCEL(MPEG1_VDPAU,       mpeg1_vdpau);
     REGISTER_HWACCEL(MPEG2_XVMC,        mpeg2_xvmc);
+    REGISTER_HWACCEL(MPEG2_D3D11VA,     mpeg2_d3d11va);
     REGISTER_HWACCEL(MPEG2_DXVA2,       mpeg2_dxva2);
     REGISTER_HWACCEL(MPEG2_VAAPI,       mpeg2_vaapi);
     REGISTER_HWACCEL(MPEG2_VDPAU,       mpeg2_vdpau);
     REGISTER_HWACCEL(MPEG4_VAAPI,       mpeg4_vaapi);
     REGISTER_HWACCEL(MPEG4_VDPAU,       mpeg4_vdpau);
+    REGISTER_HWACCEL(VC1_D3D11VA,       vc1_d3d11va);
     REGISTER_HWACCEL(VC1_DXVA2,         vc1_dxva2);
     REGISTER_HWACCEL(VC1_VAAPI,         vc1_vaapi);
     REGISTER_HWACCEL(VC1_VDPAU,         vc1_vdpau);
+    REGISTER_HWACCEL(WMV3_D3D11VA,      wmv3_d3d11va);
     REGISTER_HWACCEL(WMV3_DXVA2,        wmv3_dxva2);
     REGISTER_HWACCEL(WMV3_VAAPI,        wmv3_vaapi);
     REGISTER_HWACCEL(WMV3_VDPAU,        wmv3_vdpau);
@@ -230,8 +235,6 @@ void avcodec_register_all(void)
     REGISTER_DECODER(MVC2,              mvc2);
     REGISTER_DECODER(MXPEG,             mxpeg);
     REGISTER_DECODER(NUV,               nuv);
-    REGISTER_ENCODER(NVENC,             nvenc);
-    REGISTER_ENCODER(NVENC_H265,        nvenc_h265);
     REGISTER_DECODER(PAF_VIDEO,         paf_video);
     REGISTER_ENCDEC (PAM,               pam);
     REGISTER_ENCDEC (PBM,               pbm);
@@ -540,6 +543,7 @@ void avcodec_register_all(void)
     REGISTER_ENCDEC (LIBVPX_VP8,        libvpx_vp8);
     REGISTER_ENCDEC (LIBVPX_VP9,        libvpx_vp9);
     REGISTER_ENCODER(LIBWAVPACK,        libwavpack);
+    REGISTER_ENCODER(LIBWEBP_ANIM,      libwebp_anim);  /* preferred over libwebp */
     REGISTER_ENCODER(LIBWEBP,           libwebp);
     REGISTER_ENCODER(LIBX264,           libx264);
     REGISTER_ENCODER(LIBX264RGB,        libx264rgb);
@@ -558,6 +562,9 @@ void avcodec_register_all(void)
      * above is available */
     REGISTER_ENCODER(LIBOPENH264,       libopenh264);
     REGISTER_ENCODER(H264_QSV,          h264_qsv);
+    REGISTER_ENCODER(NVENC,             nvenc);
+    REGISTER_ENCODER(NVENC_H264,        nvenc_h264);
+    REGISTER_ENCODER(NVENC_HEVC,        nvenc_hevc);
 
     /* parsers */
     REGISTER_PARSER(AAC,                aac);

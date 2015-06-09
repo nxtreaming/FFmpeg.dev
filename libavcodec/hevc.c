@@ -328,7 +328,7 @@ static void export_stream_params(AVCodecContext *avctx,
 
 static int set_sps(HEVCContext *s, const HEVCSPS *sps, enum AVPixelFormat pix_fmt)
 {
-    #define HWACCEL_MAX (CONFIG_HEVC_DXVA2_HWACCEL)
+    #define HWACCEL_MAX (CONFIG_HEVC_DXVA2_HWACCEL + CONFIG_HEVC_D3D11VA_HWACCEL)
     enum AVPixelFormat pix_fmts[HWACCEL_MAX + 2], *fmt = pix_fmts;
     int ret, i;
 
@@ -342,6 +342,9 @@ static int set_sps(HEVCContext *s, const HEVCSPS *sps, enum AVPixelFormat pix_fm
     if (sps->pix_fmt == AV_PIX_FMT_YUV420P || sps->pix_fmt == AV_PIX_FMT_YUVJ420P) {
 #if CONFIG_HEVC_DXVA2_HWACCEL
         *fmt++ = AV_PIX_FMT_DXVA2_VLD;
+#endif
+#if CONFIG_HEVC_D3D11VA_HWACCEL
+        *fmt++ = AV_PIX_FMT_D3D11VA_VLD;
 #endif
     }
 
@@ -398,7 +401,7 @@ static int hls_slice_header(HEVCContext *s)
 {
     GetBitContext *gb = &s->HEVClc->gb;
     SliceHeader *sh   = &s->sh;
-    int i, j, ret;
+    int i, ret;
 
     // Coded parameters
     sh->first_slice_in_pic_flag = get_bits1(gb);
@@ -1616,7 +1619,7 @@ static void hevc_await_progress(HEVCContext *s, HEVCFrame *ref,
         ff_thread_await_progress(&ref->tf, y, 0);
 }
 
-static void hevc_luma_mv_mpv_mode(HEVCContext *s, int x0, int y0, int nPbW,
+static void hevc_luma_mv_mvp_mode(HEVCContext *s, int x0, int y0, int nPbW,
                                   int nPbH, int log2_cb_size, int part_idx,
                                   int merge_idx, MvField *mv)
 {
@@ -1701,7 +1704,7 @@ static void hls_prediction_unit(HEVCContext *s, int x0, int y0,
         ff_hevc_luma_mv_merge_mode(s, x0, y0, nPbW, nPbH, log2_cb_size,
                                    partIdx, merge_idx, &current_mv);
     } else {
-        hevc_luma_mv_mpv_mode(s, x0, y0, nPbW, nPbH, log2_cb_size,
+        hevc_luma_mv_mvp_mode(s, x0, y0, nPbW, nPbH, log2_cb_size,
                               partIdx, merge_idx, &current_mv);
     }
 

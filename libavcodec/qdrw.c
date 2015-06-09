@@ -95,6 +95,8 @@ static int decode_rle(AVCodecContext *avctx, AVFrame *p, GetByteContext *gbc,
                         pos -= offset;
                         pos++;
                     }
+                    if (pos >= offset)
+                        return AVERROR_INVALIDDATA;
                 }
                 left  -= 2;
             } else { /* copy */
@@ -105,6 +107,8 @@ static int decode_rle(AVCodecContext *avctx, AVFrame *p, GetByteContext *gbc,
                         pos -= offset;
                         pos++;
                     }
+                    if (pos >= offset)
+                        return AVERROR_INVALIDDATA;
                 }
                 left  -= 2 + code;
             }
@@ -149,7 +153,6 @@ static int decode_frame(AVCodecContext *avctx,
 
     bytestream2_init(&gbc, avpkt->data, avpkt->size);
     if (   bytestream2_get_bytes_left(&gbc) >= 552
-           && !check_header(gbc.buffer      , bytestream2_get_bytes_left(&gbc))
            &&  check_header(gbc.buffer + 512, bytestream2_get_bytes_left(&gbc) - 512)
        )
         bytestream2_skip(&gbc, 512);

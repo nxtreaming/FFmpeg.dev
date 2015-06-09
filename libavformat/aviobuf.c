@@ -465,7 +465,9 @@ static void fill_buffer(AVIOContext *s)
     /* make buffer smaller in case it ended up large after probing */
     if (s->read_packet && s->orig_buffer_size && s->buffer_size > s->orig_buffer_size) {
         if (dst == s->buffer) {
-            ffio_set_buf_size(s, s->orig_buffer_size);
+            int ret = ffio_set_buf_size(s, s->orig_buffer_size);
+            if (ret < 0)
+                av_log(s, AV_LOG_WARNING, "Failed to decrease buffer size\n");
 
             s->checksum_ptr = dst = s->buffer;
         }
@@ -578,6 +580,14 @@ int avio_read(AVIOContext *s, unsigned char *buf, int size)
         if (avio_feof(s))  return AVERROR_EOF;
     }
     return size1 - size;
+}
+
+int ffio_read_size(AVIOContext *s, unsigned char *buf, int size)
+{
+    int ret = avio_read(s, buf, size);
+    if (ret != size)
+        return AVERROR_INVALIDDATA;
+    return ret;
 }
 
 int ffio_read_indirect(AVIOContext *s, unsigned char *buf, int size, const unsigned char **data)

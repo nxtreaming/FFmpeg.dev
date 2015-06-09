@@ -34,8 +34,10 @@
 #include "h263.h"
 #include "internal.h"
 #include "mpeg_er.h"
+#include "mpegutils.h"
 #include "mpegvideo.h"
 #include "mpeg4video.h"
+#include "mpegvideodata.h"
 
 #define RV_GET_MAJOR_VER(x)  ((x) >> 28)
 #define RV_GET_MINOR_VER(x) (((x) >> 20) & 0xFF)
@@ -707,8 +709,6 @@ static int rv10_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     const uint8_t *slices_hdr = NULL;
 
     ff_dlog(avctx, "*****frame %d size=%d\n", avctx->frame_number, buf_size);
-    s->flags  = avctx->flags;
-    s->flags2 = avctx->flags2;
 
     /* no supplementary picture */
     if (buf_size == 0) {

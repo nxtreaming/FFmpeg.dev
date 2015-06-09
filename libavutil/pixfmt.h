@@ -57,11 +57,6 @@
  * For all the 8bit per pixel formats, an RGB32 palette is in data[1] like
  * for pal8. This palette is filled in automatically by the function
  * allocating the picture.
- *
- * @note
- * Make sure that all newly added big-endian formats have (pix_fmt & 1) == 1
- * and that all newly added little-endian formats have (pix_fmt & 1) == 0.
- * This allows simpler detection of big vs little-endian.
  */
 enum AVPixelFormat {
     AV_PIX_FMT_NONE = -1,
@@ -257,6 +252,8 @@ enum AVPixelFormat {
      * MMAL_BUFFER_HEADER_T structure.
      */
     AV_PIX_FMT_MMAL,
+
+    AV_PIX_FMT_D3D11VA_VLD,  ///< HW decoding through Direct3D11, Picture.data[3] contains a ID3D11VideoDecoderOutputView pointer
 
 #ifndef AV_PIX_FMT_ABI_GIT_MASTER
     AV_PIX_FMT_RGBA64BE=0x123,  ///< packed RGBA 16:16:16:16, 64bpp, 16R, 16G, 16B, 16A, the 2-byte value for each R/G/B/A component is stored as big-endian
@@ -530,15 +527,23 @@ enum AVColorRange {
 /**
  * Location of chroma samples.
  *
- *  X   X      3 4 X      X are luma samples,
- *             1 2        1-6 are possible chroma positions
- *  X   X      5 6 X      0 is undefined/unknown position
+ * Illustration showing the location of the first (top left) chroma sample of the
+ * image, the left shows only luma, the right
+ * shows the location of the chroma sample, the 2 could be imagined to overlay
+ * each other but are drawn seperately due to limitations of ASCII
+ *
+ *                1st 2nd       1st 2nd horizontal luma sample positions
+ *                 v   v         v   v
+ *                 ______        ______
+ *1st luma line > |X   X ...    |3 4 X ...     X are luma samples,
+ *                |             |1 2           1-6 are possible chroma positions
+ *2nd luma line > |X   X ...    |5 6 X ...     0 is undefined/unknown position
  */
 enum AVChromaLocation {
     AVCHROMA_LOC_UNSPECIFIED = 0,
-    AVCHROMA_LOC_LEFT        = 1, ///< mpeg2/4, h264 default
-    AVCHROMA_LOC_CENTER      = 2, ///< mpeg1, jpeg, h263
-    AVCHROMA_LOC_TOPLEFT     = 3, ///< DV
+    AVCHROMA_LOC_LEFT        = 1, ///< mpeg2/4 4:2:0, h264 default for 4:2:0
+    AVCHROMA_LOC_CENTER      = 2, ///< mpeg1 4:2:0, jpeg 4:2:0, h263 4:2:0
+    AVCHROMA_LOC_TOPLEFT     = 3, ///< ITU-R 601, SMPTE 274M 296M S314M(DV 4:1:1), mpeg2 4:2:2
     AVCHROMA_LOC_TOP         = 4,
     AVCHROMA_LOC_BOTTOMLEFT  = 5,
     AVCHROMA_LOC_BOTTOM      = 6,

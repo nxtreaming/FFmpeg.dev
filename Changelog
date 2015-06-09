@@ -8,7 +8,7 @@ version <next>:
 - showwavespic filter
 - DTS decoding through libdcadec
 - Drop support for nvenc API before 5.0
-- nvenc H265 encoder
+- nvenc HEVC encoder
 - Detelecine filter
 - Intel QSV-accelerated H.264 encoding
 - MMAL-accelerated H.264 decoding
@@ -21,6 +21,10 @@ version <next>:
 - Automatically rotate videos based on metadata in ffmpeg
 - improved Quickdraw compatibility
 - VP9 high bit-depth and extended colorspaces decoding support
+- WebPAnimEncoder API when available for encoding and muxing WebP
+- Direct3D11-accelerated decoding
+- Support Secure Transport
+- Multipart JPEG demuxer
 
 
 version 2.6:

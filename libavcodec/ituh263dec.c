@@ -42,6 +42,7 @@
 #include "unary.h"
 #include "flv.h"
 #include "mpeg4video.h"
+#include "mpegvideodata.h"
 
 // The defines below define the number of bits that are read at once for
 // reading vlc values. Changing these may improve speed and data cache needs
@@ -118,8 +119,8 @@ av_cold void ff_h263_decode_init_vlc(void)
         INIT_VLC_STATIC(&mv_vlc, MV_VLC_BITS, 33,
                  &ff_mvtab[0][1], 2, 1,
                  &ff_mvtab[0][0], 2, 1, 538);
-        ff_init_rl(&ff_h263_rl_inter, ff_h263_static_rl_table_store[0]);
-        ff_init_rl(&ff_rl_intra_aic, ff_h263_static_rl_table_store[1]);
+        ff_rl_init(&ff_h263_rl_inter, ff_h263_static_rl_table_store[0]);
+        ff_rl_init(&ff_rl_intra_aic, ff_h263_static_rl_table_store[1]);
         INIT_VLC_RL(ff_h263_rl_inter, 554);
         INIT_VLC_RL(ff_rl_intra_aic, 554);
         INIT_VLC_STATIC(&h263_mbtype_b_vlc, H263_MBTYPE_B_VLC_BITS, 15,
@@ -460,7 +461,7 @@ static int h263_decode_block(MpegEncContext * s, int16_t * block,
             level = get_bits(&s->gb, 8);
             if((level&0x7F) == 0){
                 av_log(s->avctx, AV_LOG_ERROR, "illegal dc %d at %d %d\n", level, s->mb_x, s->mb_y);
-                if(s->err_recognition & (AV_EF_BITSTREAM|AV_EF_COMPLIANT))
+                if (s->avctx->err_recognition & (AV_EF_BITSTREAM|AV_EF_COMPLIANT))
                     return -1;
             }
             if (level == 255)

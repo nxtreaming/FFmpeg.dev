@@ -271,6 +271,7 @@ OBJS-$(CONFIG_MPEGPS_DEMUXER)            += mpeg.o
 OBJS-$(CONFIG_MPEGTS_DEMUXER)            += mpegts.o isom.o
 OBJS-$(CONFIG_MPEGTS_MUXER)              += mpegtsenc.o
 OBJS-$(CONFIG_MPEGVIDEO_DEMUXER)         += mpegvideodec.o rawdec.o
+OBJS-$(CONFIG_MPJPEG_DEMUXER)            += mpjpegdec.o
 OBJS-$(CONFIG_MPJPEG_MUXER)              += mpjpeg.o
 OBJS-$(CONFIG_MPL2_DEMUXER)              += mpl2dec.o subtitles.o
 OBJS-$(CONFIG_MPSUB_DEMUXER)             += mpsubdec.o subtitles.o
@@ -399,6 +400,7 @@ OBJS-$(CONFIG_SEGAFILM_DEMUXER)          += segafilm.o
 OBJS-$(CONFIG_SEGMENT_MUXER)             += segment.o
 OBJS-$(CONFIG_SHORTEN_DEMUXER)           += rawdec.o
 OBJS-$(CONFIG_SIFF_DEMUXER)              += siff.o
+OBJS-$(CONFIG_SINGLEJPEG_MUXER)          += rawenc.o
 OBJS-$(CONFIG_SMACKER_DEMUXER)           += smacker.o
 OBJS-$(CONFIG_SMJPEG_DEMUXER)            += smjpegdec.o smjpeg.o
 OBJS-$(CONFIG_SMJPEG_MUXER)              += smjpegenc.o smjpeg.o
@@ -521,7 +523,9 @@ OBJS-$(CONFIG_SCTP_PROTOCOL)             += sctp.o
 OBJS-$(CONFIG_SRTP_PROTOCOL)             += srtpproto.o srtp.o
 OBJS-$(CONFIG_SUBFILE_PROTOCOL)          += subfile.o
 OBJS-$(CONFIG_TCP_PROTOCOL)              += tcp.o
-OBJS-$(CONFIG_TLS_PROTOCOL)              += tls.o
+OBJS-$(CONFIG_TLS_GNUTLS_PROTOCOL)       += tls_gnutls.o tls.o
+OBJS-$(CONFIG_TLS_OPENSSL_PROTOCOL)      += tls_openssl.o tls.o
+OBJS-$(CONFIG_TLS_SECURETRANSPORT_PROTOCOL) += tls_securetransport.o tls.o
 OBJS-$(CONFIG_UDP_PROTOCOL)              += udp.o
 OBJS-$(CONFIG_UDPLITE_PROTOCOL)          += udp.o
 OBJS-$(CONFIG_UNIX_PROTOCOL)             += unix.o
@@ -542,6 +546,7 @@ TESTPROGS = seek                                                        \
             url                                                         \
 
 TESTPROGS-$(CONFIG_NETWORK)              += noproxy
+TESTPROGS-$(CONFIG_FFRTMPCRYPT_PROTOCOL) += rtmpdh
 
 TOOLS     = aviocat                                                     \
             ismindex                                                    \

@@ -33,6 +33,7 @@
 #include "mpeg4video.h"
 #include "msmpeg4data.h"
 #include "vc1data.h"
+#include "wmv2.h"
 
 #define DC_VLC_BITS 9
 #define V2_INTRA_CBPC_VLC_BITS 3
@@ -301,7 +302,7 @@ av_cold int ff_msmpeg4_decode_init(AVCodecContext *avctx)
 
     if (!done) {
         for(i=0;i<NB_RL_TABLES;i++) {
-            ff_init_rl(&ff_rl_table[i], ff_static_rl_table_store[i]);
+            ff_rl_init(&ff_rl_table[i], ff_static_rl_table_store[i]);
         }
         INIT_VLC_RL(ff_rl_table[0], 642);
         INIT_VLC_RL(ff_rl_table[1], 1104);
@@ -843,7 +844,9 @@ int ff_msmpeg4_decode_block(MpegEncContext * s, int16_t * block,
             i-= 192;
             if(i&(~63)){
                 const int left= get_bits_left(&s->gb);
-                if(((i+192 == 64 && level/qmul==-1) || !(s->err_recognition&(AV_EF_BITSTREAM|AV_EF_COMPLIANT))) && left>=0){
+                if (((i + 192 == 64 && level / qmul == -1) ||
+                     !(s->avctx->err_recognition & (AV_EF_BITSTREAM|AV_EF_COMPLIANT))) &&
+                    left >= 0) {
                     av_log(s->avctx, AV_LOG_ERROR, "ignoring overflow at %d %d\n", s->mb_x, s->mb_y);
                     i = 63;
                     break;

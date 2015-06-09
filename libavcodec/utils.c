@@ -1615,6 +1615,11 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
     avctx->pts_correction_last_pts =
     avctx->pts_correction_last_dts = INT64_MIN;
 
+    if (   !CONFIG_GRAY && avctx->flags & CODEC_FLAG_GRAY
+        && avctx->codec_descriptor->type == AVMEDIA_TYPE_VIDEO)
+        av_log(avctx, AV_LOG_WARNING,
+               "gray decoding requested but not enabled at configuration time\n");
+
     if (   avctx->codec->init && (!(avctx->active_thread_type&FF_THREAD_FRAME)
         || avctx->internal->frame_thread_encoder)) {
         ret = avctx->codec->init(avctx);
@@ -2534,6 +2539,7 @@ int attribute_align_arg avcodec_decode_audio4(AVCodecContext *avctx,
             ret = ff_thread_decode_frame(avctx, frame, got_frame_ptr, &tmp);
         else {
             ret = avctx->codec->decode(avctx, frame, got_frame_ptr, &tmp);
+            av_assert0(ret <= tmp.size);
             frame->pkt_dts = avpkt->dts;
         }
         if (ret >= 0 && *got_frame_ptr) {
