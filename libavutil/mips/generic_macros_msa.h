@@ -403,6 +403,19 @@
 }
 #define LD_SH16(...) LD_H16(v8i16, __VA_ARGS__)
 
+/* Description : Load as 4x4 block of signed halfword elements from 1D source
+                 data into 4 vectors (Each vector with 4 signed halfwords)
+   Arguments   : Inputs  - psrc
+                 Outputs - out0, out1, out2, out3
+*/
+#define LD4x4_SH(psrc, out0, out1, out2, out3)                \
+{                                                             \
+    out0 = LD_SH(psrc);                                       \
+    out2 = LD_SH(psrc + 8);                                   \
+    out1 = (v8i16) __msa_ilvl_d((v2i64) out0, (v2i64) out0);  \
+    out3 = (v8i16) __msa_ilvl_d((v2i64) out2, (v2i64) out2);  \
+}
+
 /* Description : Load 2 vectors of signed word elements with stride
    Arguments   : Inputs  - psrc    (source pointer to load from)
                          - stride
@@ -747,6 +760,33 @@
     SW(out15_m, pblk_12x8_m + 8);                                        \
 }
 
+/* Description : average with rounding (in0 + in1 + 1) / 2.
+   Arguments   : Inputs  - in0, in1, in2, in3,
+                 Outputs - out0, out1
+                 Return Type - signed byte
+   Details     : Each byte element from 'in0' vector is added with each byte
+                 element from 'in1' vector. The addition of the elements plus 1
+                (for rounding) is done unsigned with full precision,
+                i.e. the result has one extra bit. Unsigned division by 2
+                (or logical shift right by one bit) is performed before writing
+                the result to vector 'out0'
+                Similar for the pair of 'in2' and 'in3'
+*/
+#define AVER_UB2(RTYPE, in0, in1, in2, in3, out0, out1)       \
+{                                                             \
+    out0 = (RTYPE) __msa_aver_u_b((v16u8) in0, (v16u8) in1);  \
+    out1 = (RTYPE) __msa_aver_u_b((v16u8) in2, (v16u8) in3);  \
+}
+#define AVER_UB2_UB(...) AVER_UB2(v16u8, __VA_ARGS__)
+
+#define AVER_UB4(RTYPE, in0, in1, in2, in3, in4, in5, in6, in7, \
+                 out0, out1, out2, out3)                        \
+{                                                               \
+    AVER_UB2(RTYPE, in0, in1, in2, in3, out0, out1)             \
+    AVER_UB2(RTYPE, in4, in5, in6, in7, out2, out3)             \
+}
+#define AVER_UB4_UB(...) AVER_UB4(v16u8, __VA_ARGS__)
+
 /* Description : Immediate number of columns to slide with zero
    Arguments   : Inputs  - in0, in1, slide_val
                  Outputs - out0, out1
@@ -761,6 +801,8 @@
     out1 = (RTYPE) __msa_sldi_b((v16i8) zero_m, (v16i8) in1, slide_val);  \
 }
 #define SLDI_B2_0_UB(...) SLDI_B2_0(v16u8, __VA_ARGS__)
+#define SLDI_B2_0_SB(...) SLDI_B2_0(v16i8, __VA_ARGS__)
+#define SLDI_B2_0_SW(...) SLDI_B2_0(v4i32, __VA_ARGS__)
 
 #define SLDI_B4_0(RTYPE, in0, in1, in2, in3,            \
                   out0, out1, out2, out3, slide_val)    \
@@ -768,7 +810,9 @@
     SLDI_B2_0(RTYPE, in0, in1, out0, out1, slide_val);  \
     SLDI_B2_0(RTYPE, in2, in3, out2, out3, slide_val);  \
 }
+#define SLDI_B4_0_UB(...) SLDI_B4_0(v16u8, __VA_ARGS__)
 #define SLDI_B4_0_SB(...) SLDI_B4_0(v16i8, __VA_ARGS__)
+#define SLDI_B4_0_SH(...) SLDI_B4_0(v8i16, __VA_ARGS__)
 
 /* Description : Immediate number of columns to slide
    Arguments   : Inputs  - in0_0, in0_1, in1_0, in1_1, slide_val
@@ -821,6 +865,23 @@
     VSHF_B2(RTYPE, in0, in1, in0, in1, mask2, mask3, out2, out3);  \
 }
 #define VSHF_B4_SB(...) VSHF_B4(v16i8, __VA_ARGS__)
+#define VSHF_B4_SH(...) VSHF_B4(v8i16, __VA_ARGS__)
+
+/* Description : Shuffle halfword vector elements as per mask vector
+   Arguments   : Inputs  - in0, in1, in2, in3, mask0, mask1
+                 Outputs - out0, out1
+                 Return Type - as per RTYPE
+   Details     : Selective halfword elements from in0 & in1 are copied to out0
+                 as per control vector mask0
+                 Selective halfword elements from in2 & in3 are copied to out1
+                 as per control vector mask1
+*/
+#define VSHF_H2(RTYPE, in0, in1, in2, in3, mask0, mask1, out0, out1)       \
+{                                                                          \
+    out0 = (RTYPE) __msa_vshf_h((v8i16) mask0, (v8i16) in1, (v8i16) in0);  \
+    out1 = (RTYPE) __msa_vshf_h((v8i16) mask1, (v8i16) in3, (v8i16) in2);  \
+}
+#define VSHF_H2_SH(...) VSHF_H2(v8i16, __VA_ARGS__)
 
 /* Description : Shuffle byte vector elements as per mask vector
    Arguments   : Inputs  - in0, in1, in2, in3, mask0, mask1
@@ -837,6 +898,34 @@
     out1 = (RTYPE) __msa_vshf_w((v4i32) mask1, (v4i32) in3, (v4i32) in2); \
 }
 #define VSHF_W2_SB(...) VSHF_W2(v16i8, __VA_ARGS__)
+
+/* Description : Dot product of byte vector elements
+   Arguments   : Inputs  - mult0, mult1
+                           cnst0, cnst1
+                 Outputs - out0, out1
+                 Return Type - unsigned halfword
+   Details     : Unsigned byte elements from mult0 are multiplied with
+                 unsigned byte elements from cnst0 producing a result
+                 twice the size of input i.e. unsigned halfword.
+                 Then this multiplication results of adjacent odd-even elements
+                 are added together and stored to the out vector
+                 (2 unsigned halfword results)
+*/
+#define DOTP_UB2(RTYPE, mult0, mult1, cnst0, cnst1, out0, out1)   \
+{                                                                 \
+    out0 = (RTYPE) __msa_dotp_u_h((v16u8) mult0, (v16u8) cnst0);  \
+    out1 = (RTYPE) __msa_dotp_u_h((v16u8) mult1, (v16u8) cnst1);  \
+}
+#define DOTP_UB2_UH(...) DOTP_UB2(v8u16, __VA_ARGS__)
+
+#define DOTP_UB4(RTYPE, mult0, mult1, mult2, mult3,           \
+                 cnst0, cnst1, cnst2, cnst3,                  \
+                 out0, out1, out2, out3)                      \
+{                                                             \
+    DOTP_UB2(RTYPE, mult0, mult1, cnst0, cnst1, out0, out1);  \
+    DOTP_UB2(RTYPE, mult2, mult3, cnst2, cnst3, out2, out3);  \
+}
+#define DOTP_UB4_UH(...) DOTP_UB4(v8u16, __VA_ARGS__)
 
 /* Description : Dot product of byte vector elements
    Arguments   : Inputs  - mult0, mult1
@@ -1018,6 +1107,21 @@
     out_m;                                                \
 } )
 
+/* Description : Horizontal addition of unsigned byte vector elements
+   Arguments   : Inputs  - in0, in1
+                 Outputs - out0, out1
+                 Return Type - as per RTYPE
+   Details     : Each unsigned odd byte element from 'in0' is added to
+                 even unsigned byte element from 'in0' (pairwise) and the
+                 halfword result is stored in 'out0'
+*/
+#define HADD_UB2(RTYPE, in0, in1, out0, out1)                 \
+{                                                             \
+    out0 = (RTYPE) __msa_hadd_u_h((v16u8) in0, (v16u8) in0);  \
+    out1 = (RTYPE) __msa_hadd_u_h((v16u8) in1, (v16u8) in1);  \
+}
+#define HADD_UB2_UH(...) HADD_UB2(v8u16, __VA_ARGS__)
+
 /* Description : Horizontal subtraction of unsigned byte vector elements
    Arguments   : Inputs  - in0, in1
                  Outputs - out0, out1
@@ -1033,6 +1137,20 @@
 }
 #define HSUB_UB2_UH(...) HSUB_UB2(v8u16, __VA_ARGS__)
 #define HSUB_UB2_SH(...) HSUB_UB2(v8i16, __VA_ARGS__)
+
+/* Description : Insert specified word elements from input vectors to 1
+                 destination vector
+   Arguments   : Inputs  - in0, in1, in2, in3 (4 input vectors)
+                 Outputs - out                (output vector)
+                 Return Type - as per RTYPE
+*/
+#define INSERT_W2(RTYPE, in0, in1, out)                 \
+{                                                       \
+    out = (RTYPE) __msa_insert_w((v4i32) out, 0, in0);  \
+    out = (RTYPE) __msa_insert_w((v4i32) out, 1, in1);  \
+}
+#define INSERT_W2_UB(...) INSERT_W2(v16u8, __VA_ARGS__)
+#define INSERT_W2_SB(...) INSERT_W2(v16i8, __VA_ARGS__)
 
 #define INSERT_W4(RTYPE, in0, in1, in2, in3, out)       \
 {                                                       \
@@ -1059,6 +1177,25 @@
 #define INSERT_D2_UB(...) INSERT_D2(v16u8, __VA_ARGS__)
 #define INSERT_D2_SB(...) INSERT_D2(v16i8, __VA_ARGS__)
 #define INSERT_D2_SD(...) INSERT_D2(v2i64, __VA_ARGS__)
+
+/* Description : Interleave even byte elements from vectors
+   Arguments   : Inputs  - in0, in1, in2, in3
+                 Outputs - out0, out1
+                 Return Type - as per RTYPE
+   Details     : Even byte elements of 'in0' and even byte
+                 elements of 'in1' are interleaved and copied to 'out0'
+                 Even byte elements of 'in2' and even byte
+                 elements of 'in3' are interleaved and copied to 'out1'
+*/
+#define ILVEV_B2(RTYPE, in0, in1, in2, in3, out0, out1)      \
+{                                                            \
+    out0 = (RTYPE) __msa_ilvev_b((v16i8) in1, (v16i8) in0);  \
+    out1 = (RTYPE) __msa_ilvev_b((v16i8) in3, (v16i8) in2);  \
+}
+#define ILVEV_B2_UB(...) ILVEV_B2(v16u8, __VA_ARGS__)
+#define ILVEV_B2_SB(...) ILVEV_B2(v16i8, __VA_ARGS__)
+#define ILVEV_B2_SH(...) ILVEV_B2(v8i16, __VA_ARGS__)
+#define ILVEV_B2_SD(...) ILVEV_B2(v2i64, __VA_ARGS__)
 
 /* Description : Interleave even halfword elements from vectors
    Arguments   : Inputs  - in0, in1, in2, in3
@@ -1107,6 +1244,8 @@
     out1 = (RTYPE) __msa_ilvev_d((v2i64) in3, (v2i64) in2);  \
 }
 #define ILVEV_D2_UB(...) ILVEV_D2(v16u8, __VA_ARGS__)
+#define ILVEV_D2_SB(...) ILVEV_D2(v16i8, __VA_ARGS__)
+#define ILVEV_D2_SW(...) ILVEV_D2(v4i32, __VA_ARGS__)
 
 /* Description : Interleave left half of byte elements from vectors
    Arguments   : Inputs  - in0, in1, in2, in3
@@ -1212,9 +1351,22 @@
     ILVR_B2(RTYPE, in0, in1, in2, in3, out0, out1);             \
     ILVR_B2(RTYPE, in4, in5, in6, in7, out2, out3);             \
 }
+#define ILVR_B4_UB(...) ILVR_B4(v16u8, __VA_ARGS__)
 #define ILVR_B4_SB(...) ILVR_B4(v16i8, __VA_ARGS__)
 #define ILVR_B4_UH(...) ILVR_B4(v8u16, __VA_ARGS__)
 #define ILVR_B4_SH(...) ILVR_B4(v8i16, __VA_ARGS__)
+#define ILVR_B4_SW(...) ILVR_B4(v4i32, __VA_ARGS__)
+
+#define ILVR_B8(RTYPE, in0, in1, in2, in3, in4, in5, in6, in7,    \
+                in8, in9, in10, in11, in12, in13, in14, in15,     \
+                out0, out1, out2, out3, out4, out5, out6, out7)   \
+{                                                                 \
+    ILVR_B4(RTYPE, in0, in1, in2, in3, in4, in5, in6, in7,        \
+            out0, out1, out2, out3);                              \
+    ILVR_B4(RTYPE, in8, in9, in10, in11, in12, in13, in14, in15,  \
+            out4, out5, out6, out7);                              \
+}
+#define ILVR_B8_UH(...) ILVR_B8(v8u16, __VA_ARGS__)
 
 /* Description : Interleave right half of halfword elements from vectors
    Arguments   : Inputs  - in0, in1, in2, in3, in4, in5, in6, in7
@@ -1279,6 +1431,7 @@
     out0 = (RTYPE) __msa_ilvr_d((v2i64) (in0), (v2i64) (in1));  \
     out1 = (RTYPE) __msa_ilvr_d((v2i64) (in2), (v2i64) (in3));  \
 }
+#define ILVR_D2_UB(...) ILVR_D2(v16u8, __VA_ARGS__)
 #define ILVR_D2_SB(...) ILVR_D2(v16i8, __VA_ARGS__)
 #define ILVR_D2_SH(...) ILVR_D2(v8i16, __VA_ARGS__)
 
@@ -1311,8 +1464,11 @@
     out0 = (RTYPE) __msa_ilvr_b((v16i8) in0, (v16i8) in1);  \
     out1 = (RTYPE) __msa_ilvl_b((v16i8) in0, (v16i8) in1);  \
 }
+#define ILVRL_B2_UB(...) ILVRL_B2(v16u8, __VA_ARGS__)
 #define ILVRL_B2_SB(...) ILVRL_B2(v16i8, __VA_ARGS__)
+#define ILVRL_B2_UH(...) ILVRL_B2(v8u16, __VA_ARGS__)
 #define ILVRL_B2_SH(...) ILVRL_B2(v8i16, __VA_ARGS__)
+#define ILVRL_B2_SW(...) ILVRL_B2(v4i32, __VA_ARGS__)
 
 #define ILVRL_H2(RTYPE, in0, in1, out0, out1)               \
 {                                                           \
@@ -1870,6 +2026,53 @@
     ADD2(in4, in5, in6, in7, out2, out3);                                     \
 }
 
+/* Description : Subtraction of 2 pairs of vectors
+   Arguments   : Inputs  - in0, in1, in2, in3
+                 Outputs - out0, out1
+   Details     : Each element from 2 pairs vectors is subtracted and 2 results
+                 are produced
+*/
+#define SUB2(in0, in1, in2, in3, out0, out1)  \
+{                                             \
+    out0 = in0 - in1;                         \
+    out1 = in2 - in3;                         \
+}
+
+/* Description : Sign extend halfword elements from right half of the vector
+   Arguments   : Inputs  - in    (input halfword vector)
+                 Outputs - out   (sign extended word vectors)
+                 Return Type - signed word
+   Details     : Sign bit of halfword elements from input vector 'in' is
+                 extracted and interleaved with same vector 'in0' to generate
+                 4 word elements keeping sign intact
+*/
+#define UNPCK_R_SH_SW(in, out)                       \
+{                                                    \
+    v8i16 sign_m;                                    \
+                                                     \
+    sign_m = __msa_clti_s_h((v8i16) in, 0);          \
+    out = (v4i32) __msa_ilvr_h(sign_m, (v8i16) in);  \
+}
+
+/* Description : Sign extend byte elements from input vector and return
+                 halfword results in pair of vectors
+   Arguments   : Inputs  - in           (1 input byte vector)
+                 Outputs - out0, out1   (sign extended 2 halfword vectors)
+                 Return Type - signed halfword
+   Details     : Sign bit of byte elements from input vector 'in' is
+                 extracted and interleaved right with same vector 'in0' to
+                 generate 8 signed halfword elements in 'out0'
+                 Then interleaved left with same vector 'in0' to
+                 generate 8 signed halfword elements in 'out1'
+*/
+#define UNPCK_SB_SH(in, out0, out1)                  \
+{                                                    \
+    v16i8 tmp_m;                                     \
+                                                     \
+    tmp_m = __msa_clti_s_b((v16i8) in, 0);           \
+    ILVRL_B2_SH(tmp_m, in, out0, out1);              \
+}
+
 /* Description : Zero extend unsigned byte elements to halfword elements
    Arguments   : Inputs  - in           (1 input unsigned byte vector)
                  Outputs - out0, out1   (unsigned 2 halfword vectors)
@@ -1903,6 +2106,18 @@
     ILVRL_H2_SW(tmp_m, in, out0, out1);              \
 }
 
+/* Description : Swap two variables
+   Arguments   : Inputs  - in0, in1
+                 Outputs - in0, in1 (in-place)
+   Details     : Swapping of two input variables using xor
+*/
+#define SWAP(in0, in1)  \
+{                       \
+    in0 = in0 ^ in1;    \
+    in1 = in0 ^ in1;    \
+    in0 = in0 ^ in1;    \
+}
+
 /* Description : Butterfly of 4 input vectors
    Arguments   : Inputs  - in0, in1, in2, in3
                  Outputs - out0, out1, out2, out3
@@ -1915,6 +2130,25 @@
                                                                  \
     out2 = in1 - in2;                                            \
     out3 = in0 - in3;                                            \
+}
+
+/* Description : Butterfly of 8 input vectors
+   Arguments   : Inputs  - in0 ...  in7
+                 Outputs - out0 .. out7
+   Details     : Butterfly operation
+*/
+#define BUTTERFLY_8(in0, in1, in2, in3, in4, in5, in6, in7,          \
+                    out0, out1, out2, out3, out4, out5, out6, out7)  \
+{                                                                    \
+    out0 = in0 + in7;                                                \
+    out1 = in1 + in6;                                                \
+    out2 = in2 + in5;                                                \
+    out3 = in3 + in4;                                                \
+                                                                     \
+    out4 = in3 - in4;                                                \
+    out5 = in2 - in5;                                                \
+    out6 = in1 - in6;                                                \
+    out7 = in0 - in7;                                                \
 }
 
 /* Description : Transposes input 4x4 byte block
@@ -1959,9 +2193,34 @@
     out1 = (RTYPE) __msa_ilvl_d((v2i64) out2, (v2i64) out0);            \
     out3 = (RTYPE) __msa_ilvl_d((v2i64) out0, (v2i64) out2);            \
 }
-
 #define TRANSPOSE8x4_UB_UB(...) TRANSPOSE8x4_UB(v16u8, __VA_ARGS__)
+#define TRANSPOSE8x4_UB_UH(...) TRANSPOSE8x4_UB(v8u16, __VA_ARGS__)
 
+/* Description : Transposes input 8x8 byte block
+   Arguments   : Inputs  - in0, in1, in2, in3, in4, in5, in6, in7
+                           (input 8x8 byte block)
+                 Outputs - out0, out1, out2, out3, out4, out5, out6, out7
+                           (output 8x8 byte block)
+                 Return Type - unsigned byte
+   Details     :
+*/
+#define TRANSPOSE8x8_UB(RTYPE, in0, in1, in2, in3, in4, in5, in6, in7,   \
+                        out0, out1, out2, out3, out4, out5, out6, out7)  \
+{                                                                        \
+    v16i8 tmp0_m, tmp1_m, tmp2_m, tmp3_m;                                \
+    v16i8 tmp4_m, tmp5_m, tmp6_m, tmp7_m;                                \
+                                                                         \
+    ILVR_B4_SB(in2, in0, in3, in1, in6, in4, in7, in5,                   \
+               tmp0_m, tmp1_m, tmp2_m, tmp3_m);                          \
+    ILVRL_B2_SB(tmp1_m, tmp0_m, tmp4_m, tmp5_m);                         \
+    ILVRL_B2_SB(tmp3_m, tmp2_m, tmp6_m, tmp7_m);                         \
+    ILVRL_W2(RTYPE, tmp6_m, tmp4_m, out0, out2);                         \
+    ILVRL_W2(RTYPE, tmp7_m, tmp5_m, out4, out6);                         \
+    SLDI_B2_0(RTYPE, out0, out2, out1, out3, 8);                         \
+    SLDI_B2_0(RTYPE, out4, out6, out5, out7, 8);                         \
+}
+#define TRANSPOSE8x8_UB_UB(...) TRANSPOSE8x8_UB(v16u8, __VA_ARGS__)
+#define TRANSPOSE8x8_UB_UH(...) TRANSPOSE8x8_UB(v8u16, __VA_ARGS__)
 /* Description : Transposes 16x8 block into 8x16 with byte elements in vectors
    Arguments   : Inputs  - in0, in1, in2, in3, in4, in5, in6, in7,
                            in8, in9, in10, in11, in12, in13, in14, in15
@@ -2009,6 +2268,22 @@
     tmp3_m = (v16u8) __msa_ilvod_h((v8i16) tmp7_m, (v8i16) tmp6_m);          \
     out3 = (v16u8) __msa_ilvev_w((v4i32) tmp3_m, (v4i32) tmp2_m);            \
     out7 = (v16u8) __msa_ilvod_w((v4i32) tmp3_m, (v4i32) tmp2_m);            \
+}
+
+/* Description : Transposes 4x4 block with half word elements in vectors
+   Arguments   : Inputs  - in0, in1, in2, in3
+                 Outputs - out0, out1, out2, out3
+                 Return Type - signed halfword
+   Details     :
+*/
+#define TRANSPOSE4x4_SH_SH(in0, in1, in2, in3, out0, out1, out2, out3)  \
+{                                                                       \
+    v8i16 s0_m, s1_m;                                                   \
+                                                                        \
+    ILVR_H2_SH(in1, in0, in3, in2, s0_m, s1_m);                         \
+    ILVRL_W2_SH(s1_m, s0_m, out0, out2);                                \
+    out1 = (v8i16) __msa_ilvl_d((v2i64) out0, (v2i64) out0);            \
+    out3 = (v8i16) __msa_ilvl_d((v2i64) out0, (v2i64) out2);            \
 }
 
 /* Description : Transposes 8x8 block with half word elements in vectors
@@ -2061,6 +2336,38 @@
     out3 = (v4i32) __msa_ilvl_d((v2i64) s3_m, (v2i64) s1_m);            \
 }
 
+/* Description : Add block 4x4
+   Arguments   : Inputs  - in0, in1, in2, in3, pdst, stride
+                 Outputs -
+                 Return Type - unsigned bytes
+   Details     : Least significant 4 bytes from each input vector are added to
+                 the destination bytes, clipped between 0-255 and then stored.
+*/
+#define ADDBLK_ST4x4_UB(in0, in1, in2, in3, pdst, stride)         \
+{                                                                 \
+    uint32_t src0_m, src1_m, src2_m, src3_m;                      \
+    uint32_t out0_m, out1_m, out2_m, out3_m;                      \
+    v8i16 inp0_m, inp1_m, res0_m, res1_m;                         \
+    v16i8 dst0_m = { 0 };                                         \
+    v16i8 dst1_m = { 0 };                                         \
+    v16i8 zero_m = { 0 };                                         \
+                                                                  \
+    ILVR_D2_SH(in1, in0, in3, in2, inp0_m, inp1_m)                \
+    LW4(pdst, stride,  src0_m, src1_m, src2_m, src3_m);           \
+    INSERT_W2_SB(src0_m, src1_m, dst0_m);                         \
+    INSERT_W2_SB(src2_m, src3_m, dst1_m);                         \
+    ILVR_B2_SH(zero_m, dst0_m, zero_m, dst1_m, res0_m, res1_m);   \
+    ADD2(res0_m, inp0_m, res1_m, inp1_m, res0_m, res1_m);         \
+    CLIP_SH2_0_255(res0_m, res1_m);                               \
+    PCKEV_B2_SB(res0_m, res0_m, res1_m, res1_m, dst0_m, dst1_m);  \
+                                                                  \
+    out0_m = __msa_copy_u_w((v4i32) dst0_m, 0);                   \
+    out1_m = __msa_copy_u_w((v4i32) dst0_m, 1);                   \
+    out2_m = __msa_copy_u_w((v4i32) dst1_m, 0);                   \
+    out3_m = __msa_copy_u_w((v4i32) dst1_m, 1);                   \
+    SW4(out0_m, out1_m, out2_m, out3_m, pdst, stride);            \
+}
+
 /* Description : Pack even elements of input vectors & xor with 128
    Arguments   : Inputs  - in0, in1
                  Outputs - out_m
@@ -2095,5 +2402,16 @@
     out3_m = __msa_copy_u_w((v4i32) tmp1_m, 2);           \
                                                           \
     SW4(out0_m, out1_m, out2_m, out3_m, pdst, stride);    \
+}
+
+/* Description : Pack even byte elements and store byte vector in destination
+                 memory
+   Arguments   : Inputs  - in0, in1, pdst
+*/
+#define PCKEV_ST_SB(in0, in1, pdst)                   \
+{                                                     \
+    v16i8 tmp_m;                                      \
+    tmp_m = __msa_pckev_b((v16i8) in1, (v16i8) in0);  \
+    ST_SB(tmp_m, (pdst));                             \
 }
 #endif  /* AVUTIL_MIPS_GENERIC_MACROS_MSA_H */
