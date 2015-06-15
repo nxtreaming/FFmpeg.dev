@@ -3612,6 +3612,7 @@ static int process_input(int file_index)
         return AVERROR(EAGAIN);
     }
 
+    av_log(NULL, AV_LOG_DEBUG, "pos:%"PRId64",\tsize:%d,\tindex:%d\n", pkt.pos, pkt.size, pkt.stream_index);
     read_packet_time = av_gettime_relative();
     reset_eagain();
 
