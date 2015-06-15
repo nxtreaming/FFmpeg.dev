@@ -133,8 +133,10 @@ static int tag_tree_decode(Jpeg2000DecoderContext *s, Jpeg2000TgtNode *node,
     Jpeg2000TgtNode *stack[30];
     int sp = -1, curval = 0;
 
-    if (!node)
+    if (!node) {
+        av_log(s->avctx, AV_LOG_ERROR, "missing node\n");
         return AVERROR_INVALIDDATA;
+    }
 
     while (node && !node->vis) {
         stack[++sp] = node;
@@ -170,6 +172,8 @@ static int pix_fmt_match(enum AVPixelFormat pix_fmt, int components,
 {
     int match = 1;
     const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
+
+    av_assert2(desc);
 
     if (desc->nb_components != components) {
         return 0;
@@ -218,7 +222,8 @@ static int pix_fmt_match(enum AVPixelFormat pix_fmt, int components,
 static const enum AVPixelFormat rgb_pix_fmts[]  = {RGB_PIXEL_FORMATS};
 static const enum AVPixelFormat gray_pix_fmts[] = {GRAY_PIXEL_FORMATS};
 static const enum AVPixelFormat yuv_pix_fmts[]  = {YUV_PIXEL_FORMATS};
-static const enum AVPixelFormat xyz_pix_fmts[]  = {XYZ_PIXEL_FORMATS};
+static const enum AVPixelFormat xyz_pix_fmts[]  = {XYZ_PIXEL_FORMATS,
+                                                   YUV_PIXEL_FORMATS};
 static const enum AVPixelFormat all_pix_fmts[]  = {RGB_PIXEL_FORMATS,
                                                    GRAY_PIXEL_FORMATS,
                                                    YUV_PIXEL_FORMATS,
@@ -234,8 +239,10 @@ static int get_siz(Jpeg2000DecoderContext *s)
     const enum AVPixelFormat *possible_fmts = NULL;
     int possible_fmts_nb = 0;
 
-    if (bytestream2_get_bytes_left(&s->g) < 36)
+    if (bytestream2_get_bytes_left(&s->g) < 36) {
+        av_log(s->avctx, AV_LOG_ERROR, "Insufficient space for SIZ\n");
         return AVERROR_INVALIDDATA;
+    }
 
     s->avctx->profile = bytestream2_get_be16u(&s->g); // Rsiz
     s->width          = bytestream2_get_be32u(&s->g); // Width
@@ -273,8 +280,10 @@ static int get_siz(Jpeg2000DecoderContext *s)
         return AVERROR_INVALIDDATA;
     }
 
-    if (bytestream2_get_bytes_left(&s->g) < 3 * s->ncomponents)
+    if (bytestream2_get_bytes_left(&s->g) < 3 * s->ncomponents) {
+        av_log(s->avctx, AV_LOG_ERROR, "Insufficient space for %d components in SIZ\n", s->ncomponents);
         return AVERROR_INVALIDDATA;
+    }
 
     for (i = 0; i < s->ncomponents; i++) { // Ssiz_i XRsiz_i, YRsiz_i
         uint8_t x    = bytestream2_get_byteu(&s->g);
@@ -349,16 +358,41 @@ static int get_siz(Jpeg2000DecoderContext *s)
             break;
         }
     }
+
+    if (i == possible_fmts_nb) {
+        if (ncomponents == 4 &&
+            s->cdy[0] == 1 && s->cdx[0] == 1 &&
+            s->cdy[1] == 1 && s->cdx[1] == 1 &&
+            s->cdy[2] == s->cdy[3] && s->cdx[2] == s->cdx[3]) {
+            if (s->precision == 8 && s->cdy[2] == 2 && s->cdx[2] == 2 && !s->pal8) {
+                s->avctx->pix_fmt = AV_PIX_FMT_YUVA420P;
+                s->cdef[0] = 0;
+                s->cdef[1] = 1;
+                s->cdef[2] = 2;
+                s->cdef[3] = 3;
+                i = 0;
+            }
+        }
+    }
+
+
     if (i == possible_fmts_nb) {
         av_log(s->avctx, AV_LOG_ERROR,
                "Unknown pix_fmt, profile: %d, colour_space: %d, "
-               "components: %d, precision: %d, "
-               "cdx[1]: %d, cdy[1]: %d, cdx[2]: %d, cdy[2]: %d\n",
+               "components: %d, precision: %d\n"
+               "cdx[0]: %d, cdy[0]: %d\n"
+               "cdx[1]: %d, cdy[1]: %d\n"
+               "cdx[2]: %d, cdy[2]: %d\n"
+               "cdx[3]: %d, cdy[3]: %d\n",
                s->avctx->profile, s->colour_space, ncomponents, s->precision,
-               ncomponents > 2 ? s->cdx[1] : 0,
-               ncomponents > 2 ? s->cdy[1] : 0,
+               s->cdx[0],
+               s->cdy[0],
+               ncomponents > 1 ? s->cdx[1] : 0,
+               ncomponents > 1 ? s->cdy[1] : 0,
                ncomponents > 2 ? s->cdx[2] : 0,
-               ncomponents > 2 ? s->cdy[2] : 0);
+               ncomponents > 2 ? s->cdy[2] : 0,
+               ncomponents > 3 ? s->cdx[3] : 0,
+               ncomponents > 3 ? s->cdy[3] : 0);
         return AVERROR_PATCHWELCOME;
     }
     s->avctx->bits_per_raw_sample = s->precision;
@@ -370,8 +404,10 @@ static int get_cox(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *c)
 {
     uint8_t byte;
 
-    if (bytestream2_get_bytes_left(&s->g) < 5)
+    if (bytestream2_get_bytes_left(&s->g) < 5) {
+        av_log(s->avctx, AV_LOG_ERROR, "Insufficient space for COX\n");
         return AVERROR_INVALIDDATA;
+    }
 
     /*  nreslevels = number of resolution levels
                    = number of decomposition level +1 */
@@ -411,6 +447,8 @@ static int get_cox(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *c)
     c->cblk_style = bytestream2_get_byteu(&s->g);
     if (c->cblk_style != 0) { // cblk style
         av_log(s->avctx, AV_LOG_WARNING, "extra cblk styles %X\n", c->cblk_style);
+        if (c->cblk_style & JPEG2000_CBLK_BYPASS)
+            av_log(s->avctx, AV_LOG_WARNING, "Selective arithmetic coding bypass\n");
     }
     c->transform = bytestream2_get_byteu(&s->g); // DWT transformation type
     /* set integer 9/7 DWT in case of BITEXACT flag */
@@ -438,8 +476,10 @@ static int get_cod(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *c,
     Jpeg2000CodingStyle tmp;
     int compno, ret;
 
-    if (bytestream2_get_bytes_left(&s->g) < 5)
+    if (bytestream2_get_bytes_left(&s->g) < 5) {
+        av_log(s->avctx, AV_LOG_ERROR, "Insufficient space for COD\n");
         return AVERROR_INVALIDDATA;
+    }
 
     tmp.csty = bytestream2_get_byteu(&s->g);
 
@@ -472,8 +512,10 @@ static int get_coc(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *c,
 {
     int compno, ret;
 
-    if (bytestream2_get_bytes_left(&s->g) < 2)
+    if (bytestream2_get_bytes_left(&s->g) < 2) {
+        av_log(s->avctx, AV_LOG_ERROR, "Insufficient space for COC\n");
         return AVERROR_INVALIDDATA;
+    }
 
     compno = bytestream2_get_byteu(&s->g);
 
@@ -677,7 +719,7 @@ static uint8_t get_plt(Jpeg2000DecoderContext *s, int n)
 {
     int i;
 
-    av_log(s->avctx, AV_LOG_ERROR,
+    av_log(s->avctx, AV_LOG_DEBUG,
             "PLT marker at pos 0x%X\n", bytestream2_tell(&s->g) - 4);
 
     /*Zplt =*/ bytestream2_get_byte(&s->g);
@@ -756,12 +798,22 @@ static int getlblockinc(Jpeg2000DecoderContext *s)
     return res;
 }
 
-static int jpeg2000_decode_packet(Jpeg2000DecoderContext *s,
+static int jpeg2000_decode_packet(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile, int *tp_index,
                                   Jpeg2000CodingStyle *codsty,
                                   Jpeg2000ResLevel *rlevel, int precno,
                                   int layno, uint8_t *expn, int numgbits)
 {
     int bandno, cblkno, ret, nb_code_blocks;
+    int cwsno;
+
+    if (bytestream2_get_bytes_left(&s->g) == 0 && s->bit_index == 8) {
+        if (*tp_index < FF_ARRAY_ELEMS(tile->tile_part) - 1) {
+            s->g = tile->tile_part[++(*tp_index)].tpg;
+        }
+    }
+
+    if (bytestream2_peek_be32(&s->g) == 0xFF910004)
+        bytestream2_skip(&s->g, 6);
 
     if (!(ret = get_bits(s, 1))) {
         jpeg2000_flush(s);
@@ -803,19 +855,46 @@ static int jpeg2000_decode_packet(Jpeg2000DecoderContext *s,
             }
             if ((newpasses = getnpasses(s)) < 0)
                 return newpasses;
-            if ((llen = getlblockinc(s)) < 0)
-                return llen;
-            cblk->lblock += llen;
-            if ((ret = get_bits(s, av_log2(newpasses) + cblk->lblock)) < 0)
-                return ret;
-            if (ret > sizeof(cblk->data)) {
-                avpriv_request_sample(s->avctx,
-                                      "Block with lengthinc greater than %"SIZE_SPECIFIER"",
-                                      sizeof(cblk->data));
+            av_assert2(newpasses > 0);
+            if (cblk->npasses + newpasses >= JPEG2000_MAX_PASSES) {
+                avpriv_request_sample(s->avctx, "Too many passes\n");
                 return AVERROR_PATCHWELCOME;
             }
-            cblk->lengthinc = ret;
-            cblk->npasses  += newpasses;
+            if ((llen = getlblockinc(s)) < 0)
+                return llen;
+            if (cblk->lblock + llen + av_log2(newpasses) > 16) {
+                avpriv_request_sample(s->avctx,
+                                      "Block with length beyond 16 bits\n");
+                return AVERROR_PATCHWELCOME;
+            }
+
+            cblk->lblock += llen;
+
+            cblk->nb_lengthinc = 0;
+            cblk->nb_terminationsinc = 0;
+            do {
+                int newpasses1 = 0;
+
+                while (newpasses1 < newpasses) {
+                    newpasses1 ++;
+                    if (needs_termination(codsty->cblk_style, cblk->npasses + newpasses1 - 1)) {
+                        cblk->nb_terminationsinc ++;
+                        break;
+                    }
+                }
+
+                if ((ret = get_bits(s, av_log2(newpasses1) + cblk->lblock)) < 0)
+                    return ret;
+                if (ret > sizeof(cblk->data)) {
+                    avpriv_request_sample(s->avctx,
+                                        "Block with lengthinc greater than %"SIZE_SPECIFIER"",
+                                        sizeof(cblk->data));
+                    return AVERROR_PATCHWELCOME;
+                }
+                cblk->lengthinc[cblk->nb_lengthinc++] = ret;
+                cblk->npasses  += newpasses1;
+                newpasses -= newpasses1;
+            } while(newpasses);
         }
     }
     jpeg2000_flush(s);
@@ -834,18 +913,27 @@ static int jpeg2000_decode_packet(Jpeg2000DecoderContext *s,
         nb_code_blocks = prec->nb_codeblocks_height * prec->nb_codeblocks_width;
         for (cblkno = 0; cblkno < nb_code_blocks; cblkno++) {
             Jpeg2000Cblk *cblk = prec->cblk + cblkno;
-            if (   bytestream2_get_bytes_left(&s->g) < cblk->lengthinc
-                || sizeof(cblk->data) < cblk->length + cblk->lengthinc + 2
-            ) {
-                av_log(s->avctx, AV_LOG_ERROR,
-                       "Block length %"PRIu16" or lengthinc %d is too large\n",
-                       cblk->length, cblk->lengthinc);
-                return AVERROR_INVALIDDATA;
-            }
+            for (cwsno = 0; cwsno < cblk->nb_lengthinc; cwsno ++) {
+                if (   bytestream2_get_bytes_left(&s->g) < cblk->lengthinc[cwsno]
+                    || sizeof(cblk->data) < cblk->length + cblk->lengthinc[cwsno] + 4
+                ) {
+                    av_log(s->avctx, AV_LOG_ERROR,
+                        "Block length %"PRIu16" or lengthinc %d is too large, left %d\n",
+                        cblk->length, cblk->lengthinc[cwsno], bytestream2_get_bytes_left(&s->g));
+                    return AVERROR_INVALIDDATA;
+                }
 
-            bytestream2_get_bufferu(&s->g, cblk->data + cblk->length, cblk->lengthinc);
-            cblk->length   += cblk->lengthinc;
-            cblk->lengthinc = 0;
+                bytestream2_get_bufferu(&s->g, cblk->data + cblk->length, cblk->lengthinc[cwsno]);
+                cblk->length   += cblk->lengthinc[cwsno];
+                cblk->lengthinc[cwsno] = 0;
+                if (cblk->nb_terminationsinc) {
+                    cblk->nb_terminationsinc--;
+                    cblk->nb_terminations++;
+                    cblk->data[cblk->length++] = 0xFF;
+                    cblk->data[cblk->length++] = 0xFF;
+                    cblk->data_start[cblk->nb_terminations] = cblk->length;
+                }
+            }
         }
     }
     return 0;
@@ -856,13 +944,39 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
     int ret = 0;
     int layno, reslevelno, compno, precno, ok_reslevel;
     int x, y;
+    int tp_index = 0;
+    int step_x, step_y;
 
     s->bit_index = 8;
     switch (tile->codsty[0].prog_order) {
     case JPEG2000_PGOD_RLCP:
-        avpriv_request_sample(s->avctx, "Progression order RLCP");
+        av_log(s->avctx, AV_LOG_DEBUG, "Progression order RLCP\n");
+        ok_reslevel = 1;
+        for (reslevelno = 0; ok_reslevel; reslevelno++) {
+            ok_reslevel = 0;
+            for (layno = 0; layno < tile->codsty[0].nlayers; layno++) {
+                for (compno = 0; compno < s->ncomponents; compno++) {
+                    Jpeg2000CodingStyle *codsty = tile->codsty + compno;
+                    Jpeg2000QuantStyle *qntsty  = tile->qntsty + compno;
+                    if (reslevelno < codsty->nreslevels) {
+                        Jpeg2000ResLevel *rlevel = tile->comp[compno].reslevel +
+                                                reslevelno;
+                        ok_reslevel = 1;
+                        for (precno = 0; precno < rlevel->num_precincts_x * rlevel->num_precincts_y; precno++)
+                            if ((ret = jpeg2000_decode_packet(s, tile, &tp_index,
+                                                              codsty, rlevel,
+                                                              precno, layno,
+                                                              qntsty->expn + (reslevelno ? 3 * (reslevelno - 1) + 1 : 0),
+                                                              qntsty->nguardbits)) < 0)
+                                return ret;
+                    }
+                }
+            }
+        }
+        break;
 
     case JPEG2000_PGOD_LRCP:
+        av_log(s->avctx, AV_LOG_DEBUG, "Progression order LRCP\n");
         for (layno = 0; layno < tile->codsty[0].nlayers; layno++) {
             ok_reslevel = 1;
             for (reslevelno = 0; ok_reslevel; reslevelno++) {
@@ -875,7 +989,7 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
                                                 reslevelno;
                         ok_reslevel = 1;
                         for (precno = 0; precno < rlevel->num_precincts_x * rlevel->num_precincts_y; precno++)
-                            if ((ret = jpeg2000_decode_packet(s,
+                            if ((ret = jpeg2000_decode_packet(s, tile, &tp_index,
                                                               codsty, rlevel,
                                                               precno, layno,
                                                               qntsty->expn + (reslevelno ? 3 * (reslevelno - 1) + 1 : 0),
@@ -888,46 +1002,59 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
         break;
 
     case JPEG2000_PGOD_CPRL:
+        av_log(s->avctx, AV_LOG_DEBUG, "Progression order CPRL\n");
         for (compno = 0; compno < s->ncomponents; compno++) {
+            Jpeg2000Component *comp     = tile->comp + compno;
             Jpeg2000CodingStyle *codsty = tile->codsty + compno;
             Jpeg2000QuantStyle *qntsty  = tile->qntsty + compno;
+            int maxlogstep_x = 0;
+            int maxlogstep_y = 0;
+            int start_x, start_y;
+            step_x = 32;
+            step_y = 32;
 
-            /* Set bit stream buffer address according to tile-part.
-             * For DCinema one tile-part per component, so can be
-             * indexed by component. */
-            s->g = tile->tile_part[compno].tpg;
+            for (reslevelno = 0; reslevelno < codsty->nreslevels; reslevelno++) {
+                uint8_t reducedresno = codsty->nreslevels - 1 -reslevelno; //  ==> N_L - r
+                Jpeg2000ResLevel *rlevel = comp->reslevel + reslevelno;
+                step_x = FFMIN(step_x, rlevel->log2_prec_width  + reducedresno);
+                step_y = FFMIN(step_y, rlevel->log2_prec_height + reducedresno);
+                maxlogstep_x = FFMAX(maxlogstep_x, rlevel->log2_prec_width  + reducedresno);
+                maxlogstep_y = FFMAX(maxlogstep_y, rlevel->log2_prec_height + reducedresno);
+            }
+            step_x = 1<<step_x;
+            step_y = 1<<step_y;
 
-            /* Position loop (y axis)
-             * TODO: Automate computing of step 256.
-             * Fixed here, but to be computed before entering here. */
-            for (y = 0; y < s->height; y += 256) {
-                /* Position loop (y axis)
-                 * TODO: automate computing of step 256.
-                 * Fixed here, but to be computed before entering here. */
-                for (x = 0; x < s->width; x += 256) {
+            start_y = comp->coord_o[1][0] >> maxlogstep_y << maxlogstep_y;
+            start_x = comp->coord_o[0][0] >> maxlogstep_x << maxlogstep_x;
+            for (y = start_y; y < comp->coord_o[1][1]; y += step_y) {
+                for (x = start_x; x < comp->coord_o[0][1]; x += step_x) {
                     for (reslevelno = 0; reslevelno < codsty->nreslevels; reslevelno++) {
-                        uint16_t prcx, prcy;
+                        unsigned prcx, prcy;
                         uint8_t reducedresno = codsty->nreslevels - 1 -reslevelno; //  ==> N_L - r
-                        Jpeg2000ResLevel *rlevel = tile->comp[compno].reslevel + reslevelno;
+                        Jpeg2000ResLevel *rlevel = comp->reslevel + reslevelno;
 
-                        if (!((y % (1 << (rlevel->log2_prec_height + reducedresno)) == 0) ||
-                              (y == 0))) // TODO: 2nd condition simplified as try0 always =0 for dcinema
+                        if (y % (1 << (rlevel->log2_prec_height + reducedresno)))
                             continue;
 
-                        if (!((x % (1 << (rlevel->log2_prec_width + reducedresno)) == 0) ||
-                              (x == 0))) // TODO: 2nd condition simplified as try0 always =0 for dcinema
+                        if (x % (1 << (rlevel->log2_prec_width + reducedresno)))
                             continue;
 
                         // check if a precinct exists
                         prcx   = ff_jpeg2000_ceildivpow2(x, reducedresno) >> rlevel->log2_prec_width;
                         prcy   = ff_jpeg2000_ceildivpow2(y, reducedresno) >> rlevel->log2_prec_height;
+                        prcx  -= ff_jpeg2000_ceildivpow2(comp->coord_o[0][0], reducedresno) >> rlevel->log2_prec_width;
+                        prcy  -= ff_jpeg2000_ceildivpow2(comp->coord_o[1][0], reducedresno) >> rlevel->log2_prec_height;
+
                         precno = prcx + rlevel->num_precincts_x * prcy;
 
-                        if (prcx >= rlevel->num_precincts_x || prcy >= rlevel->num_precincts_y)
-                            return AVERROR_PATCHWELCOME;
+                        if (prcx >= rlevel->num_precincts_x || prcy >= rlevel->num_precincts_y) {
+                            av_log(s->avctx, AV_LOG_WARNING, "prc %d %d outside limits %d %d\n",
+                                   prcx, prcy, rlevel->num_precincts_x, rlevel->num_precincts_y);
+                            continue;
+                        }
 
                         for (layno = 0; layno < tile->codsty[0].nlayers; layno++) {
-                            if ((ret = jpeg2000_decode_packet(s, codsty, rlevel,
+                            if ((ret = jpeg2000_decode_packet(s, tile, &tp_index, codsty, rlevel,
                                                               precno, layno,
                                                               qntsty->expn + (reslevelno ? 3 * (reslevelno - 1) + 1 : 0),
                                                               qntsty->nguardbits)) < 0)
@@ -940,13 +1067,148 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
         break;
 
     case JPEG2000_PGOD_RPCL:
-        avpriv_request_sample(s->avctx, "Progression order RPCL");
-        ret = AVERROR_PATCHWELCOME;
+        av_log(s->avctx, AV_LOG_WARNING, "Progression order RPCL\n");
+        ok_reslevel = 1;
+        for (reslevelno = 0; ok_reslevel; reslevelno++) {
+            ok_reslevel = 0;
+
+            step_x = 32;
+            step_y = 32;
+            for (compno = 0; compno < s->ncomponents; compno++) {
+                Jpeg2000Component *comp     = tile->comp + compno;
+                Jpeg2000CodingStyle *codsty = tile->codsty + compno;
+
+                if (reslevelno < codsty->nreslevels) {
+                    uint8_t reducedresno = codsty->nreslevels - 1 -reslevelno; //  ==> N_L - r
+                    Jpeg2000ResLevel *rlevel = comp->reslevel + reslevelno;
+                    step_x = FFMIN(step_x, rlevel->log2_prec_width  + reducedresno);
+                    step_y = FFMIN(step_y, rlevel->log2_prec_height + reducedresno);
+                }
+            }
+            step_x = 1<<step_x;
+            step_y = 1<<step_y;
+
+            //FIXME we could iterate over less than the whole image
+            for (y = 0; y < s->height; y += step_y) {
+                for (x = 0; x < s->width; x += step_x) {
+                    for (compno = 0; compno < s->ncomponents; compno++) {
+                        Jpeg2000Component *comp     = tile->comp + compno;
+                        Jpeg2000CodingStyle *codsty = tile->codsty + compno;
+                        Jpeg2000QuantStyle *qntsty  = tile->qntsty + compno;
+                        uint8_t reducedresno = codsty->nreslevels - 1 -reslevelno; //  ==> N_L - r
+                        Jpeg2000ResLevel *rlevel = comp->reslevel + reslevelno;
+                        unsigned prcx, prcy;
+
+                        int xc = x / s->cdx[compno];
+                        int yc = y / s->cdy[compno];
+
+                        if (reslevelno >= codsty->nreslevels)
+                            continue;
+
+                        if (yc % (1 << (rlevel->log2_prec_height + reducedresno)))
+                            continue;
+
+                        if (xc % (1 << (rlevel->log2_prec_width + reducedresno)))
+                            continue;
+
+                        // check if a precinct exists
+                        prcx   = ff_jpeg2000_ceildivpow2(xc, reducedresno) >> rlevel->log2_prec_width;
+                        prcy   = ff_jpeg2000_ceildivpow2(yc, reducedresno) >> rlevel->log2_prec_height;
+                        prcx  -= ff_jpeg2000_ceildivpow2(comp->coord_o[0][0], reducedresno) >> rlevel->log2_prec_width;
+                        prcy  -= ff_jpeg2000_ceildivpow2(comp->coord_o[1][0], reducedresno) >> rlevel->log2_prec_height;
+
+                        precno = prcx + rlevel->num_precincts_x * prcy;
+
+                        if (prcx >= rlevel->num_precincts_x || prcy >= rlevel->num_precincts_y) {
+                            av_log(s->avctx, AV_LOG_WARNING, "prc %d %d outside limits %d %d\n",
+                                   prcx, prcy, rlevel->num_precincts_x, rlevel->num_precincts_y);
+                            continue;
+                        }
+
+                        if (reslevelno < codsty->nreslevels) {
+                            Jpeg2000ResLevel *rlevel = tile->comp[compno].reslevel +
+                                                    reslevelno;
+                            ok_reslevel = 1;
+                            for (layno = 0; layno < tile->codsty[0].nlayers; layno++) {
+                                if ((ret = jpeg2000_decode_packet(s, tile, &tp_index,
+                                                                codsty, rlevel,
+                                                                precno, layno,
+                                                                qntsty->expn + (reslevelno ? 3 * (reslevelno - 1) + 1 : 0),
+                                                                qntsty->nguardbits)) < 0)
+                                    return ret;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         break;
 
     case JPEG2000_PGOD_PCRL:
-        avpriv_request_sample(s->avctx, "Progression order PCRL");
-        ret = AVERROR_PATCHWELCOME;
+        av_log(s->avctx, AV_LOG_WARNING, "Progression order PCRL");
+        step_x = 32;
+        step_y = 32;
+        for (compno = 0; compno < s->ncomponents; compno++) {
+            Jpeg2000Component *comp     = tile->comp + compno;
+            Jpeg2000CodingStyle *codsty = tile->codsty + compno;
+            Jpeg2000QuantStyle *qntsty  = tile->qntsty + compno;
+
+            for (reslevelno = 0; reslevelno < codsty->nreslevels; reslevelno++) {
+                uint8_t reducedresno = codsty->nreslevels - 1 -reslevelno; //  ==> N_L - r
+                Jpeg2000ResLevel *rlevel = comp->reslevel + reslevelno;
+                step_x = FFMIN(step_x, rlevel->log2_prec_width  + reducedresno);
+                step_y = FFMIN(step_y, rlevel->log2_prec_height + reducedresno);
+            }
+        }
+        step_x = 1<<step_x;
+        step_y = 1<<step_y;
+
+        //FIXME we could iterate over less than the whole image
+        for (y = 0; y < s->height; y += step_y) {
+            for (x = 0; x < s->width; x += step_x) {
+                for (compno = 0; compno < s->ncomponents; compno++) {
+                    Jpeg2000Component *comp     = tile->comp + compno;
+                    Jpeg2000CodingStyle *codsty = tile->codsty + compno;
+                    Jpeg2000QuantStyle *qntsty  = tile->qntsty + compno;
+                    int xc = x / s->cdx[compno];
+                    int yc = y / s->cdy[compno];
+
+                    for (reslevelno = 0; reslevelno < codsty->nreslevels; reslevelno++) {
+                        unsigned prcx, prcy;
+                        uint8_t reducedresno = codsty->nreslevels - 1 -reslevelno; //  ==> N_L - r
+                        Jpeg2000ResLevel *rlevel = comp->reslevel + reslevelno;
+
+                        if (yc % (1 << (rlevel->log2_prec_height + reducedresno)))
+                            continue;
+
+                        if (xc % (1 << (rlevel->log2_prec_width + reducedresno)))
+                            continue;
+
+                        // check if a precinct exists
+                        prcx   = ff_jpeg2000_ceildivpow2(xc, reducedresno) >> rlevel->log2_prec_width;
+                        prcy   = ff_jpeg2000_ceildivpow2(yc, reducedresno) >> rlevel->log2_prec_height;
+                        prcx  -= ff_jpeg2000_ceildivpow2(comp->coord_o[0][0], reducedresno) >> rlevel->log2_prec_width;
+                        prcy  -= ff_jpeg2000_ceildivpow2(comp->coord_o[1][0], reducedresno) >> rlevel->log2_prec_height;
+
+                        precno = prcx + rlevel->num_precincts_x * prcy;
+
+                        if (prcx >= rlevel->num_precincts_x || prcy >= rlevel->num_precincts_y) {
+                            av_log(s->avctx, AV_LOG_WARNING, "prc %d %d outside limits %d %d\n",
+                                   prcx, prcy, rlevel->num_precincts_x, rlevel->num_precincts_y);
+                            continue;
+                        }
+
+                        for (layno = 0; layno < tile->codsty[0].nlayers; layno++) {
+                            if ((ret = jpeg2000_decode_packet(s, tile, &tp_index, codsty, rlevel,
+                                                              precno, layno,
+                                                              qntsty->expn + (reslevelno ? 3 * (reslevelno - 1) + 1 : 0),
+                                                              qntsty->nguardbits)) < 0)
+                                return ret;
+                        }
+                    }
+                }
+            }
+        }
         break;
 
     default:
@@ -961,7 +1223,7 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
 
 /* TIER-1 routines */
 static void decode_sigpass(Jpeg2000T1Context *t1, int width, int height,
-                           int bpno, int bandno, int bpass_csty_symbol,
+                           int bpno, int bandno,
                            int vert_causal_ctx_csty_symbol)
 {
     int mask = 3 << (bpno - 1), y0, x, y;
@@ -976,7 +1238,7 @@ static void decode_sigpass(Jpeg2000T1Context *t1, int width, int height,
                         flags_mask &= ~(JPEG2000_T1_SIG_S | JPEG2000_T1_SIG_SW | JPEG2000_T1_SIG_SE);
                     if (ff_mqc_decode(&t1->mqc, t1->mqc.cx_states + ff_jpeg2000_getsigctxno(t1->flags[y+1][x+1] & flags_mask, bandno))) {
                         int xorbit, ctxno = ff_jpeg2000_getsgnctxno(t1->flags[y+1][x+1], &xorbit);
-                        if (bpass_csty_symbol)
+                        if (t1->mqc.raw)
                              t1->data[y][x] = ff_mqc_decode(&t1->mqc, t1->mqc.cx_states + ctxno) ? -mask : mask;
                         else
                              t1->data[y][x] = (ff_mqc_decode(&t1->mqc, t1->mqc.cx_states + ctxno) ^ xorbit) ?
@@ -1080,9 +1342,10 @@ static int decode_cblk(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *codsty,
                        int width, int height, int bandpos)
 {
     int passno = cblk->npasses, pass_t = 2, bpno = cblk->nonzerobits - 1, y;
-    int clnpass_cnt = 0;
-    int bpass_csty_symbol           = codsty->cblk_style & JPEG2000_CBLK_BYPASS;
+    int pass_cnt = 0;
     int vert_causal_ctx_csty_symbol = codsty->cblk_style & JPEG2000_CBLK_VSC;
+    int term_cnt = 0;
+    int coder_type;
 
     av_assert0(width  <= JPEG2000_MAX_CBLKW);
     av_assert0(height <= JPEG2000_MAX_CBLKH);
@@ -1099,28 +1362,33 @@ static int decode_cblk(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *codsty,
 
     cblk->data[cblk->length] = 0xff;
     cblk->data[cblk->length+1] = 0xff;
-    ff_mqc_initdec(&t1->mqc, cblk->data);
+    ff_mqc_initdec(&t1->mqc, cblk->data, 0, 1);
 
     while (passno--) {
         switch(pass_t) {
         case 0:
             decode_sigpass(t1, width, height, bpno + 1, bandpos,
-                           bpass_csty_symbol && (clnpass_cnt >= 4),
                            vert_causal_ctx_csty_symbol);
             break;
         case 1:
             decode_refpass(t1, width, height, bpno + 1);
-            if (bpass_csty_symbol && clnpass_cnt >= 4)
-                ff_mqc_initdec(&t1->mqc, cblk->data);
             break;
         case 2:
+            av_assert2(!t1->mqc.raw);
             decode_clnpass(s, t1, width, height, bpno + 1, bandpos,
                            codsty->cblk_style & JPEG2000_CBLK_SEGSYM,
                            vert_causal_ctx_csty_symbol);
-            clnpass_cnt = clnpass_cnt + 1;
-            if (bpass_csty_symbol && clnpass_cnt >= 4)
-                ff_mqc_initdec(&t1->mqc, cblk->data);
             break;
+        }
+        if (codsty->cblk_style & JPEG2000_CBLK_RESET) // XXX no testcase for just this
+            ff_mqc_init_contexts(&t1->mqc);
+
+        if ((coder_type = needs_termination(codsty->cblk_style, pass_cnt))) {
+            if (term_cnt >= cblk->nb_terminations) {
+                av_log(s->avctx, AV_LOG_ERROR, "Missing needed termination \n");
+                return AVERROR_INVALIDDATA;
+            }
+            ff_mqc_initdec(&t1->mqc, cblk->data + cblk->data_start[++term_cnt], coder_type == 2, 0);
         }
 
         pass_t++;
@@ -1128,7 +1396,13 @@ static int decode_cblk(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *codsty,
             bpno--;
             pass_t = 0;
         }
+        pass_cnt ++;
     }
+
+    if (cblk->data + cblk->length != t1->mqc.bp) {
+        av_log(s->avctx, AV_LOG_WARNING, "End mismatch %"PTRDIFF_SPECIFIER"\n", cblk->data + cblk->length - t1->mqc.bp);
+    }
+
     return 0;
 }
 
@@ -1256,8 +1530,8 @@ static int jpeg2000_decode_tile(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile,
                                     cblk->coord[1][1] - cblk->coord[1][0],
                                     bandpos);
 
-                        x = cblk->coord[0][0];
-                        y = cblk->coord[1][0];
+                        x = cblk->coord[0][0] - band->coord[0][0];
+                        y = cblk->coord[1][0] - band->coord[1][0];
 
                         if (codsty->transform == FF_DWT97)
                             dequantization_float(x, y, cblk, comp, &t1, band);
@@ -1451,8 +1725,10 @@ static int jpeg2000_read_main_headers(Jpeg2000DecoderContext *s)
             break;
 
         len = bytestream2_get_be16(&s->g);
-        if (len < 2 || bytestream2_get_bytes_left(&s->g) < len - 2)
+        if (len < 2 || bytestream2_get_bytes_left(&s->g) < len - 2) {
+            av_log(s->avctx, AV_LOG_ERROR, "Invalid len %d left=%d\n", len, bytestream2_get_bytes_left(&s->g));
             return AVERROR_INVALIDDATA;
+        }
 
         switch (marker) {
         case JPEG2000_SIZ:
@@ -1518,11 +1794,11 @@ static int jpeg2000_read_bitstream_packets(Jpeg2000DecoderContext *s)
     for (tileno = 0; tileno < s->numXtiles * s->numYtiles; tileno++) {
         Jpeg2000Tile *tile = s->tile + tileno;
 
-        if (ret = init_tile(s, tileno))
+        if ((ret = init_tile(s, tileno)) < 0)
             return ret;
 
         s->g = tile->tile_part[0].tpg;
-        if (ret = jpeg2000_decode_packets(s, tile))
+        if ((ret = jpeg2000_decode_packets(s, tile)) < 0)
             return ret;
     }
 

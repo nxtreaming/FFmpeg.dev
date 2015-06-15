@@ -1,7 +1,7 @@
 /*
- * JPEG 2000 DSP functions
- * Copyright (c) 2007 Kamil Nowosad
- * Copyright (c) 2013 Nicolas Bertrand <nicoinattendu@gmail.com>
+ * MPEG1/2 VLC
+ * copyright (c) 2000,2001 Fabrice Bellard
+ * copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
  *
  * This file is part of FFmpeg.
  *
@@ -20,17 +20,33 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVCODEC_JPEG2000DSP_H
-#define AVCODEC_JPEG2000DSP_H
+/**
+ * @file
+ * MPEG1/2 VLC.
+ */
 
-#include <stdint.h>
-#include "jpeg2000dwt.h"
+#ifndef AVCODEC_MPEG12VLC_H
+#define AVCODEC_MPEG12VLC_H
 
-typedef struct Jpeg2000DSPContext {
-    void (*mct_decode[FF_DWT_NB])(void *src0, void *src1, void *src2, int csize);
-} Jpeg2000DSPContext;
+#include "get_bits.h"
 
-void ff_jpeg2000dsp_init(Jpeg2000DSPContext *c);
-void ff_jpeg2000dsp_init_x86(Jpeg2000DSPContext *c);
+#define DC_VLC_BITS 9
+#define MV_VLC_BITS 9
+#define TEX_VLC_BITS 9
 
-#endif /* AVCODEC_JPEG2000DSP_H */
+#define MBINCR_VLC_BITS 9
+#define MB_PAT_VLC_BITS 9
+#define MB_PTYPE_VLC_BITS 6
+#define MB_BTYPE_VLC_BITS 6
+
+extern VLC ff_dc_lum_vlc;
+extern VLC ff_dc_chroma_vlc;
+extern VLC ff_mbincr_vlc;
+extern VLC ff_mb_ptype_vlc;
+extern VLC ff_mb_btype_vlc;
+extern VLC ff_mb_pat_vlc;
+extern VLC ff_mv_vlc;
+
+void ff_mpeg12_init_vlcs(void);
+
+#endif /* AVCODEC_MPEG12VLC_H */
