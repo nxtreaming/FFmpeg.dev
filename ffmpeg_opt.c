@@ -40,6 +40,7 @@
 #include "libavutil/parseutils.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/pixfmt.h"
+#include "libavutil/time.h"
 #include "libavutil/time_internal.h"
 
 #define MATCH_PER_STREAM_OPT(name, type, outvar, fmtctx, st)\
