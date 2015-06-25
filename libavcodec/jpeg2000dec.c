@@ -60,7 +60,7 @@ typedef struct Jpeg2000Tile {
     uint8_t             properties[4];
     Jpeg2000CodingStyle codsty[4];
     Jpeg2000QuantStyle  qntsty[4];
-    Jpeg2000TilePart    tile_part[32];
+    Jpeg2000TilePart    tile_part[256];
     uint16_t tp_idx;                    // Tile-part index
 } Jpeg2000Tile;
 
@@ -439,8 +439,8 @@ static int get_cox(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *c)
         return AVERROR_INVALIDDATA;
     }
 
-    if (c->log2_cblk_width > 6 || c->log2_cblk_height > 6) {
-        avpriv_request_sample(s->avctx, "cblk size > 64");
+    if (c->log2_cblk_width > 7 || c->log2_cblk_height > 7) {
+        avpriv_request_sample(s->avctx, "cblk size > 128");
         return AVERROR_PATCHWELCOME;
     }
 
@@ -461,6 +461,13 @@ static int get_cox(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *c)
             byte = bytestream2_get_byte(&s->g);
             c->log2_prec_widths[i]  =  byte       & 0x0F;    // precinct PPx
             c->log2_prec_heights[i] = (byte >> 4) & 0x0F;    // precinct PPy
+            if (i)
+                if (c->log2_prec_widths[i] == 0 || c->log2_prec_heights[i] == 0) {
+                    av_log(s->avctx, AV_LOG_ERROR, "PPx %d PPy %d invalid\n",
+                           c->log2_prec_widths[i], c->log2_prec_heights[i]);
+                    c->log2_prec_widths[i] = c->log2_prec_heights[i] = 1;
+                    return AVERROR_INVALIDDATA;
+                }
         }
     } else {
         memset(c->log2_prec_widths , 15, sizeof(c->log2_prec_widths ));
@@ -627,7 +634,7 @@ static int get_sot(Jpeg2000DecoderContext *s, int n)
     Jpeg2000TilePart *tp;
     uint16_t Isot;
     uint32_t Psot;
-    uint8_t TPsot;
+    unsigned TPsot;
 
     if (bytestream2_get_bytes_left(&s->g) < 8)
         return AVERROR_INVALIDDATA;
@@ -652,10 +659,7 @@ static int get_sot(Jpeg2000DecoderContext *s, int n)
         return AVERROR_INVALIDDATA;
     }
 
-    if (TPsot >= FF_ARRAY_ELEMS(s->tile[Isot].tile_part)) {
-        avpriv_request_sample(s->avctx, "Support for %"PRIu8" components", TPsot);
-        return AVERROR_PATCHWELCOME;
-    }
+    av_assert0(TPsot < FF_ARRAY_ELEMS(s->tile[Isot].tile_part));
 
     s->tile[Isot].tp_idx = TPsot;
     tp             = s->tile[Isot].tile_part + TPsot;
@@ -1071,9 +1075,8 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
         ok_reslevel = 1;
         for (reslevelno = 0; ok_reslevel; reslevelno++) {
             ok_reslevel = 0;
-
-            step_x = 32;
-            step_y = 32;
+            step_x = 30;
+            step_y = 30;
             for (compno = 0; compno < s->ncomponents; compno++) {
                 Jpeg2000Component *comp     = tile->comp + compno;
                 Jpeg2000CodingStyle *codsty = tile->codsty + compno;
@@ -1119,16 +1122,13 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
 
                         precno = prcx + rlevel->num_precincts_x * prcy;
 
+                        ok_reslevel = 1;
                         if (prcx >= rlevel->num_precincts_x || prcy >= rlevel->num_precincts_y) {
                             av_log(s->avctx, AV_LOG_WARNING, "prc %d %d outside limits %d %d\n",
                                    prcx, prcy, rlevel->num_precincts_x, rlevel->num_precincts_y);
                             continue;
                         }
 
-                        {
-                            Jpeg2000ResLevel *rlevel = tile->comp[compno].reslevel +
-                                                    reslevelno;
-                            ok_reslevel = 1;
                             for (layno = 0; layno < tile->codsty[0].nlayers; layno++) {
                                 if ((ret = jpeg2000_decode_packet(s, tile, &tp_index,
                                                                 codsty, rlevel,
@@ -1137,7 +1137,6 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
                                                                 qntsty->nguardbits)) < 0)
                                     return ret;
                             }
-                        }
                     }
                 }
             }
@@ -1443,8 +1442,14 @@ static void dequantization_int(int x, int y, Jpeg2000Cblk *cblk,
     for (j = 0; j < (cblk->coord[1][1] - cblk->coord[1][0]); ++j) {
         int32_t *datap = &comp->i_data[(comp->coord[0][1] - comp->coord[0][0]) * (y + j) + x];
         int *src = t1->data[j];
-        for (i = 0; i < w; ++i)
-            datap[i] = (src[i] * band->i_stepsize) / 32768;
+        if (band->i_stepsize == 16384) {
+            for (i = 0; i < w; ++i)
+                datap[i] = src[i] / 2;
+        } else {
+            // This should be VERY uncommon
+            for (i = 0; i < w; ++i)
+                datap[i] = (src[i] * (int64_t)band->i_stepsize) / 32768;
+        }
     }
 }
 
@@ -1458,7 +1463,7 @@ static void dequantization_int_97(int x, int y, Jpeg2000Cblk *cblk,
         int32_t *datap = &comp->i_data[(comp->coord[0][1] - comp->coord[0][0]) * (y + j) + x];
         int *src = t1->data[j];
         for (i = 0; i < w; ++i)
-            datap[i] = (src[i] * band->i_stepsize + (1<<14)) >> 15;
+            datap[i] = (src[i] * (int64_t)band->i_stepsize + (1<<14)) >> 15;
     }
 }
 

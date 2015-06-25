@@ -128,6 +128,9 @@ static const char *const ctlidstr[] = {
     [VP9E_SET_TILE_ROWS]               = "VP9E_SET_TILE_ROWS",
     [VP9E_SET_FRAME_PARALLEL_DECODING] = "VP9E_SET_FRAME_PARALLEL_DECODING",
     [VP9E_SET_AQ_MODE]                 = "VP9E_SET_AQ_MODE",
+#if VPX_ENCODER_ABI_VERSION > 8
+    [VP9E_SET_COLOR_SPACE]             = "VP9E_SET_COLOR_SPACE",
+#endif
 #endif
 };
 
@@ -349,13 +352,36 @@ static int set_pix_fmt(AVCodecContext *avctx, vpx_codec_caps_t codec_caps,
     av_log(avctx, AV_LOG_ERROR, "Unsupported pixel format.\n");
     return AVERROR_INVALIDDATA;
 }
+
+#if VPX_ENCODER_ABI_VERSION > 8
+static void set_colorspace(AVCodecContext *avctx)
+{
+    enum vpx_color_space vpx_cs;
+
+    switch (avctx->colorspace) {
+    case AVCOL_SPC_RGB:         vpx_cs = VPX_CS_SRGB;      break;
+    case AVCOL_SPC_BT709:       vpx_cs = VPX_CS_BT_709;    break;
+    case AVCOL_SPC_UNSPECIFIED: vpx_cs = VPX_CS_UNKNOWN;   break;
+    case AVCOL_SPC_RESERVED:    vpx_cs = VPX_CS_RESERVED;  break;
+    case AVCOL_SPC_BT470BG:     vpx_cs = VPX_CS_BT_601;    break;
+    case AVCOL_SPC_SMPTE170M:   vpx_cs = VPX_CS_SMPTE_170; break;
+    case AVCOL_SPC_SMPTE240M:   vpx_cs = VPX_CS_SMPTE_240; break;
+    case AVCOL_SPC_BT2020_NCL:  vpx_cs = VPX_CS_BT_2020;   break;
+    default:
+        av_log(avctx, AV_LOG_WARNING, "Unsupported colorspace (%d)\n",
+               avctx->colorspace);
+        return;
+    }
+    codecctl_int(avctx, VP9E_SET_COLOR_SPACE, vpx_cs);
+}
+#endif
 #endif
 
 static av_cold int vpx_init(AVCodecContext *avctx,
                             const struct vpx_codec_iface *iface)
 {
     VP8Context *ctx = avctx->priv_data;
-    struct vpx_codec_enc_cfg enccfg;
+    struct vpx_codec_enc_cfg enccfg = { 0 };
     struct vpx_codec_enc_cfg enccfg_alpha;
     vpx_codec_flags_t flags = (avctx->flags & CODEC_FLAG_PSNR) ? VPX_CODEC_USE_PSNR : 0;
     int res;
@@ -562,7 +588,8 @@ static av_cold int vpx_init(AVCodecContext *avctx,
         codecctl_int(avctx, VP8E_SET_ARNR_STRENGTH,    ctx->arnr_strength);
     if (ctx->arnr_type >= 0)
         codecctl_int(avctx, VP8E_SET_ARNR_TYPE,        ctx->arnr_type);
-    if (avctx->codec_id == AV_CODEC_ID_VP8) {
+
+    if (CONFIG_LIBVPX_VP8_ENCODER && avctx->codec_id == AV_CODEC_ID_VP8) {
         codecctl_int(avctx, VP8E_SET_NOISE_SENSITIVITY, avctx->noise_reduction);
         codecctl_int(avctx, VP8E_SET_TOKEN_PARTITIONS,  av_log2(avctx->slices));
     }
@@ -593,6 +620,9 @@ static av_cold int vpx_init(AVCodecContext *avctx,
             codecctl_int(avctx, VP9E_SET_FRAME_PARALLEL_DECODING, ctx->frame_parallel);
         if (ctx->aq_mode >= 0)
             codecctl_int(avctx, VP9E_SET_AQ_MODE, ctx->aq_mode);
+#if VPX_ENCODER_ABI_VERSION > 8
+        set_colorspace(avctx);
+#endif
     }
 #endif
 
@@ -1026,6 +1056,14 @@ static const AVClass class_vp9 = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
+static const AVProfile profiles[] = {
+    { FF_PROFILE_VP9_0, "Profile 0" },
+    { FF_PROFILE_VP9_1, "Profile 1" },
+    { FF_PROFILE_VP9_2, "Profile 2" },
+    { FF_PROFILE_VP9_3, "Profile 3" },
+    { FF_PROFILE_UNKNOWN },
+};
+
 AVCodec ff_libvpx_vp9_encoder = {
     .name           = "libvpx-vp9",
     .long_name      = NULL_IF_CONFIG_SMALL("libvpx VP9"),
@@ -1036,6 +1074,7 @@ AVCodec ff_libvpx_vp9_encoder = {
     .encode2        = vp8_encode,
     .close          = vp8_free,
     .capabilities   = CODEC_CAP_DELAY | CODEC_CAP_AUTO_THREADS,
+    .profiles       = NULL_IF_CONFIG_SMALL(profiles),
     .priv_class     = &class_vp9,
     .defaults       = defaults,
     .init_static_data = ff_vp9_init_static,

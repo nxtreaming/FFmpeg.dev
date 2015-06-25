@@ -594,7 +594,7 @@ static int decode_frame_header(AVCodecContext *ctx,
                 av_log(ctx, AV_LOG_ERROR, "Invalid sync code\n");
                 return AVERROR_INVALIDDATA;
             }
-            if (ctx->profile == 1) {
+            if (ctx->profile >= 1) {
                 if ((fmt = read_colorspace_details(ctx)) < 0)
                     return fmt;
             } else {
@@ -3988,7 +3988,8 @@ static int vp9_decode_frame(AVCodecContext *ctx, void *frame,
     int size = pkt->size;
     VP9Context *s = ctx->priv_data;
     int res, tile_row, tile_col, i, ref, row, col;
-    int retain_segmap_ref = s->segmentation.enabled && !s->segmentation.update_map;
+    int retain_segmap_ref = s->segmentation.enabled && !s->segmentation.update_map
+                            && s->frames[REF_FRAME_SEGMAP].segmentation_map;
     ptrdiff_t yoff, uvoff, ls_y, ls_uv;
     AVFrame *f;
     int bytesperpixel;

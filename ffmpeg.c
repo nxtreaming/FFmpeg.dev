@@ -670,6 +670,7 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, OutputStream *ost)
             if (!new_pkt.buf)
                 exit_program(1);
         } else if (a < 0) {
+            new_pkt = *pkt;
             av_log(NULL, AV_LOG_ERROR, "Failed to open bitstream filter %s for stream %d with codec %s",
                    bsfc->filter->name, pkt->stream_index,
                    avctx->codec ? avctx->codec->name : "copy");
@@ -1198,6 +1199,8 @@ static void do_video_out(AVFormatContext *s,
     av_frame_unref(ost->last_frame);
     if (next_picture)
         av_frame_ref(ost->last_frame, next_picture);
+    else
+        av_frame_free(&ost->last_frame);
 }
 
 static double psnr(double d)

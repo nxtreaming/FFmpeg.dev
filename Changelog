@@ -3,6 +3,11 @@ releases are sorted from youngest to oldest.
 
 version <next>:
 - colorkey video filter
+- BFSTM/BCSTM demuxer
+- little-endian ADPCM_THP decoder
+- Hap decoder and encoder
+- DirectDraw Surface image/texture decoder
+- ssim filter
 
 
 version 2.7:
