@@ -67,10 +67,6 @@ enum Jpeg2000Quantsty { // quantization style
     JPEG2000_QSTY_SE    // scalar expounded
 };
 
-#define JPEG2000_MAX_CBLKW 128
-#define JPEG2000_MAX_CBLKH 128
-
-
 #define JPEG2000_MAX_DECLEVELS 32
 #define JPEG2000_MAX_RESLEVELS (JPEG2000_MAX_DECLEVELS + 1)
 
@@ -123,9 +119,10 @@ enum Jpeg2000Quantsty { // quantization style
 #define JPEG2000_PGOD_CPRL      0x04  // Component-position-resolution level-layer progression
 
 typedef struct Jpeg2000T1Context {
-    int data[JPEG2000_MAX_CBLKW][JPEG2000_MAX_CBLKH];
-    uint16_t flags[JPEG2000_MAX_CBLKW + 2][JPEG2000_MAX_CBLKH + 2];
+    int data[6144];
+    uint16_t flags[6156];
     MqcState mqc;
+    int stride;
 } Jpeg2000T1Context;
 
 typedef struct Jpeg2000TgtNode {
@@ -186,6 +183,7 @@ typedef struct Jpeg2000Prec {
     Jpeg2000TgtNode *zerobits;
     Jpeg2000TgtNode *cblkincl;
     Jpeg2000Cblk *cblk;
+    int decoded_layers;
     uint16_t coord[2][2]; // border coordinates {{x0, x1}, {y0, y1}}
 } Jpeg2000Prec; // precinct
 
