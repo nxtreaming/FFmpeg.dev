@@ -1893,17 +1893,8 @@ static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output)
     if (*got_output || ret<0 || pkt->size)
         decode_error_stat[ret<0] ++;
 
-    if (!*got_output || ret < 0) {
-        if (!pkt->size) {
-            for (i = 0; i < ist->nb_filters; i++)
-#if 1
-                av_buffersrc_add_ref(ist->filters[i]->filter, NULL, 0);
-#else
-                av_buffersrc_add_frame(ist->filters[i]->filter, NULL);
-#endif
-        }
+    if (!*got_output || ret < 0)
         return ret;
-    }
 
     ist->samples_decoded += decoded_frame->nb_samples;
     ist->frames_decoded++;
@@ -2052,17 +2043,8 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output)
         }
     }
 
-    if (!*got_output || ret < 0) {
-        if (!pkt->size) {
-            for (i = 0; i < ist->nb_filters; i++)
-#if 1
-                av_buffersrc_add_ref(ist->filters[i]->filter, NULL, 0);
-#else
-                av_buffersrc_add_frame(ist->filters[i]->filter, NULL);
-#endif
-        }
+    if (!*got_output || ret < 0)
         return ret;
-    }
 
     if(ist->top_field_first>=0)
         decoded_frame->top_field_first = ist->top_field_first;
@@ -2207,6 +2189,21 @@ out:
     return ret;
 }
 
+static int send_filter_eof(InputStream *ist)
+{
+    int i, ret;
+    for (i = 0; i < ist->nb_filters; i++) {
+#if 1
+        ret = av_buffersrc_add_ref(ist->filters[i]->filter, NULL, 0);
+#else
+        ret = av_buffersrc_add_frame(ist->filters[i]->filter, NULL);
+#endif
+        if (ret < 0)
+            return ret;
+    }
+    return 0;
+}
+
 /* pkt = NULL means EOF (needed to flush decoder buffers) */
 static int process_input_packet(InputStream *ist, const AVPacket *pkt)
 {
@@ -2291,8 +2288,13 @@ static int process_input_packet(InputStream *ist, const AVPacket *pkt)
             return -1;
         }
 
-        if (ret < 0)
-            return ret;
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_ERROR, "Error while decoding stream #%d:%d: %s\n",
+                   ist->file_index, ist->st->index, av_err2str(ret));
+            if (exit_on_error)
+                exit_program(1);
+            break;
+        }
 
         avpkt.dts=
         avpkt.pts= AV_NOPTS_VALUE;
@@ -2309,6 +2311,15 @@ static int process_input_packet(InputStream *ist, const AVPacket *pkt)
         }
         if (got_output && !pkt)
             break;
+    }
+
+    /* after flushing, send an EOF on all the filter inputs attached to the stream */
+    if (!pkt && ist->decoding_needed && !got_output) {
+        int ret = send_filter_eof(ist);
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_FATAL, "Error marking filters as finished\n");
+            exit_program(1);
+        }
     }
 
     /* handle stream copy */
@@ -3794,13 +3805,7 @@ static int process_input(int file_index)
 
     sub2video_heartbeat(ist, pkt.pts);
 
-    ret = process_input_packet(ist, &pkt);
-    if (ret < 0) {
-        av_log(NULL, AV_LOG_ERROR, "Error while decoding stream #%d:%d: %s\n",
-               ist->file_index, ist->st->index, av_err2str(ret));
-        if (exit_on_error)
-            exit_program(1);
-    }
+    process_input_packet(ist, &pkt);
 
     ret = 0;
 discard_packet:

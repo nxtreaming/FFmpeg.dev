@@ -39,6 +39,38 @@
 #include "asf.h"
 #include "asfcrypt.h"
 
+typedef struct ASFPayload {
+    uint8_t type;
+    uint16_t size;
+} ASFPayload;
+
+typedef struct ASFStream {
+    int num;
+    unsigned char seq;
+    /* use for reading */
+    AVPacket pkt;
+    int frag_offset;
+    int packet_obj_size;
+    int timestamp;
+    int64_t duration;
+    int skip_to_key;
+    int pkt_clean;
+
+    int ds_span;                /* descrambling  */
+    int ds_packet_size;
+    int ds_chunk_size;
+
+    int64_t packet_pos;
+
+    uint16_t stream_language_index;
+
+    int      palette_changed;
+    uint32_t palette[256];
+
+    int payload_ext_ct;
+    ASFPayload payload[8];
+} ASFStream;
+
 typedef struct ASFContext {
     const AVClass *class;
     int asfid2avid[128];                 ///< conversion table from asf ID 2 AVStream ID
@@ -100,8 +132,9 @@ static const AVClass asf_class = {
 #include <assert.h>
 
 #define ASF_MAX_STREAMS 127
-#define FRAME_HEADER_SIZE 16
-// Fix Me! FRAME_HEADER_SIZE may be different. (17 is known to be too large)
+#define FRAME_HEADER_SIZE 6
+// Fix Me! FRAME_HEADER_SIZE may be different.
+// (7 is known to be too large for GipsyGuitar.wmv)
 
 #ifdef DEBUG
 static const ff_asf_guid stream_bitrate_guid = { /* (http://get.to/sdp) */
@@ -1030,8 +1063,8 @@ static int asf_read_frame_header(AVFormatContext *s, AVIOContext *pb)
         int64_t end = avio_tell(pb) + asf->packet_replic_size;
         AVRational aspect;
         asfst->packet_obj_size = avio_rl32(pb);
-        if (asfst->packet_obj_size >= (1 << 24) || asfst->packet_obj_size <= 0) {
-            av_log(s, AV_LOG_ERROR, "packet_obj_size invalid\n");
+        if (asfst->packet_obj_size >= (1 << 24) || asfst->packet_obj_size < 0) {
+            av_log(s, AV_LOG_ERROR, "packet_obj_size %d invalid\n", asfst->packet_obj_size);
             asfst->packet_obj_size = 0;
             return AVERROR_INVALIDDATA;
         }
@@ -1142,6 +1175,9 @@ static int asf_parse_packet(AVFormatContext *s, AVIOContext *pb, AVPacket *pkt)
         if (asf->packet_size_left < FRAME_HEADER_SIZE ||
             asf->packet_segments < 1 && asf->packet_time_start == 0) {
             int ret = asf->packet_size_left + asf->packet_padsize;
+
+            if (asf->packet_size_left && asf->packet_size_left < FRAME_HEADER_SIZE)
+                av_log(s, AV_LOG_WARNING, "Skip due to FRAME_HEADER_SIZE\n");
 
             assert(ret >= 0);
             /* fail safe */

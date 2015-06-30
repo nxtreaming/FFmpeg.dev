@@ -1232,7 +1232,6 @@ static int jpeg2000_decode_packets_po_iteration(Jpeg2000DecoderContext *s, Jpeg2
         for (compno = CSpoc; compno < CEpoc; compno++) {
             Jpeg2000Component *comp     = tile->comp + compno;
             Jpeg2000CodingStyle *codsty = tile->codsty + compno;
-            Jpeg2000QuantStyle *qntsty  = tile->qntsty + compno;
 
             for (reslevelno = RSpoc; reslevelno < FFMIN(codsty->nreslevels, REpoc); reslevelno++) {
                 uint8_t reducedresno = codsty->nreslevels - 1 -reslevelno; //  ==> N_L - r
@@ -1309,7 +1308,9 @@ static int jpeg2000_decode_packets(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile
             Jpeg2000POCEntry *e = &tile->poc.poc[i];
             ret = jpeg2000_decode_packets_po_iteration(s, tile,
                 e->RSpoc, e->CSpoc,
-                e->LYEpoc, e->REpoc, e->CEpoc,
+                FFMIN(e->LYEpoc, tile->codsty[0].nlayers),
+                e->REpoc,
+                FFMIN(e->CEpoc, s->ncomponents),
                 e->Ppoc, &tp_index
                 );
             if (ret < 0)
@@ -1456,7 +1457,7 @@ static int decode_cblk(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *codsty,
                        Jpeg2000T1Context *t1, Jpeg2000Cblk *cblk,
                        int width, int height, int bandpos)
 {
-    int passno = cblk->npasses, pass_t = 2, bpno = cblk->nonzerobits - 1, y;
+    int passno = cblk->npasses, pass_t = 2, bpno = cblk->nonzerobits - 1;
     int pass_cnt = 0;
     int vert_causal_ctx_csty_symbol = codsty->cblk_style & JPEG2000_CBLK_VSC;
     int term_cnt = 0;
@@ -1501,6 +1502,12 @@ static int decode_cblk(Jpeg2000DecoderContext *s, Jpeg2000CodingStyle *codsty,
                 av_log(s->avctx, AV_LOG_ERROR, "Missing needed termination \n");
                 return AVERROR_INVALIDDATA;
             }
+            if (FFABS(cblk->data + cblk->data_start[term_cnt + 1] - 2 - t1->mqc.bp) > 0) {
+                av_log(s->avctx, AV_LOG_WARNING, "Mid mismatch %"PTRDIFF_SPECIFIER" in pass %d of %d\n",
+                    cblk->data + cblk->data_start[term_cnt + 1] - 2 - t1->mqc.bp,
+                    pass_cnt, cblk->npasses);
+            }
+
             ff_mqc_initdec(&t1->mqc, cblk->data + cblk->data_start[++term_cnt], coder_type == 2, 0);
         }
 
@@ -1551,13 +1558,13 @@ static void dequantization_int(int x, int y, Jpeg2000Cblk *cblk,
     for (j = 0; j < (cblk->coord[1][1] - cblk->coord[1][0]); ++j) {
         int32_t *datap = &comp->i_data[(comp->coord[0][1] - comp->coord[0][0]) * (y + j) + x];
         int *src = t1->data + j*t1->stride;
-        if (band->i_stepsize == 16384) {
+        if (band->i_stepsize == 32768) {
             for (i = 0; i < w; ++i)
                 datap[i] = src[i] / 2;
         } else {
             // This should be VERY uncommon
             for (i = 0; i < w; ++i)
-                datap[i] = (src[i] * (int64_t)band->i_stepsize) / 32768;
+                datap[i] = (src[i] * (int64_t)band->i_stepsize) / 65536;
         }
     }
 }
@@ -1572,7 +1579,7 @@ static void dequantization_int_97(int x, int y, Jpeg2000Cblk *cblk,
         int32_t *datap = &comp->i_data[(comp->coord[0][1] - comp->coord[0][0]) * (y + j) + x];
         int *src = t1->data + j*t1->stride;
         for (i = 0; i < w; ++i)
-            datap[i] = (src[i] * (int64_t)band->i_stepsize + (1<<14)) >> 15;
+            datap[i] = (src[i] * (int64_t)band->i_stepsize + (1<<15)) >> 16;
     }
 }
 

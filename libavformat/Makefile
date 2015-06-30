@@ -84,6 +84,8 @@ OBJS-$(CONFIG_APNG_MUXER)                += apngenc.o
 OBJS-$(CONFIG_AQTITLE_DEMUXER)           += aqtitledec.o subtitles.o
 OBJS-$(CONFIG_ASF_DEMUXER)               += asfdec.o asf.o asfcrypt.o \
                                             avlanguage.o
+OBJS-$(CONFIG_ASF_O_DEMUXER)             += asfdec-o.o asf.o asfcrypt.o \
+                                            avlanguage.o
 OBJS-$(CONFIG_ASF_MUXER)                 += asfenc.o asf.o
 OBJS-$(CONFIG_ASS_DEMUXER)               += assdec.o subtitles.o
 OBJS-$(CONFIG_ASS_MUXER)                 += assenc.o
@@ -200,6 +202,7 @@ OBJS-$(CONFIG_IMAGE2PIPE_MUXER)          += img2enc.o img2.o
 OBJS-$(CONFIG_IMAGE2_ALIAS_PIX_DEMUXER)  += img2_alias_pix.o
 OBJS-$(CONFIG_IMAGE2_BRENDER_PIX_DEMUXER) += img2_brender_pix.o
 OBJS-$(CONFIG_IMAGE_BMP_PIPE_DEMUXER)     += img2dec.o img2.o
+OBJS-$(CONFIG_IMAGE_DDS_PIPE_DEMUXER)     += img2dec.o img2.o
 OBJS-$(CONFIG_IMAGE_DPX_PIPE_DEMUXER)     += img2dec.o img2.o
 OBJS-$(CONFIG_IMAGE_EXR_PIPE_DEMUXER)     += img2dec.o img2.o
 OBJS-$(CONFIG_IMAGE_J2K_PIPE_DEMUXER)     += img2dec.o img2.o
@@ -547,7 +550,6 @@ TESTPROGS = seek                                                        \
             url                                                         \
 
 TESTPROGS-$(CONFIG_NETWORK)              += noproxy
-TESTPROGS-yes                            += api-h264
 TESTPROGS-$(CONFIG_FFRTMPCRYPT_PROTOCOL) += rtmpdh
 
 TOOLS     = aviocat                                                     \
