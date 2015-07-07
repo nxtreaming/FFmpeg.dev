@@ -677,10 +677,16 @@ av_cold int ff_mpv_encode_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-    if (avctx->intra_quant_bias != FF_DEFAULT_QUANT_BIAS)
+#if FF_API_QUANT_BIAS
+FF_DISABLE_DEPRECATION_WARNINGS
+    if (s->intra_quant_bias == FF_DEFAULT_QUANT_BIAS &&
+        avctx->intra_quant_bias != FF_DEFAULT_QUANT_BIAS)
         s->intra_quant_bias = avctx->intra_quant_bias;
-    if (avctx->inter_quant_bias != FF_DEFAULT_QUANT_BIAS)
+    if (s->inter_quant_bias == FF_DEFAULT_QUANT_BIAS &&
+        avctx->inter_quant_bias != FF_DEFAULT_QUANT_BIAS)
         s->inter_quant_bias = avctx->inter_quant_bias;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
 
     av_log(avctx, AV_LOG_DEBUG, "intra_quant_bias = %d inter_quant_bias = %d\n",s->intra_quant_bias,s->inter_quant_bias);
 
@@ -4559,12 +4565,12 @@ int ff_dct_quantize_c(MpegEncContext *s,
         start_i = 1;
         last_non_zero = 0;
         qmat = n < 4 ? s->q_intra_matrix[qscale] : s->q_chroma_intra_matrix[qscale];
-        bias= s->intra_quant_bias<<(QMAT_SHIFT - QUANT_BIAS_SHIFT);
+        bias= s->intra_quant_bias*(1<<(QMAT_SHIFT - QUANT_BIAS_SHIFT));
     } else {
         start_i = 0;
         last_non_zero = -1;
         qmat = s->q_inter_matrix[qscale];
-        bias= s->inter_quant_bias<<(QMAT_SHIFT - QUANT_BIAS_SHIFT);
+        bias= s->inter_quant_bias*(1<<(QMAT_SHIFT - QUANT_BIAS_SHIFT));
     }
     threshold1= (1<<QMAT_SHIFT) - bias - 1;
     threshold2= (threshold1<<1);

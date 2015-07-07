@@ -1702,13 +1702,13 @@ static int jpeg2000_decode_tile(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile,
                 plane = s->cdef[compno] ? s->cdef[compno]-1 : (s->ncomponents-1);
 
 
-            y    = tile->comp[compno].coord[1][0] - s->image_offset_y;
-            line = picture->data[plane] + y / s->cdy[compno] * picture->linesize[plane];
+            y    = tile->comp[compno].coord[1][0] - s->image_offset_y / s->cdy[compno];
+            line = picture->data[plane] + y * picture->linesize[plane];
             for (; y < tile->comp[compno].coord[1][1] - s->image_offset_y; y ++) {
                 uint8_t *dst;
 
-                x   = tile->comp[compno].coord[0][0] - s->image_offset_x;
-                dst = line + x / s->cdx[compno] * pixelsize + compno*!planar;
+                x   = tile->comp[compno].coord[0][0] - s->image_offset_x / s->cdx[compno];
+                dst = line + x * pixelsize + compno*!planar;
 
                 if (codsty->transform == FF_DWT97) {
                     for (; x < w; x ++) {
@@ -1751,13 +1751,13 @@ static int jpeg2000_decode_tile(Jpeg2000DecoderContext *s, Jpeg2000Tile *tile,
             if (planar)
                 plane = s->cdef[compno] ? s->cdef[compno]-1 : (s->ncomponents-1);
 
-            y     = tile->comp[compno].coord[1][0] - s->image_offset_y;
-            linel = (uint16_t *)picture->data[plane] + y / s->cdy[compno] * (picture->linesize[plane] >> 1);
+            y     = tile->comp[compno].coord[1][0] - s->image_offset_y / s->cdy[compno];
+            linel = (uint16_t *)picture->data[plane] + y * (picture->linesize[plane] >> 1);
             for (; y < tile->comp[compno].coord[1][1] - s->image_offset_y; y ++) {
                 uint16_t *dst;
 
-                x   = tile->comp[compno].coord[0][0] - s->image_offset_x;
-                dst = linel + (x / s->cdx[compno] * pixelsize + compno*!planar);
+                x   = tile->comp[compno].coord[0][0] - s->image_offset_x / s->cdx[compno];
+                dst = linel + (x * pixelsize + compno*!planar);
                 if (codsty->transform == FF_DWT97) {
                     for (; x < w; x ++) {
                         int  val = lrintf(*datap) + (1 << (cbps - 1));
@@ -2156,7 +2156,7 @@ AVCodec ff_jpeg2000_decoder = {
     .long_name        = NULL_IF_CONFIG_SMALL("JPEG 2000"),
     .type             = AVMEDIA_TYPE_VIDEO,
     .id               = AV_CODEC_ID_JPEG2000,
-    .capabilities     = CODEC_CAP_FRAME_THREADS,
+    .capabilities     = CODEC_CAP_FRAME_THREADS | CODEC_CAP_DR1,
     .priv_data_size   = sizeof(Jpeg2000DecoderContext),
     .init_static_data = jpeg2000_init_static_data,
     .init             = jpeg2000_decode_init,
