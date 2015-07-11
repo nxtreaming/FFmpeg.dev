@@ -428,10 +428,17 @@ void avcodec_align_dimensions2(AVCodecContext *s, int *width, int *height,
 
     *width  = FFALIGN(*width, w_align);
     *height = FFALIGN(*height, h_align);
-    if (s->codec_id == AV_CODEC_ID_H264 || s->lowres)
+    if (s->codec_id == AV_CODEC_ID_H264 || s->lowres) {
         // some of the optimized chroma MC reads one line too much
         // which is also done in mpeg decoders with lowres > 0
         *height += 2;
+
+        // H.264 uses edge emulation for out of frame motion vectors, for this
+        // it requires a temporary area large enough to hold a 21x21 block,
+        // increasing witdth ensure that the temporary area is large enough,
+        // the next rounded up width is 32
+        *width = FFMAX(*width, 32);
+    }
 
     for (i = 0; i < 4; i++)
         linesize_align[i] = STRIDE_ALIGN;
@@ -2257,6 +2264,7 @@ static int apply_param_change(AVCodecContext *avctx, AVPacket *avpkt)
     int size = 0, ret;
     const uint8_t *data;
     uint32_t flags;
+    int64_t val;
 
     data = av_packet_get_side_data(avpkt, AV_PKT_DATA_PARAM_CHANGE, &size);
     if (!data)
@@ -2277,7 +2285,12 @@ static int apply_param_change(AVCodecContext *avctx, AVPacket *avpkt)
     if (flags & AV_SIDE_DATA_PARAM_CHANGE_CHANNEL_COUNT) {
         if (size < 4)
             goto fail;
-        avctx->channels = bytestream_get_le32(&data);
+        val = bytestream_get_le32(&data);
+        if (val <= 0 || val > INT_MAX) {
+            av_log(avctx, AV_LOG_ERROR, "Invalid channel count");
+            return AVERROR_INVALIDDATA;
+        }
+        avctx->channels = val;
         size -= 4;
     }
     if (flags & AV_SIDE_DATA_PARAM_CHANGE_CHANNEL_LAYOUT) {
@@ -2289,7 +2302,12 @@ static int apply_param_change(AVCodecContext *avctx, AVPacket *avpkt)
     if (flags & AV_SIDE_DATA_PARAM_CHANGE_SAMPLE_RATE) {
         if (size < 4)
             goto fail;
-        avctx->sample_rate = bytestream_get_le32(&data);
+        val = bytestream_get_le32(&data);
+        if (val <= 0 || val > INT_MAX) {
+            av_log(avctx, AV_LOG_ERROR, "Invalid sample rate");
+            return AVERROR_INVALIDDATA;
+        }
+        avctx->sample_rate = val;
         size -= 4;
     }
     if (flags & AV_SIDE_DATA_PARAM_CHANGE_DIMENSIONS) {

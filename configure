@@ -322,6 +322,7 @@ Toolchain options:
   --extra-cxxflags=ECFLAGS add ECFLAGS to CXXFLAGS [$CXXFLAGS]
   --extra-ldflags=ELDFLAGS add ELDFLAGS to LDFLAGS [$LDFLAGS]
   --extra-ldexeflags=ELDFLAGS add ELDFLAGS to LDEXEFLAGS [$LDEXEFLAGS]
+  --extra-ldlibflags=ELDFLAGS add ELDFLAGS to LDLIBFLAGS [$LDLIBFLAGS]
   --extra-libs=ELIBS       add ELIBS [$ELIBS]
   --extra-version=STRING   version string suffix []
   --optflags=OPTFLAGS      override optimization-related compiler flags
@@ -790,6 +791,10 @@ add_ldflags(){
 
 add_ldexeflags(){
     append LDEXEFLAGS $($ldflags_filter "$@")
+}
+
+add_ldlibflags(){
+    append LDLIBFLAGS $($ldflags_filter "$@")
 }
 
 add_stripflags(){
@@ -2128,6 +2133,7 @@ qsvenc_select="qsv"
 
 # decoders / encoders
 aac_decoder_select="imdct15 mdct sinewin"
+aac_fixed_decoder_select="mdct sinewin"
 aac_encoder_select="audio_frame_queue iirfilter mdct sinewin"
 aac_latm_decoder_select="aac_decoder aac_latm_parser"
 ac3_decoder_select="ac3_parser ac3dsp bswapdsp fmtconvert mdct"
@@ -2209,6 +2215,8 @@ hap_decoder_select="snappy texturedsp"
 hap_encoder_deps="libsnappy"
 hap_encoder_select="texturedspenc"
 hevc_decoder_select="bswapdsp cabac golomb videodsp"
+hevc_qsv_encoder_deps="libmfx"
+hevc_qsv_encoder_select="qsvenc"
 huffyuv_decoder_select="bswapdsp huffyuvdsp llviddsp"
 huffyuv_encoder_select="bswapdsp huffman huffyuvencdsp llviddsp"
 iac_decoder_select="imc_decoder"
@@ -2248,6 +2256,8 @@ mpeg1video_decoder_select="error_resilience mpeg_er mpegvideo"
 mpeg1video_encoder_select="aandcttables mpegvideoenc h263dsp"
 mpeg2video_decoder_select="error_resilience mpeg_er mpegvideo"
 mpeg2video_encoder_select="aandcttables mpegvideoenc h263dsp"
+mpeg2_qsv_encoder_deps="libmfx"
+mpeg2_qsv_encoder_select="qsvenc"
 mpeg4_decoder_select="h263_decoder mpeg4video_parser"
 mpeg4_encoder_select="h263_encoder"
 msmpeg4v1_decoder_select="h263_decoder"
@@ -3011,6 +3021,9 @@ for opt do
         ;;
         --extra-ldexeflags=*)
             add_ldexeflags $optval
+        ;;
+        --extra-ldlibflags=*)
+            add_ldlibflags $optval
         ;;
         --extra-libs=*)
             add_extralibs $optval
@@ -5449,6 +5462,7 @@ check_disable_warning -Wno-pointer-sign
 check_ldflags -Wl,--warn-common
 check_ldflags -Wl,-rpath-link=libpostproc:libswresample:libswscale:libavfilter:libavdevice:libavformat:libavcodec:libavutil:libavresample
 enabled rpath && add_ldexeflags -Wl,-rpath,$libdir
+enabled rpath && add_ldlibflags -Wl,-rpath,$libdir
 test_ldflags -Wl,-Bsymbolic && append SHFLAGS -Wl,-Bsymbolic
 
 # add some strip flags
@@ -5917,6 +5931,7 @@ DEPWINDRES=$dep_cc
 DOXYGEN=$doxygen
 LDFLAGS=$LDFLAGS
 LDEXEFLAGS=$LDEXEFLAGS
+LDLIBFLAGS=$LDLIBFLAGS
 SHFLAGS=$(echo $($ldflags_filter $SHFLAGS))
 ASMSTRIPFLAGS=$ASMSTRIPFLAGS
 YASMFLAGS=$YASMFLAGS

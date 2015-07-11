@@ -42,6 +42,8 @@ typedef struct QSVEncContext {
     mfxSession internal_session;
 
     int packet_size;
+    int width_align;
+    int height_align;
 
     mfxVideoParam param;
     mfxFrameAllocRequest req;
@@ -56,6 +58,8 @@ typedef struct QSVEncContext {
     int preset;
     int avbr_accuracy;
     int avbr_convergence;
+
+    char *load_plugins;
 } QSVEncContext;
 
 int ff_qsv_enc_init(AVCodecContext *avctx, QSVEncContext *q);

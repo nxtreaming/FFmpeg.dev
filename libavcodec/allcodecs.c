@@ -339,6 +339,7 @@ void avcodec_register_all(void)
 
     /* audio codecs */
     REGISTER_ENCDEC (AAC,               aac);
+    REGISTER_DECODER(AAC_FIXED,         aac_fixed);
     REGISTER_DECODER(AAC_LATM,          aac_latm);
     REGISTER_ENCDEC (AC3,               ac3);
     REGISTER_ENCDEC (AC3_FIXED,         ac3_fixed);
@@ -569,6 +570,8 @@ void avcodec_register_all(void)
     REGISTER_ENCODER(NVENC,             nvenc);
     REGISTER_ENCODER(NVENC_H264,        nvenc_h264);
     REGISTER_ENCODER(NVENC_HEVC,        nvenc_hevc);
+    REGISTER_ENCODER(HEVC_QSV,          hevc_qsv);
+    REGISTER_ENCODER(MPEG2_QSV,         mpeg2_qsv);
 
     /* parsers */
     REGISTER_PARSER(AAC,                aac);

@@ -555,6 +555,11 @@ static uint32_t epic_decode_pixel_pred(ePICContext *dc, int x, int y,
         B     = ((pred >> B_shift) & 0xFF) - TOSIGNED(delta);
     }
 
+    if (R<0 || G<0 || B<0) {
+        av_log(NULL, AV_LOG_ERROR, "RGB %d %d %d is out of range\n", R, G, B);
+        return 0;
+    }
+
     return (R << R_shift) | (G << G_shift) | (B << B_shift);
 }
 
@@ -1171,11 +1176,12 @@ static int g2m_init_buffers(G2MContext *c)
         c->tile_stride     = FFALIGN(c->tile_width, 16) * 3;
         c->epic_buf_stride = FFALIGN(c->tile_width * 4, 16);
         aligned_height     = FFALIGN(c->tile_height,    16);
-        av_free(c->synth_tile);
-        av_free(c->jpeg_tile);
-        av_free(c->kempf_buf);
-        av_free(c->kempf_flags);
-        av_free(c->epic_buf_base);
+        av_freep(&c->synth_tile);
+        av_freep(&c->jpeg_tile);
+        av_freep(&c->kempf_buf);
+        av_freep(&c->kempf_flags);
+        av_freep(&c->epic_buf_base);
+        c->epic_buf    = NULL;
         c->synth_tile  = av_mallocz(c->tile_stride      * aligned_height);
         c->jpeg_tile   = av_mallocz(c->tile_stride      * aligned_height);
         c->kempf_buf   = av_mallocz((c->tile_width + 1) * aligned_height +
@@ -1604,6 +1610,7 @@ static av_cold int g2m_decode_end(AVCodecContext *avctx)
     jpg_free_context(&c->jc);
 
     av_freep(&c->epic_buf_base);
+    c->epic_buf = NULL;
     av_freep(&c->kempf_buf);
     av_freep(&c->kempf_flags);
     av_freep(&c->synth_tile);
