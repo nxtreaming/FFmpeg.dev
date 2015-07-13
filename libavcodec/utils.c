@@ -36,6 +36,7 @@
 #include "libavutil/frame.h"
 #include "libavutil/internal.h"
 #include "libavutil/mathematics.h"
+#include "libavutil/mem_internal.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/samplefmt.h"
@@ -121,20 +122,6 @@ volatile int ff_avcodec_locked;
 static int volatile entangled_thread_counter = 0;
 static void *codec_mutex;
 static void *avformat_mutex;
-
-static inline int ff_fast_malloc(void *ptr, unsigned int *size, size_t min_size, int zero_realloc)
-{
-    void **p = ptr;
-    if (min_size <= *size && *p)
-        return 0;
-    min_size = FFMAX(17 * min_size / 16 + 32, min_size);
-    av_free(*p);
-    *p = zero_realloc ? av_mallocz(min_size) : av_malloc(min_size);
-    if (!*p)
-        min_size = 0;
-    *size = min_size;
-    return 1;
-}
 
 void av_fast_padded_malloc(void *ptr, unsigned int *size, size_t min_size)
 {
@@ -1588,6 +1575,12 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
                 ret = AVERROR(EINVAL);
                 goto free_and_end;
             }
+        }
+        if (avctx->sample_rate < 0) {
+            av_log(avctx, AV_LOG_ERROR, "Specified sample rate %d is not supported\n",
+                    avctx->sample_rate);
+            ret = AVERROR(EINVAL);
+            goto free_and_end;
         }
         if (avctx->codec->channel_layouts) {
             if (!avctx->channel_layout) {

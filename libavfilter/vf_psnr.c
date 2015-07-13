@@ -173,10 +173,10 @@ static AVFrame *do_psnr(AVFilterContext *ctx, AVFrame *main,
     for (j = 0; j < s->nb_components; j++) {
         c = s->is_rgb ? s->rgba_map[j] : j;
         set_meta(metadata, "lavfi.psnr.mse.", s->comps[j], comp_mse[c]);
-        set_meta(metadata, "lavfi.psnr.mse_avg", 0, mse);
         set_meta(metadata, "lavfi.psnr.psnr.", s->comps[j], get_psnr(comp_mse[c], 1, s->max[c]));
-        set_meta(metadata, "lavfi.psnr.psnr_avg", 0, get_psnr(mse, 1, s->average_max));
     }
+    set_meta(metadata, "lavfi.psnr.mse_avg", 0, mse);
+    set_meta(metadata, "lavfi.psnr.psnr_avg", 0, get_psnr(mse, 1, s->average_max));
 
     if (s->stats_file) {
         fprintf(s->stats_file, "n:%"PRId64" mse_avg:%0.2f ", s->nb_frames, mse);
@@ -260,33 +260,10 @@ static int config_input_ref(AVFilterLink *inlink)
         return AVERROR(EINVAL);
     }
 
-    switch (inlink->format) {
-    case AV_PIX_FMT_GRAY8:
-    case AV_PIX_FMT_GRAY16:
-    case AV_PIX_FMT_GBRP:
-    case AV_PIX_FMT_GBRP9:
-    case AV_PIX_FMT_GBRP10:
-    case AV_PIX_FMT_GBRP12:
-    case AV_PIX_FMT_GBRP14:
-    case AV_PIX_FMT_GBRP16:
-    case AV_PIX_FMT_GBRAP:
-    case AV_PIX_FMT_GBRAP16:
-    case AV_PIX_FMT_YUVJ411P:
-    case AV_PIX_FMT_YUVJ420P:
-    case AV_PIX_FMT_YUVJ422P:
-    case AV_PIX_FMT_YUVJ440P:
-    case AV_PIX_FMT_YUVJ444P:
-        s->max[0] = (1 << (desc->comp[0].depth_minus1 + 1)) - 1;
-        s->max[1] = (1 << (desc->comp[1].depth_minus1 + 1)) - 1;
-        s->max[2] = (1 << (desc->comp[2].depth_minus1 + 1)) - 1;
-        s->max[3] = (1 << (desc->comp[3].depth_minus1 + 1)) - 1;
-        break;
-    default:
-        s->max[0] = 235 * (1 << (desc->comp[0].depth_minus1 - 7));
-        s->max[1] = 240 * (1 << (desc->comp[1].depth_minus1 - 7));
-        s->max[2] = 240 * (1 << (desc->comp[2].depth_minus1 - 7));
-        s->max[3] = (1 << (desc->comp[3].depth_minus1 + 1)) - 1;
-    }
+    s->max[0] = (1 << (desc->comp[0].depth_minus1 + 1)) - 1;
+    s->max[1] = (1 << (desc->comp[1].depth_minus1 + 1)) - 1;
+    s->max[2] = (1 << (desc->comp[2].depth_minus1 + 1)) - 1;
+    s->max[3] = (1 << (desc->comp[3].depth_minus1 + 1)) - 1;
 
     s->is_rgb = ff_fill_rgba_map(s->rgba_map, inlink->format) >= 0;
     s->comps[0] = s->is_rgb ? 'r' : 'y' ;
@@ -350,9 +327,11 @@ static av_cold void uninit(AVFilterContext *ctx)
         char buf[256];
 
         buf[0] = 0;
-        for (j = 0; j < s->nb_components; j++)
+        for (j = 0; j < s->nb_components; j++) {
+            int c = s->is_rgb ? s->rgba_map[j] : j;
             av_strlcatf(buf, sizeof(buf), " %c:%0.2f", s->comps[j],
-                        get_psnr(s->mse_comp[j], s->nb_frames, s->max[j]));
+                        get_psnr(s->mse_comp[c], s->nb_frames, s->max[c]));
+        }
         av_log(ctx, AV_LOG_INFO, "PSNR%s average:%0.2f min:%0.2f max:%0.2f\n",
                buf,
                get_psnr(s->mse, s->nb_frames, s->average_max),
