@@ -30,7 +30,7 @@
 
 #define IS_IRAP_NAL(nal) (nal->type >= 16 && nal->type <= 23)
 
-#define ADVANCED_PARSER
+#define ADVANCED_PARSER CONFIG_HEVC_DECODER
 
 typedef struct HEVCParserContext {
     ParseContext pc;
@@ -40,11 +40,12 @@ typedef struct HEVCParserContext {
 
     int parsed_extradata;
 
-#ifdef ADVANCED_PARSER
+#if ADVANCED_PARSER
     HEVCContext h;
 #endif
 } HEVCParserContext;
 
+#if !ADVANCED_PARSER
 static int hevc_parse_slice_header(AVCodecParserContext *s, HEVCNAL *nal,
                                    AVCodecContext *avctx)
 {
@@ -81,7 +82,6 @@ static int hevc_parse_slice_header(AVCodecParserContext *s, HEVCNAL *nal,
     return 0;
 }
 
-#ifndef ADVANCED_PARSER
 static int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
                            int buf_size, AVCodecContext *avctx)
 {
@@ -115,7 +115,13 @@ static int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
         case NAL_RADL_N:
         case NAL_RADL_R:
         case NAL_RASL_N:
-        case NAL_RASL_R: hevc_parse_slice_header(s, nal, avctx); break;
+        case NAL_RASL_R:
+            if (buf == avctx->extradata) {
+                av_log(avctx, AV_LOG_ERROR, "Invalid NAL unit: %d\n", nal->type);
+                return AVERROR_INVALIDDATA;
+            }
+            hevc_parse_slice_header(s, nal, avctx);
+            break;
         }
     }
 
@@ -166,6 +172,7 @@ static int hevc_find_frame_end(AVCodecParserContext *s, const uint8_t *buf,
     return END_NOT_FOUND;
 }
 
+#if ADVANCED_PARSER
 /**
  * Parse NAL units of found picture and decode some basic information.
  *
@@ -174,7 +181,6 @@ static int hevc_find_frame_end(AVCodecParserContext *s, const uint8_t *buf,
  * @param buf buffer with field/frame data.
  * @param buf_size size of the buffer.
  */
-#ifdef ADVANCED_PARSER
 static inline int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
                            int buf_size, AVCodecContext *avctx)
 {
@@ -183,10 +189,11 @@ static inline int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
     GetBitContext      *gb;
     SliceHeader        *sh = &h->sh;
     HEVCParamSets *ps = &h->ps;
-    HEVCPacket   *pkt = &h->pkt;
+    HEVCPacket   *pkt = &ctx->pkt;
     const uint8_t *buf_end = buf + buf_size;
     int state = -1, i;
     HEVCNAL *nal;
+    int is_global = buf == avctx->extradata;
 
     if (!h->HEVClc)
         h->HEVClc = av_mallocz(sizeof(HEVCLocalContext));
@@ -266,6 +273,12 @@ static inline int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
         case NAL_IDR_W_RADL:
         case NAL_IDR_N_LP:
         case NAL_CRA_NUT:
+
+            if (is_global) {
+                av_log(avctx, AV_LOG_ERROR, "Invalid NAL unit: %d\n", h->nal_unit_type);
+                return AVERROR_INVALIDDATA;
+            }
+
             sh->first_slice_in_pic_flag = get_bits1(gb);
             s->picture_structure = h->picture_struct;
             s->field_order = h->picture_struct;
@@ -354,7 +367,8 @@ static inline int parse_nal_units(AVCodecParserContext *s, const uint8_t *buf,
         buf += consumed;
     }
     /* didn't find a picture! */
-    av_log(h->avctx, AV_LOG_ERROR, "missing picture in access unit\n");
+    if (!is_global)
+        av_log(h->avctx, AV_LOG_ERROR, "missing picture in access unit\n");
     return -1;
 }
 #endif
@@ -418,8 +432,18 @@ static void hevc_parser_close(AVCodecParserContext *s)
     HEVCParserContext *ctx = s->priv_data;
     int i;
 
-#ifdef ADVANCED_PARSER
+#if ADVANCED_PARSER
     HEVCContext  *h  = &ctx->h;
+
+    for (i = 0; i < FF_ARRAY_ELEMS(h->ps.vps_list); i++)
+        av_buffer_unref(&h->ps.vps_list[i]);
+    for (i = 0; i < FF_ARRAY_ELEMS(h->ps.sps_list); i++)
+        av_buffer_unref(&h->ps.sps_list[i]);
+    for (i = 0; i < FF_ARRAY_ELEMS(h->ps.pps_list); i++)
+        av_buffer_unref(&h->ps.pps_list[i]);
+
+    h->ps.sps = NULL;
+
     av_freep(&h->HEVClc);
 #endif
 

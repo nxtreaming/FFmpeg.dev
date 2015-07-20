@@ -136,8 +136,6 @@ AVIOContext *progress_avio = NULL;
 
 static uint8_t *subtitle_out;
 
-#define DEFAULT_PASS_LOGFILENAME_PREFIX "ffmpeg2pass"
-
 InputStream **input_streams = NULL;
 int        nb_input_streams = 0;
 InputFile   **input_files   = NULL;
@@ -520,7 +518,10 @@ static void ffmpeg_cleanup(int ret)
     /* close files */
     for (i = 0; i < nb_output_files; i++) {
         OutputFile *of = output_files[i];
-        AVFormatContext *s = of->ctx;
+        AVFormatContext *s;
+        if (!of)
+            continue;
+        s = of->ctx;
         if (s && s->oformat && !(s->oformat->flags & AVFMT_NOFILE))
             avio_closep(&s->pb);
         avformat_free_context(s);
@@ -530,7 +531,12 @@ static void ffmpeg_cleanup(int ret)
     }
     for (i = 0; i < nb_output_streams; i++) {
         OutputStream *ost = output_streams[i];
-        AVBitStreamFilterContext *bsfc = ost->bitstream_filters;
+        AVBitStreamFilterContext *bsfc;
+
+        if (!ost)
+            continue;
+
+        bsfc = ost->bitstream_filters;
         while (bsfc) {
             AVBitStreamFilterContext *next = bsfc->next;
             av_bitstream_filter_close(bsfc);
@@ -1242,7 +1248,7 @@ static void do_video_out(AVFormatContext *s,
     if (!ost->last_frame)
         ost->last_frame = av_frame_alloc();
     av_frame_unref(ost->last_frame);
-    if (next_picture)
+    if (next_picture && ost->last_frame)
         av_frame_ref(ost->last_frame, next_picture);
     else
         av_frame_free(&ost->last_frame);
@@ -2563,6 +2569,71 @@ static int compare_int64(const void *a, const void *b)
     return va < vb ? -1 : va > vb ? +1 : 0;
 }
 
+static int init_output_stream(OutputStream *ost, char *error, int error_len)
+{
+    int ret = 0;
+
+    if (ost->encoding_needed) {
+        AVCodec      *codec = ost->enc;
+        AVCodecContext *dec = NULL;
+        InputStream *ist;
+
+        if ((ist = get_input_stream(ost)))
+            dec = ist->dec_ctx;
+        if (dec && dec->subtitle_header) {
+            /* ASS code assumes this buffer is null terminated so add extra byte. */
+            ost->enc_ctx->subtitle_header = av_mallocz(dec->subtitle_header_size + 1);
+            if (!ost->enc_ctx->subtitle_header)
+                return AVERROR(ENOMEM);
+            memcpy(ost->enc_ctx->subtitle_header, dec->subtitle_header, dec->subtitle_header_size);
+            ost->enc_ctx->subtitle_header_size = dec->subtitle_header_size;
+        }
+        if (!av_dict_get(ost->encoder_opts, "threads", NULL, 0))
+            av_dict_set(&ost->encoder_opts, "threads", "auto", 0);
+        av_dict_set(&ost->encoder_opts, "side_data_only_packets", "1", 0);
+
+        if ((ret = avcodec_open2(ost->enc_ctx, codec, &ost->encoder_opts)) < 0) {
+            if (ret == AVERROR_EXPERIMENTAL)
+                abort_codec_experimental(codec, 1);
+            snprintf(error, error_len,
+                     "Error while opening encoder for output stream #%d:%d - "
+                     "maybe incorrect parameters such as bit_rate, rate, width or height",
+                    ost->file_index, ost->index);
+            return ret;
+        }
+        if (ost->enc->type == AVMEDIA_TYPE_AUDIO &&
+            !(ost->enc->capabilities & CODEC_CAP_VARIABLE_FRAME_SIZE))
+            av_buffersink_set_frame_size(ost->filter->filter,
+                                            ost->enc_ctx->frame_size);
+        assert_avoptions(ost->encoder_opts);
+        if (ost->enc_ctx->bit_rate && ost->enc_ctx->bit_rate < 1000)
+            av_log(NULL, AV_LOG_WARNING, "The bitrate parameter is set too low."
+                                         " It takes bits/s as argument, not kbits/s\n");
+
+        ret = avcodec_copy_context(ost->st->codec, ost->enc_ctx);
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_FATAL,
+                   "Error initializing the output stream codec context.\n");
+            exit_program(1);
+        }
+
+        // copy timebase while removing common factors
+        ost->st->time_base = av_add_q(ost->enc_ctx->time_base, (AVRational){0, 1});
+        ost->st->codec->codec= ost->enc_ctx->codec;
+    } else {
+        ret = av_opt_set_dict(ost->enc_ctx, &ost->encoder_opts);
+        if (ret < 0) {
+           av_log(NULL, AV_LOG_FATAL,
+                  "Error setting up codec context options.\n");
+           return ret;
+        }
+        // copy timebase while removing common factors
+        ost->st->time_base = av_add_q(ost->st->codec->time_base, (AVRational){0, 1});
+    }
+
+    return ret;
+}
+
 static void parse_forced_key_frames(char *kf, OutputStream *ost,
                                     AVCodecContext *avctx)
 {
@@ -2713,21 +2784,6 @@ static int transcode_init(void)
             for (j = 0; j < ifile->nb_streams; j++)
                 input_streams[j + ifile->ist_index]->start = av_gettime_relative();
     }
-
-    /* output stream init */
-    for (i = 0; i < nb_output_files; i++) {
-        oc = output_files[i]->ctx;
-        if (!oc->nb_streams && !(oc->oformat->flags & AVFMT_NOSTREAMS)) {
-            av_dump_format(oc, i, oc->filename, 1);
-            av_log(NULL, AV_LOG_ERROR, "Output file #%d does not contain any stream\n", i);
-            return AVERROR(EINVAL);
-        }
-    }
-
-    /* init complex filtergraphs */
-    for (i = 0; i < nb_filtergraphs; i++)
-        if ((ret = avfilter_graph_config(filtergraphs[i]->graph, NULL)) < 0)
-            return ret;
 
     /* for each output stream, we compute the right encoding parameters */
     for (i = 0; i < nb_output_streams; i++) {
@@ -2937,10 +2993,6 @@ static int transcode_init(void)
                 goto dump_format;
             }
 
-            if (ist)
-                ist->decoding_needed |= DECODING_FOR_OST;
-            ost->encoding_needed = 1;
-
             set_encoder_id(output_files[ost->file_index], ost);
 
             if (!ost->filter &&
@@ -3069,39 +3121,6 @@ static int transcode_init(void)
                 abort();
                 break;
             }
-            /* two pass mode */
-            if (enc_ctx->flags & (CODEC_FLAG_PASS1 | CODEC_FLAG_PASS2)) {
-                char logfilename[1024];
-                FILE *f;
-
-                snprintf(logfilename, sizeof(logfilename), "%s-%d.log",
-                         ost->logfile_prefix ? ost->logfile_prefix :
-                                               DEFAULT_PASS_LOGFILENAME_PREFIX,
-                         i);
-                if (!strcmp(ost->enc->name, "libx264")) {
-                    av_dict_set(&ost->encoder_opts, "stats", logfilename, AV_DICT_DONT_OVERWRITE);
-                } else {
-                    if (enc_ctx->flags & CODEC_FLAG_PASS2) {
-                        char  *logbuffer;
-                        size_t logbuffer_size;
-                        if (cmdutils_read_file(logfilename, &logbuffer, &logbuffer_size) < 0) {
-                            av_log(NULL, AV_LOG_FATAL, "Error reading log file '%s' for pass-2 encoding\n",
-                                   logfilename);
-                            exit_program(1);
-                        }
-                        enc_ctx->stats_in = logbuffer;
-                    }
-                    if (enc_ctx->flags & CODEC_FLAG_PASS1) {
-                        f = av_fopen_utf8(logfilename, "wb");
-                        if (!f) {
-                            av_log(NULL, AV_LOG_FATAL, "Cannot write log file '%s' for pass-1 encoding: %s\n",
-                                logfilename, strerror(errno));
-                            exit_program(1);
-                        }
-                        ost->logfile = f;
-                    }
-                }
-            }
         }
 
         if (ost->disposition) {
@@ -3138,63 +3157,9 @@ static int transcode_init(void)
 
     /* open each encoder */
     for (i = 0; i < nb_output_streams; i++) {
-        ost = output_streams[i];
-        if (ost->encoding_needed) {
-            AVCodec      *codec = ost->enc;
-            AVCodecContext *dec = NULL;
-
-            if ((ist = get_input_stream(ost)))
-                dec = ist->dec_ctx;
-            if (dec && dec->subtitle_header) {
-                /* ASS code assumes this buffer is null terminated so add extra byte. */
-                ost->enc_ctx->subtitle_header = av_mallocz(dec->subtitle_header_size + 1);
-                if (!ost->enc_ctx->subtitle_header) {
-                    ret = AVERROR(ENOMEM);
-                    goto dump_format;
-                }
-                memcpy(ost->enc_ctx->subtitle_header, dec->subtitle_header, dec->subtitle_header_size);
-                ost->enc_ctx->subtitle_header_size = dec->subtitle_header_size;
-            }
-            if (!av_dict_get(ost->encoder_opts, "threads", NULL, 0))
-                av_dict_set(&ost->encoder_opts, "threads", "auto", 0);
-            av_dict_set(&ost->encoder_opts, "side_data_only_packets", "1", 0);
-
-            if ((ret = avcodec_open2(ost->enc_ctx, codec, &ost->encoder_opts)) < 0) {
-                if (ret == AVERROR_EXPERIMENTAL)
-                    abort_codec_experimental(codec, 1);
-                snprintf(error, sizeof(error), "Error while opening encoder for output stream #%d:%d - maybe incorrect parameters such as bit_rate, rate, width or height",
-                        ost->file_index, ost->index);
-                goto dump_format;
-            }
-            if (ost->enc->type == AVMEDIA_TYPE_AUDIO &&
-                !(ost->enc->capabilities & CODEC_CAP_VARIABLE_FRAME_SIZE))
-                av_buffersink_set_frame_size(ost->filter->filter,
-                                             ost->enc_ctx->frame_size);
-            assert_avoptions(ost->encoder_opts);
-            if (ost->enc_ctx->bit_rate && ost->enc_ctx->bit_rate < 1000)
-                av_log(NULL, AV_LOG_WARNING, "The bitrate parameter is set too low."
-                                             " It takes bits/s as argument, not kbits/s\n");
-
-            ret = avcodec_copy_context(ost->st->codec, ost->enc_ctx);
-            if (ret < 0) {
-                av_log(NULL, AV_LOG_FATAL,
-                       "Error initializing the output stream codec context.\n");
-                exit_program(1);
-            }
-
-            // copy timebase while removing common factors
-            ost->st->time_base = av_add_q(ost->enc_ctx->time_base, (AVRational){0, 1});
-            ost->st->codec->codec= ost->enc_ctx->codec;
-        } else {
-            ret = av_opt_set_dict(ost->enc_ctx, &ost->encoder_opts);
-            if (ret < 0) {
-                av_log(NULL, AV_LOG_FATAL,
-                    "Error setting up codec context options.\n");
-                return ret;
-            }
-            // copy timebase while removing common factors
-            ost->st->time_base = av_add_q(ost->st->codec->time_base, (AVRational){0, 1});
-        }
+        ret = init_output_stream(output_streams[i], error, sizeof(error));
+        if (ret < 0)
+            goto dump_format;
     }
 
     /* init input streams */
@@ -3544,7 +3509,7 @@ static void free_input_threads(void)
         InputFile *f = input_files[i];
         AVPacket pkt;
 
-        if (!f->in_thread_queue)
+        if (!f || !f->in_thread_queue)
             continue;
         av_thread_message_queue_set_err_send(f->in_thread_queue, AVERROR_EOF);
         while (av_thread_message_queue_recv(f->in_thread_queue, &pkt, 0) >= 0)

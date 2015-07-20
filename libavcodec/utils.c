@@ -1293,6 +1293,11 @@ MAKE_ACCESSORS(AVCodecContext, codec, int, lowres)
 MAKE_ACCESSORS(AVCodecContext, codec, int, seek_preroll)
 MAKE_ACCESSORS(AVCodecContext, codec, uint16_t*, chroma_intra_matrix)
 
+unsigned av_codec_get_codec_properties(const AVCodecContext *codec)
+{
+    return codec->properties;
+}
+
 int av_codec_get_max_lowres(const AVCodec *codec)
 {
     return codec->max_lowres;
@@ -1611,6 +1616,12 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
             }
         } else if (avctx->channel_layout) {
             avctx->channels = av_get_channel_layout_nb_channels(avctx->channel_layout);
+        }
+        if (avctx->channels < 0) {
+            av_log(avctx, AV_LOG_ERROR, "Specified number of channels %d is not supported\n",
+                    avctx->channels);
+            ret = AVERROR(EINVAL);
+            goto free_and_end;
         }
         if(avctx->codec_type == AVMEDIA_TYPE_VIDEO) {
             if (avctx->width <= 0 || avctx->height <= 0) {
@@ -3147,6 +3158,13 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
         if (encode) {
             snprintf(buf + strlen(buf), buf_size - strlen(buf),
                      ", q=%d-%d", enc->qmin, enc->qmax);
+        } else {
+            if (enc->properties & FF_CODEC_PROPERTY_CLOSED_CAPTIONS)
+                snprintf(buf + strlen(buf), buf_size - strlen(buf),
+                         ", Closed Captions");
+            if (enc->properties & FF_CODEC_PROPERTY_LOSSLESS)
+                snprintf(buf + strlen(buf), buf_size - strlen(buf),
+                         ", lossless");
         }
         break;
     case AVMEDIA_TYPE_AUDIO:

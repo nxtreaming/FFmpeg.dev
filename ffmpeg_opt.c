@@ -43,6 +43,8 @@
 #include "libavutil/time.h"
 #include "libavutil/time_internal.h"
 
+#define DEFAULT_PASS_LOGFILENAME_PREFIX "ffmpeg2pass"
+
 #define MATCH_PER_STREAM_OPT(name, type, outvar, fmtctx, st)\
 {\
     int i, ret;\
@@ -1472,6 +1474,40 @@ static OutputStream *new_video_stream(OptionsContext *o, AVFormatContext *oc, in
             !(ost->logfile_prefix = av_strdup(ost->logfile_prefix)))
             exit_program(1);
 
+        if (do_pass) {
+            char logfilename[1024];
+            FILE *f;
+
+            snprintf(logfilename, sizeof(logfilename), "%s-%d.log",
+                     ost->logfile_prefix ? ost->logfile_prefix :
+                                           DEFAULT_PASS_LOGFILENAME_PREFIX,
+                     i);
+            if (!strcmp(ost->enc->name, "libx264")) {
+                av_dict_set(&ost->encoder_opts, "stats", logfilename, AV_DICT_DONT_OVERWRITE);
+            } else {
+                if (video_enc->flags & CODEC_FLAG_PASS2) {
+                    char  *logbuffer = read_file(logfilename);
+
+                    if (!logbuffer) {
+                        av_log(NULL, AV_LOG_FATAL, "Error reading log file '%s' for pass-2 encoding\n",
+                               logfilename);
+                        exit_program(1);
+                    }
+                    video_enc->stats_in = logbuffer;
+                }
+                if (video_enc->flags & CODEC_FLAG_PASS1) {
+                    f = av_fopen_utf8(logfilename, "wb");
+                    if (!f) {
+                        av_log(NULL, AV_LOG_FATAL,
+                               "Cannot write log file '%s' for pass-1 encoding: %s\n",
+                               logfilename, strerror(errno));
+                        exit_program(1);
+                    }
+                    ost->logfile = f;
+                }
+            }
+        }
+
         MATCH_PER_STREAM_OPT(forced_key_frames, str, ost->forced_keyframes, oc, st);
         if (ost->forced_keyframes)
             ost->forced_keyframes = av_strdup(ost->forced_keyframes);
@@ -1750,8 +1786,7 @@ static void init_output_filter(OutputFilter *ofilter, OptionsContext *o,
 {
     OutputStream *ost;
 
-    switch (avfilter_pad_get_type(ofilter->out_tmp->filter_ctx->output_pads,
-                                  ofilter->out_tmp->pad_idx)) {
+    switch (ofilter->type) {
     case AVMEDIA_TYPE_VIDEO: ost = new_video_stream(o, oc, -1); break;
     case AVMEDIA_TYPE_AUDIO: ost = new_audio_stream(o, oc, -1); break;
     default:
@@ -1784,11 +1819,19 @@ static void init_output_filter(OutputFilter *ofilter, OptionsContext *o,
         exit_program(1);
     }
 
-    if (configure_output_filter(ofilter->graph, ofilter, ofilter->out_tmp) < 0) {
-        av_log(NULL, AV_LOG_FATAL, "Error configuring filter.\n");
-        exit_program(1);
-    }
     avfilter_inout_free(&ofilter->out_tmp);
+}
+
+static int init_complex_filters(void)
+{
+    int i, ret = 0;
+
+    for (i = 0; i < nb_filtergraphs; i++) {
+        ret = init_complex_filtergraph(filtergraphs[i]);
+        if (ret < 0)
+            return ret;
+    }
+    return 0;
 }
 
 static int configure_complex_filters(void)
@@ -1813,10 +1856,6 @@ static int open_output_file(OptionsContext *o, const char *filename)
     AVDictionary *unused_opts = NULL;
     AVDictionaryEntry *e = NULL;
 
-    if (configure_complex_filters() < 0) {
-        av_log(NULL, AV_LOG_FATAL, "Error configuring filters.\n");
-        exit_program(1);
-    }
 
     if (o->stop_time != INT64_MAX && o->recording_time != INT64_MAX) {
         o->stop_time = INT64_MAX;
@@ -1871,8 +1910,7 @@ static int open_output_file(OptionsContext *o, const char *filename)
             if (!ofilter->out_tmp || ofilter->out_tmp->name)
                 continue;
 
-            switch (avfilter_pad_get_type(ofilter->out_tmp->filter_ctx->output_pads,
-                                          ofilter->out_tmp->pad_idx)) {
+            switch (ofilter->type) {
             case AVMEDIA_TYPE_VIDEO:    o->video_disable    = 1; break;
             case AVMEDIA_TYPE_AUDIO:    o->audio_disable    = 1; break;
             case AVMEDIA_TYPE_SUBTITLE: o->subtitle_disable = 1; break;
@@ -2096,7 +2134,7 @@ loop_end:
         avio_read(pb, attachment, len);
 
         ost = new_attachment_stream(o, oc, -1);
-        ost->stream_copy               = 0;
+        ost->stream_copy               = 1;
         ost->attachment_filename       = o->attachments[i];
         ost->finished                  = 1;
         ost->st->codec->extradata      = attachment;
@@ -2116,6 +2154,12 @@ loop_end:
             && (!e->key[5] || check_stream_specifier(oc, ost->st, e->key+6)))
             if (av_opt_set(ost->st->codec, "flags", e->value, 0) < 0)
                 exit_program(1);
+    }
+
+    if (!oc->nb_streams && !(oc->oformat->flags & AVFMT_NOSTREAMS)) {
+        av_dump_format(oc, nb_output_files - 1, oc->filename, 1);
+        av_log(NULL, AV_LOG_ERROR, "Output file #%d does not contain any stream\n", nb_output_files - 1);
+        exit_program(1);
     }
 
     /* check if all codec options have been used */
@@ -2159,6 +2203,17 @@ loop_end:
                option->help ? option->help : "", nb_output_files - 1, filename);
     }
     av_dict_free(&unused_opts);
+
+    /* set the encoding/decoding_needed flags */
+    for (i = of->ost_index; i < nb_output_streams; i++) {
+        OutputStream *ost = output_streams[i];
+
+        ost->encoding_needed = !ost->stream_copy;
+        if (ost->encoding_needed && ost->source_index >= 0) {
+            InputStream *ist = input_streams[ost->source_index];
+            ist->decoding_needed |= DECODING_FOR_OST;
+        }
+    }
 
     /* check filename in case of an image number is expected */
     if (oc->oformat->flags & AVFMT_NEEDNUMBER) {
@@ -2873,10 +2928,24 @@ int ffmpeg_parse_options(int argc, char **argv)
         goto fail;
     }
 
+    /* create the complex filtergraphs */
+    ret = init_complex_filters();
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_FATAL, "Error initializing complex filters.\n");
+        goto fail;
+    }
+
     /* open output files */
     ret = open_files(&octx.groups[GROUP_OUTFILE], "output", open_output_file);
     if (ret < 0) {
         av_log(NULL, AV_LOG_FATAL, "Error opening output files: ");
+        goto fail;
+    }
+
+    /* configure the complex filtergraphs */
+    ret = configure_complex_filters();
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_FATAL, "Error configuring complex filters.\n");
         goto fail;
     }
 

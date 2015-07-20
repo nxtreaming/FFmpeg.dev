@@ -742,10 +742,59 @@ static int scaling_list_data(GetBitContext *gb, AVCodecContext *avctx, ScalingLi
     return 0;
 }
 
+static int map_pixel_format(AVCodecContext *avctx, HEVCSPS *sps)
+{
+    const AVPixFmtDescriptor *desc;
+    switch (sps->bit_depth) {
+    case 8:
+        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY8;
+        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P;
+        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P;
+        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P;
+       break;
+    case 9:
+        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY16;
+        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P9;
+        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P9;
+        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P9;
+        break;
+    case 10:
+        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY16;
+        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P10;
+        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P10;
+        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P10;
+        break;
+    case 12:
+        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY16;
+        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P12;
+        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P12;
+        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P12;
+        break;
+    default:
+        av_log(avctx, AV_LOG_ERROR,
+               "4:2:0, 4:2:2, 4:4:4 supports are currently specified for 8, 10 and 12 bits.\n");
+        av_log(avctx, AV_LOG_ERROR,
+               "chroma_format_idc is %d, depth is %d",
+               sps->chroma_format_idc, sps->bit_depth);
+        return AVERROR_INVALIDDATA;
+    }
+
+    desc = av_pix_fmt_desc_get(sps->pix_fmt);
+    if (!desc)
+        return AVERROR(EINVAL);
+
+    sps->hshift[0] = sps->vshift[0] = 0;
+    sps->hshift[2] = sps->hshift[1] = desc->log2_chroma_w;
+    sps->vshift[2] = sps->vshift[1] = desc->log2_chroma_h;
+
+    sps->pixel_shift = sps->bit_depth > 8;
+
+    return 0;
+}
+
 int ff_hevc_parse_sps(HEVCSPS *sps, GetBitContext *gb, unsigned int *sps_id,
                       int apply_defdispwin, AVBufferRef **vps_list, AVCodecContext *avctx)
 {
-    const AVPixFmtDescriptor *desc;
     int ret = 0;
     int log2_diff_max_min_transform_block_size;
     int bit_depth_chroma, start, vui_present, sublayer_ordering_info;
@@ -831,47 +880,9 @@ int ff_hevc_parse_sps(HEVCSPS *sps, GetBitContext *gb, unsigned int *sps_id,
         return AVERROR_INVALIDDATA;
     }
 
-    switch (sps->bit_depth) {
-    case 8:
-        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY8;
-        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P;
-        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P;
-        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P;
-       break;
-    case 9:
-        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY16;
-        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P9;
-        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P9;
-        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P9;
-        break;
-    case 10:
-        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY16;
-        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P10;
-        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P10;
-        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P10;
-        break;
-    case 12:
-        if (sps->chroma_format_idc == 0) sps->pix_fmt = AV_PIX_FMT_GRAY16;
-        if (sps->chroma_format_idc == 1) sps->pix_fmt = AV_PIX_FMT_YUV420P12;
-        if (sps->chroma_format_idc == 2) sps->pix_fmt = AV_PIX_FMT_YUV422P12;
-        if (sps->chroma_format_idc == 3) sps->pix_fmt = AV_PIX_FMT_YUV444P12;
-        break;
-    default:
-        av_log(avctx, AV_LOG_ERROR,
-               "4:2:0, 4:2:2, 4:4:4 supports are currently specified for 8, 10 and 12 bits.\n");
-        return AVERROR_INVALIDDATA;
-    }
-
-    desc = av_pix_fmt_desc_get(sps->pix_fmt);
-    if (!desc) {
-        return AVERROR(EINVAL);
-    }
-
-    sps->hshift[0] = sps->vshift[0] = 0;
-    sps->hshift[2] = sps->hshift[1] = desc->log2_chroma_w;
-    sps->vshift[2] = sps->vshift[1] = desc->log2_chroma_h;
-
-    sps->pixel_shift = sps->bit_depth > 8;
+    ret = map_pixel_format(avctx, sps);
+    if (ret < 0)
+        return ret;
 
     sps->log2_max_poc_lsb = get_ue_golomb_long(gb) + 4;
     if (sps->log2_max_poc_lsb > 16) {
@@ -1234,14 +1245,143 @@ static int pps_range_extensions(GetBitContext *gb, AVCodecContext *avctx,
     return(0);
 }
 
+static inline int setup_pps(AVCodecContext *avctx, GetBitContext *gb,
+                            HEVCPPS *pps, HEVCSPS *sps)
+{
+    int log2_diff;
+    int pic_area_in_ctbs;
+    int i, j, x, y, ctb_addr_rs, tile_id;
+
+    // Inferred parameters
+    pps->col_bd   = av_malloc_array(pps->num_tile_columns + 1, sizeof(*pps->col_bd));
+    pps->row_bd   = av_malloc_array(pps->num_tile_rows + 1,    sizeof(*pps->row_bd));
+    pps->col_idxX = av_malloc_array(sps->ctb_width,    sizeof(*pps->col_idxX));
+    if (!pps->col_bd || !pps->row_bd || !pps->col_idxX)
+        return AVERROR(ENOMEM);
+
+    if (pps->uniform_spacing_flag) {
+        if (!pps->column_width) {
+            pps->column_width = av_malloc_array(pps->num_tile_columns, sizeof(*pps->column_width));
+            pps->row_height   = av_malloc_array(pps->num_tile_rows,    sizeof(*pps->row_height));
+        }
+        if (!pps->column_width || !pps->row_height)
+            return AVERROR(ENOMEM);
+
+        for (i = 0; i < pps->num_tile_columns; i++) {
+            pps->column_width[i] = ((i + 1) * sps->ctb_width) / pps->num_tile_columns -
+                                   (i * sps->ctb_width) / pps->num_tile_columns;
+        }
+
+        for (i = 0; i < pps->num_tile_rows; i++) {
+            pps->row_height[i] = ((i + 1) * sps->ctb_height) / pps->num_tile_rows -
+                                 (i * sps->ctb_height) / pps->num_tile_rows;
+        }
+    }
+
+    pps->col_bd[0] = 0;
+    for (i = 0; i < pps->num_tile_columns; i++)
+        pps->col_bd[i + 1] = pps->col_bd[i] + pps->column_width[i];
+
+    pps->row_bd[0] = 0;
+    for (i = 0; i < pps->num_tile_rows; i++)
+        pps->row_bd[i + 1] = pps->row_bd[i] + pps->row_height[i];
+
+    for (i = 0, j = 0; i < sps->ctb_width; i++) {
+        if (i > pps->col_bd[j])
+            j++;
+        pps->col_idxX[i] = j;
+    }
+
+    /**
+     * 6.5
+     */
+    pic_area_in_ctbs     = sps->ctb_width    * sps->ctb_height;
+
+    pps->ctb_addr_rs_to_ts = av_malloc_array(pic_area_in_ctbs,    sizeof(*pps->ctb_addr_rs_to_ts));
+    pps->ctb_addr_ts_to_rs = av_malloc_array(pic_area_in_ctbs,    sizeof(*pps->ctb_addr_ts_to_rs));
+    pps->tile_id           = av_malloc_array(pic_area_in_ctbs,    sizeof(*pps->tile_id));
+    pps->min_tb_addr_zs_tab = av_malloc_array((sps->tb_mask+2) * (sps->tb_mask+2), sizeof(*pps->min_tb_addr_zs_tab));
+    if (!pps->ctb_addr_rs_to_ts || !pps->ctb_addr_ts_to_rs ||
+        !pps->tile_id || !pps->min_tb_addr_zs_tab) {
+        return AVERROR(ENOMEM);
+    }
+
+    for (ctb_addr_rs = 0; ctb_addr_rs < pic_area_in_ctbs; ctb_addr_rs++) {
+        int tb_x   = ctb_addr_rs % sps->ctb_width;
+        int tb_y   = ctb_addr_rs / sps->ctb_width;
+        int tile_x = 0;
+        int tile_y = 0;
+        int val    = 0;
+
+        for (i = 0; i < pps->num_tile_columns; i++) {
+            if (tb_x < pps->col_bd[i + 1]) {
+                tile_x = i;
+                break;
+            }
+        }
+
+        for (i = 0; i < pps->num_tile_rows; i++) {
+            if (tb_y < pps->row_bd[i + 1]) {
+                tile_y = i;
+                break;
+            }
+        }
+
+        for (i = 0; i < tile_x; i++)
+            val += pps->row_height[tile_y] * pps->column_width[i];
+        for (i = 0; i < tile_y; i++)
+            val += sps->ctb_width * pps->row_height[i];
+
+        val += (tb_y - pps->row_bd[tile_y]) * pps->column_width[tile_x] +
+               tb_x - pps->col_bd[tile_x];
+
+        pps->ctb_addr_rs_to_ts[ctb_addr_rs] = val;
+        pps->ctb_addr_ts_to_rs[val]         = ctb_addr_rs;
+    }
+
+    for (j = 0, tile_id = 0; j < pps->num_tile_rows; j++)
+        for (i = 0; i < pps->num_tile_columns; i++, tile_id++)
+            for (y = pps->row_bd[j]; y < pps->row_bd[j + 1]; y++)
+                for (x = pps->col_bd[i]; x < pps->col_bd[i + 1]; x++)
+                    pps->tile_id[pps->ctb_addr_rs_to_ts[y * sps->ctb_width + x]] = tile_id;
+
+    pps->tile_pos_rs = av_malloc_array(tile_id, sizeof(*pps->tile_pos_rs));
+    if (!pps->tile_pos_rs)
+        return AVERROR(ENOMEM);
+
+    for (j = 0; j < pps->num_tile_rows; j++)
+        for (i = 0; i < pps->num_tile_columns; i++)
+            pps->tile_pos_rs[j * pps->num_tile_columns + i] =
+                pps->row_bd[j] * sps->ctb_width + pps->col_bd[i];
+
+    log2_diff = sps->log2_ctb_size - sps->log2_min_tb_size;
+    pps->min_tb_addr_zs = &pps->min_tb_addr_zs_tab[1*(sps->tb_mask+2)+1];
+    for (y = 0; y < sps->tb_mask+2; y++) {
+        pps->min_tb_addr_zs_tab[y*(sps->tb_mask+2)] = -1;
+        pps->min_tb_addr_zs_tab[y]    = -1;
+    }
+    for (y = 0; y < sps->tb_mask+1; y++) {
+        for (x = 0; x < sps->tb_mask+1; x++) {
+            int tb_x = x >> log2_diff;
+            int tb_y = y >> log2_diff;
+            int rs   = sps->ctb_width * tb_y + tb_x;
+            int val  = pps->ctb_addr_rs_to_ts[rs] << (log2_diff * 2);
+            for (i = 0; i < log2_diff; i++) {
+                int m = 1 << i;
+                val += (m & x ? m * m : 0) + (m & y ? 2 * m * m : 0);
+            }
+            pps->min_tb_addr_zs[y * (sps->tb_mask+2) + x] = val;
+        }
+    }
+
+    return 0;
+}
+
 int ff_hevc_decode_nal_pps(GetBitContext *gb, AVCodecContext *avctx,
                            HEVCParamSets *ps)
 {
     HEVCSPS      *sps = NULL;
-    int pic_area_in_ctbs;
-    int log2_diff_ctb_min_tb_size;
-    int i, j, x, y, ctb_addr_rs, tile_id;
-    int ret = 0;
+    int i, ret = 0;
     unsigned int pps_id = 0;
 
     AVBufferRef *pps_buf;
@@ -1446,134 +1586,9 @@ int ff_hevc_decode_nal_pps(GetBitContext *gb, AVCodecContext *avctx,
         }
     }
 
-    // Inferred parameters
-    pps->col_bd   = av_malloc_array(pps->num_tile_columns + 1, sizeof(*pps->col_bd));
-    pps->row_bd   = av_malloc_array(pps->num_tile_rows + 1,    sizeof(*pps->row_bd));
-    pps->col_idxX = av_malloc_array(sps->ctb_width,    sizeof(*pps->col_idxX));
-    if (!pps->col_bd || !pps->row_bd || !pps->col_idxX) {
-        ret = AVERROR(ENOMEM);
+    ret = setup_pps(avctx, gb, pps, sps);
+    if (ret < 0)
         goto err;
-    }
-
-    if (pps->uniform_spacing_flag) {
-        if (!pps->column_width) {
-            pps->column_width = av_malloc_array(pps->num_tile_columns, sizeof(*pps->column_width));
-            pps->row_height   = av_malloc_array(pps->num_tile_rows,    sizeof(*pps->row_height));
-        }
-        if (!pps->column_width || !pps->row_height) {
-            ret = AVERROR(ENOMEM);
-            goto err;
-        }
-
-        for (i = 0; i < pps->num_tile_columns; i++) {
-            pps->column_width[i] = ((i + 1) * sps->ctb_width) / pps->num_tile_columns -
-                                   (i * sps->ctb_width) / pps->num_tile_columns;
-        }
-
-        for (i = 0; i < pps->num_tile_rows; i++) {
-            pps->row_height[i] = ((i + 1) * sps->ctb_height) / pps->num_tile_rows -
-                                 (i * sps->ctb_height) / pps->num_tile_rows;
-        }
-    }
-
-    pps->col_bd[0] = 0;
-    for (i = 0; i < pps->num_tile_columns; i++)
-        pps->col_bd[i + 1] = pps->col_bd[i] + pps->column_width[i];
-
-    pps->row_bd[0] = 0;
-    for (i = 0; i < pps->num_tile_rows; i++)
-        pps->row_bd[i + 1] = pps->row_bd[i] + pps->row_height[i];
-
-    for (i = 0, j = 0; i < sps->ctb_width; i++) {
-        if (i > pps->col_bd[j])
-            j++;
-        pps->col_idxX[i] = j;
-    }
-
-    /**
-     * 6.5
-     */
-    pic_area_in_ctbs     = sps->ctb_width    * sps->ctb_height;
-
-    pps->ctb_addr_rs_to_ts = av_malloc_array(pic_area_in_ctbs,    sizeof(*pps->ctb_addr_rs_to_ts));
-    pps->ctb_addr_ts_to_rs = av_malloc_array(pic_area_in_ctbs,    sizeof(*pps->ctb_addr_ts_to_rs));
-    pps->tile_id           = av_malloc_array(pic_area_in_ctbs,    sizeof(*pps->tile_id));
-    pps->min_tb_addr_zs_tab = av_malloc_array((sps->tb_mask+2) * (sps->tb_mask+2), sizeof(*pps->min_tb_addr_zs_tab));
-    if (!pps->ctb_addr_rs_to_ts || !pps->ctb_addr_ts_to_rs ||
-        !pps->tile_id || !pps->min_tb_addr_zs_tab) {
-        ret = AVERROR(ENOMEM);
-        goto err;
-    }
-
-    for (ctb_addr_rs = 0; ctb_addr_rs < pic_area_in_ctbs; ctb_addr_rs++) {
-        int tb_x   = ctb_addr_rs % sps->ctb_width;
-        int tb_y   = ctb_addr_rs / sps->ctb_width;
-        int tile_x = 0;
-        int tile_y = 0;
-        int val    = 0;
-
-        for (i = 0; i < pps->num_tile_columns; i++) {
-            if (tb_x < pps->col_bd[i + 1]) {
-                tile_x = i;
-                break;
-            }
-        }
-
-        for (i = 0; i < pps->num_tile_rows; i++) {
-            if (tb_y < pps->row_bd[i + 1]) {
-                tile_y = i;
-                break;
-            }
-        }
-
-        for (i = 0; i < tile_x; i++)
-            val += pps->row_height[tile_y] * pps->column_width[i];
-        for (i = 0; i < tile_y; i++)
-            val += sps->ctb_width * pps->row_height[i];
-
-        val += (tb_y - pps->row_bd[tile_y]) * pps->column_width[tile_x] +
-               tb_x - pps->col_bd[tile_x];
-
-        pps->ctb_addr_rs_to_ts[ctb_addr_rs] = val;
-        pps->ctb_addr_ts_to_rs[val]         = ctb_addr_rs;
-    }
-
-    for (j = 0, tile_id = 0; j < pps->num_tile_rows; j++)
-        for (i = 0; i < pps->num_tile_columns; i++, tile_id++)
-            for (y = pps->row_bd[j]; y < pps->row_bd[j + 1]; y++)
-                for (x = pps->col_bd[i]; x < pps->col_bd[i + 1]; x++)
-                    pps->tile_id[pps->ctb_addr_rs_to_ts[y * sps->ctb_width + x]] = tile_id;
-
-    pps->tile_pos_rs = av_malloc_array(tile_id, sizeof(*pps->tile_pos_rs));
-    if (!pps->tile_pos_rs) {
-        ret = AVERROR(ENOMEM);
-        goto err;
-    }
-
-    for (j = 0; j < pps->num_tile_rows; j++)
-        for (i = 0; i < pps->num_tile_columns; i++)
-            pps->tile_pos_rs[j * pps->num_tile_columns + i] = pps->row_bd[j] * sps->ctb_width + pps->col_bd[i];
-
-    log2_diff_ctb_min_tb_size = sps->log2_ctb_size - sps->log2_min_tb_size;
-    pps->min_tb_addr_zs = &pps->min_tb_addr_zs_tab[1*(sps->tb_mask+2)+1];
-    for (y = 0; y < sps->tb_mask+2; y++) {
-        pps->min_tb_addr_zs_tab[y*(sps->tb_mask+2)] = -1;
-        pps->min_tb_addr_zs_tab[y]    = -1;
-    }
-    for (y = 0; y < sps->tb_mask+1; y++) {
-        for (x = 0; x < sps->tb_mask+1; x++) {
-            int tb_x        = x >> log2_diff_ctb_min_tb_size;
-            int tb_y        = y >> log2_diff_ctb_min_tb_size;
-            int ctb_addr_rs = sps->ctb_width * tb_y + tb_x;
-            int val         = pps->ctb_addr_rs_to_ts[ctb_addr_rs] <<
-                              (log2_diff_ctb_min_tb_size * 2);
-            for (i = 0; i < log2_diff_ctb_min_tb_size; i++) {
-                int m = 1 << i;
-                val += (m & x ? m * m : 0) + (m & y ? 2 * m * m : 0);
-            }
-            pps->min_tb_addr_zs[y * (sps->tb_mask+2) + x] = val;
-        }
-    }
 
     if (get_bits_left(gb) < 0) {
         av_log(avctx, AV_LOG_ERROR,

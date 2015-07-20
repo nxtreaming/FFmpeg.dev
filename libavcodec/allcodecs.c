@@ -550,6 +550,7 @@ void avcodec_register_all(void)
     REGISTER_ENCODER(LIBWAVPACK,        libwavpack);
     REGISTER_ENCODER(LIBWEBP_ANIM,      libwebp_anim);  /* preferred over libwebp */
     REGISTER_ENCODER(LIBWEBP,           libwebp);
+    REGISTER_ENCODER(LIBX262,           libx262);
     REGISTER_ENCODER(LIBX264,           libx264);
     REGISTER_ENCODER(LIBX264RGB,        libx264rgb);
     REGISTER_ENCODER(LIBX265,           libx265);
@@ -571,6 +572,7 @@ void avcodec_register_all(void)
     REGISTER_ENCODER(NVENC_H264,        nvenc_h264);
     REGISTER_ENCODER(NVENC_HEVC,        nvenc_hevc);
     REGISTER_ENCODER(HEVC_QSV,          hevc_qsv);
+    REGISTER_ENCODER(LIBKVAZAAR,        libkvazaar);
     REGISTER_ENCODER(MPEG2_QSV,         mpeg2_qsv);
 
     /* parsers */
