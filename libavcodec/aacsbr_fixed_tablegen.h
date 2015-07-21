@@ -20,13 +20,13 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVCODEC_AACSBR_TABLEGEN_H
-#define AVCODEC_AACSBR_TABLEGEN_H
+#ifndef AVCODEC_AACSBR_FIXED_TABLEGEN_H
+#define AVCODEC_AACSBR_FIXED_TABLEGEN_H
 
 #include "aacsbr_tablegen_common.h"
 
 #if CONFIG_HARDCODED_TABLES
-#include "libavcodec/aacsbr_tables.h"
+#include "libavcodec/aacsbr_fixed_tables.h"
 #endif /* CONFIG_HARDCODED_TABLES */
 
-#endif /* AVCODEC_AACSBR_TABLEGEN_H */
+#endif /* AVCODEC_AACSBR_FIXED_TABLEGEN_H */
