@@ -23,6 +23,7 @@
 #include "libavutil/dict.h"
 #include "libavutil/intfloat.h"
 #include "libavutil/avassert.h"
+#include "libavutil/opt.h"
 #include "avc.h"
 #include "avformat.h"
 #include "flv.h"
@@ -63,6 +64,8 @@ typedef struct FLVContext {
     int64_t filesize_offset;
     int64_t duration;
     int64_t delay;      ///< first dts delay (needed for AVC & Speex)
+    int videodatarate;
+    int audiodatarate;
 
     AVCodecContext *audio_enc;
     AVCodecContext *video_enc;
@@ -73,6 +76,12 @@ typedef struct FLVContext {
 typedef struct FLVStreamContext {
     int64_t last_ts;    ///< last timestamp for each stream
 } FLVStreamContext;
+
+static const AVOption flvenc_options[] = {
+    { "videodatarate", "Setup the videodatarate metadata explictly", offsetof(FLVContext, videodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
+    { "audiodatarate", "Setup the audiodatarate metadata explictly", offsetof(FLVContext, audiodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
+    { NULL },
+};
 
 static int get_audio_flags(AVFormatContext *s, AVCodecContext *enc)
 {
@@ -234,6 +243,8 @@ static void write_metadata(AVFormatContext *s, unsigned int ts)
     put_amf_double(pb, s->duration / AV_TIME_BASE);
 
     if (flv->video_enc) {
+        double videodatarate = flv->video_enc->bit_rate / 1024.0;
+
         put_amf_string(pb, "width");
         put_amf_double(pb, flv->video_enc->width);
 
@@ -241,7 +252,9 @@ static void write_metadata(AVFormatContext *s, unsigned int ts)
         put_amf_double(pb, flv->video_enc->height);
 
         put_amf_string(pb, "videodatarate");
-        put_amf_double(pb, flv->video_enc->bit_rate / 1024.0);
+        if (flv->videodatarate)
+             videodatarate = flv->videodatarate;       
+        put_amf_double(pb, videodatarate);
 
         if (flv->framerate != 0.0) {
             put_amf_string(pb, "framerate");
@@ -254,8 +267,12 @@ static void write_metadata(AVFormatContext *s, unsigned int ts)
     }
 
     if (flv->audio_enc) {
+        double audiodatarate = flv->audio_enc->bit_rate / 1024.0;
+
         put_amf_string(pb, "audiodatarate");
-        put_amf_double(pb, flv->audio_enc->bit_rate / 1024.0);
+        if (flv->audiodatarate)
+            audiodatarate = flv->audiodatarate;
+        put_amf_double(pb, audiodatarate);
 
         put_amf_string(pb, "audiosamplerate");
         put_amf_double(pb, flv->audio_enc->sample_rate);
@@ -658,6 +675,13 @@ static int flv_write_packet(AVFormatContext *s, AVPacket *pkt)
     return pb->error;
 }
 
+static const AVClass flv_muxer_class = {
+    .class_name = "flv muxer",
+    .item_name  = av_default_item_name,
+    .option     = flvenc_options,
+    .version    = LIBAVUTIL_VERSION_INT,
+};
+
 AVOutputFormat ff_flv_muxer = {
     .name           = "flv",
     .long_name      = NULL_IF_CONFIG_SMALL("FLV (Flash Video)"),
@@ -674,4 +698,5 @@ AVOutputFormat ff_flv_muxer = {
                       },
     .flags          = AVFMT_GLOBALHEADER | AVFMT_VARIABLE_FPS |
                       AVFMT_TS_NONSTRICT,
+    .priv_class        = &flv_muxer_class,
 };
