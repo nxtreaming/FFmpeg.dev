@@ -468,15 +468,15 @@ static int decode_interrupt_cb(void *ctx)
     int64_t open_time = open_stream_time;
 
     if (read_time != AV_NOPTS_VALUE) {
-        // we use 10s as threshold
-        if (av_gettime_relative() > (read_time + 10 * 1000000)) {
+        // we use 15s as threshold
+        if (av_gettime_relative() > (read_time + 15 * 1000000)) {
             av_log(NULL, AV_LOG_WARNING, "read packet callback timeout...\n");
             return 1;
          }
     }
     if (open_time != AV_NOPTS_VALUE) {
-        // we use 15s as threshold
-        if (av_gettime_relative() > (open_time + 15 * 1000000)) {
+        // we use 25s as threshold
+        if (av_gettime_relative() > (open_time + 25 * 1000000)) {
             av_log(NULL, AV_LOG_WARNING, "open stream callback timeout...\n");
             return 1;
         }
