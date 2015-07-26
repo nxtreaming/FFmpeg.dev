@@ -59,6 +59,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(APERMS,         aperms,         af);
     REGISTER_FILTER(APHASER,        aphaser,        af);
     REGISTER_FILTER(ARESAMPLE,      aresample,      af);
+    REGISTER_FILTER(AREVERSE,       areverse,       af);
     REGISTER_FILTER(ASELECT,        aselect,        af);
     REGISTER_FILTER(ASENDCMD,       asendcmd,       af);
     REGISTER_FILTER(ASETNSAMPLES,   asetnsamples,   af);
@@ -95,6 +96,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(PAN,            pan,            af);
     REGISTER_FILTER(REPLAYGAIN,     replaygain,     af);
     REGISTER_FILTER(RESAMPLE,       resample,       af);
+    REGISTER_FILTER(SIDECHAINCOMPRESS, sidechaincompress, af);
     REGISTER_FILTER(SILENCEDETECT,  silencedetect,  af);
     REGISTER_FILTER(SILENCEREMOVE,  silenceremove,  af);
     REGISTER_FILTER(TREBLE,         treble,         af);

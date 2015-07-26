@@ -87,8 +87,6 @@ int main(void){
     sf3 = av_add_sf(sf3, sf2);
     printf("test3 softfloat: %.10lf (0x%08x %d)\n", (double)av_sf2double(sf3), sf3.mant, sf3.exp);
 
-<<<<<<< HEAD
-=======
     sf1 = av_int2sf(0xFFFFFFF0, 0);
     printf("test4 softfloat: %.10lf (0x%08x %d)\n", (double)av_sf2double(sf1), sf1.mant, sf1.exp);
     sf1 = av_int2sf(0x00000010, 0);
@@ -99,7 +97,19 @@ int main(void){
     sf1 = av_int2sf(0xE0000001, 0);
     printf("test4 softfloat: %.10lf (0x%08x %d)\n", (double)av_sf2double(sf1), sf1.mant, sf1.exp);
 
->>>>>>> 7c9fcdfabd4c8d37d8e588b39e7786cf55ed5989
+    for(i= 0; i<4*36; i++){
+        int s, c;
+        double errs, errc;
+
+        av_sincos_sf(i*(1ULL<<32)/36/4, &s, &c);
+        errs = (double)s/ (1<<30) - sin(i*M_PI/36);
+        errc = (double)c/ (1<<30) - cos(i*M_PI/36);
+        if (fabs(errs) > 0.00000002 || fabs(errc) >0.001) {
+            printf("sincos FAIL %d %f %f %f %f\n", i, (float)s/ (1<<30), (float)c/ (1<<30), sin(i*M_PI/36), cos(i*M_PI/36));
+        }
+
+    }
+>>>>>>> master
     return 0;
 
 }
