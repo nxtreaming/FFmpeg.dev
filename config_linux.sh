@@ -27,6 +27,8 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/data/usr/local/ssl/lib/pkgconfig:/data/
 --disable-parser=hevc                \
 --enable-libx264                     \
 --enable-encoder=libx264             \
+--enable-decoder=aac                 \
+--enable-encoder=aac                 \
 --enable-libfdk-aac                  \
 --enable-encoder=libfdk_aac          \
 --enable-decoder=libfdk_aac          \
