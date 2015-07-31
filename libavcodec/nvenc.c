@@ -777,9 +777,6 @@ static av_cold int nvenc_encode_init(AVCodecContext *avctx)
                 ctx->encode_config.encodeCodecConfig.h264Config.adaptiveTransformMode = NV_ENC_H264_ADAPTIVE_TRANSFORM_ENABLE;
                 ctx->encode_config.encodeCodecConfig.h264Config.fmoMode = NV_ENC_H264_FMO_DISABLE;
             }
-
-            if (!isLL)
-                av_log(avctx, AV_LOG_WARNING, "Twopass mode is only known to work with low latency (ll, llhq, llhp) presets.\n");
         } else {
             ctx->encode_config.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CBR;
         }
@@ -809,7 +806,7 @@ static av_cold int nvenc_encode_init(AVCodecContext *avctx)
     if (avctx->rc_buffer_size > 0)
         ctx->encode_config.rcParams.vbvBufferSize = avctx->rc_buffer_size;
 
-    if (avctx->flags & CODEC_FLAG_INTERLACED_DCT) {
+    if (avctx->flags & AV_CODEC_FLAG_INTERLACED_DCT) {
         ctx->encode_config.frameFieldMode = NV_ENC_PARAMS_FRAME_FIELD_MODE_FIELD;
     } else {
         ctx->encode_config.frameFieldMode = NV_ENC_PARAMS_FRAME_FIELD_MODE_FRAME;
@@ -826,8 +823,8 @@ static av_cold int nvenc_encode_init(AVCodecContext *avctx)
 
         ctx->encode_config.encodeCodecConfig.h264Config.h264VUIParameters.videoFullRangeFlag = avctx->color_range == AVCOL_RANGE_JPEG;
 
-        ctx->encode_config.encodeCodecConfig.h264Config.disableSPSPPS = (avctx->flags & CODEC_FLAG_GLOBAL_HEADER) ? 1 : 0;
-        ctx->encode_config.encodeCodecConfig.h264Config.repeatSPSPPS = (avctx->flags & CODEC_FLAG_GLOBAL_HEADER) ? 0 : 1;
+        ctx->encode_config.encodeCodecConfig.h264Config.disableSPSPPS = (avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ? 1 : 0;
+        ctx->encode_config.encodeCodecConfig.h264Config.repeatSPSPPS = (avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ? 0 : 1;
 
         if (!ctx->profile) {
             switch (avctx->profile) {
@@ -884,8 +881,8 @@ static av_cold int nvenc_encode_init(AVCodecContext *avctx)
 
         break;
     case AV_CODEC_ID_H265:
-        ctx->encode_config.encodeCodecConfig.hevcConfig.disableSPSPPS = (avctx->flags & CODEC_FLAG_GLOBAL_HEADER) ? 1 : 0;
-        ctx->encode_config.encodeCodecConfig.hevcConfig.repeatSPSPPS = (avctx->flags & CODEC_FLAG_GLOBAL_HEADER) ? 0 : 1;
+        ctx->encode_config.encodeCodecConfig.hevcConfig.disableSPSPPS = (avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ? 1 : 0;
+        ctx->encode_config.encodeCodecConfig.hevcConfig.repeatSPSPPS = (avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) ? 0 : 1;
 
         /* No other profile is supported in the current SDK version 5 */
         ctx->encode_config.profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
@@ -1000,7 +997,7 @@ static av_cold int nvenc_encode_init(AVCodecContext *avctx)
         ctx->output_surfaces[surfaceCount].busy = 0;
     }
 
-    if (avctx->flags & CODEC_FLAG_GLOBAL_HEADER) {
+    if (avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) {
         uint32_t outSize = 0;
         char tmpHeader[256];
         NV_ENC_SEQUENCE_PARAM_PAYLOAD payload = { 0 };
@@ -1017,7 +1014,7 @@ static av_cold int nvenc_encode_init(AVCodecContext *avctx)
         }
 
         avctx->extradata_size = outSize;
-        avctx->extradata = av_mallocz(outSize + FF_INPUT_BUFFER_PADDING_SIZE);
+        avctx->extradata = av_mallocz(outSize + AV_INPUT_BUFFER_PADDING_SIZE);
 
         if (!avctx->extradata) {
             res = AVERROR(ENOMEM);
@@ -1127,7 +1124,7 @@ static int process_output_surface(AVCodecContext *avctx, AVPacket *pkt, NvencOut
         goto error;
     }
 
-    if (res = ff_alloc_packet2(avctx, pkt, lock_params.bitstreamSizeInBytes)) {
+    if (res = ff_alloc_packet2(avctx, pkt, lock_params.bitstreamSizeInBytes, 0)) {
         p_nvenc->nvEncUnlockBitstream(ctx->nvencoder, tmpoutsurf->output_surface);
         goto error;
     }
@@ -1307,7 +1304,7 @@ static int nvenc_encode_frame(AVCodecContext *avctx, AVPacket *pkt,
         pic_params.outputBitstream = ctx->output_surfaces[i].output_surface;
         pic_params.completionEvent = 0;
 
-        if (avctx->flags & CODEC_FLAG_INTERLACED_DCT) {
+        if (avctx->flags & AV_CODEC_FLAG_INTERLACED_DCT) {
             if (frame->top_field_first) {
                 pic_params.pictureStruct = NV_ENC_PIC_STRUCT_FIELD_TOP_BOTTOM;
             } else {
@@ -1412,7 +1409,7 @@ static const AVOption options[] = {
     { "level", "Set the encoding level restriction (auto, 1.0, 1.0b, 1.1, 1.2, ..., 4.2, 5.0, 5.1)", OFFSET(level), AV_OPT_TYPE_STRING, { 0 }, 0, 0, VE },
     { "tier", "Set the encoding tier (main or high)", OFFSET(tier), AV_OPT_TYPE_STRING, { 0 }, 0, 0, VE },
     { "cbr", "Use cbr encoding mode", OFFSET(cbr), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, VE },
-    { "2pass", "Use 2pass cbr encoding mode (low latency mode only)", OFFSET(twopass), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 1, VE },
+    { "2pass", "Use 2pass cbr encoding mode", OFFSET(twopass), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 1, VE },
     { "gpu", "Selects which NVENC capable GPU to use. First GPU is 0, second is 1, and so on.", OFFSET(gpu), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, INT_MAX, VE },
     { "delay", "Delays frame output by the given amount of frames.", OFFSET(buffer_delay), AV_OPT_TYPE_INT, { .i64 = INT_MAX }, 0, INT_MAX, VE },
     { NULL }
@@ -1445,7 +1442,7 @@ AVCodec ff_nvenc_encoder = {
     .init = nvenc_encode_init,
     .encode2 = nvenc_encode_frame,
     .close = nvenc_encode_close,
-    .capabilities = CODEC_CAP_DELAY,
+    .capabilities = AV_CODEC_CAP_DELAY,
     .priv_class = &nvenc_class,
     .defaults = nvenc_defaults,
     .pix_fmts = pix_fmts_nvenc,
@@ -1470,7 +1467,7 @@ AVCodec ff_nvenc_h264_encoder = {
     .init = nvenc_encode_init,
     .encode2 = nvenc_encode_frame,
     .close = nvenc_encode_close,
-    .capabilities = CODEC_CAP_DELAY,
+    .capabilities = AV_CODEC_CAP_DELAY,
     .priv_class = &nvenc_h264_class,
     .defaults = nvenc_defaults,
     .pix_fmts = pix_fmts_nvenc,
@@ -1494,7 +1491,7 @@ AVCodec ff_nvenc_hevc_encoder = {
     .init = nvenc_encode_init,
     .encode2 = nvenc_encode_frame,
     .close = nvenc_encode_close,
-    .capabilities = CODEC_CAP_DELAY,
+    .capabilities = AV_CODEC_CAP_DELAY,
     .priv_class = &nvenc_hevc_class,
     .defaults = nvenc_defaults,
     .pix_fmts = pix_fmts_nvenc,

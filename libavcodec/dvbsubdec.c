@@ -237,6 +237,7 @@ typedef struct DVBSubContext {
     int time_out;
     int compute_edt; /**< if 1 end display time calculated using pts
                           if 0 (Default) calculated using time out */
+    int compute_clut;
     int64_t prev_start;
     DVBSubRegion *region_list;
     DVBSubCLUT   *clut_list;
@@ -754,6 +755,63 @@ static int dvbsub_read_8bit_string(AVCodecContext *avctx,
     return pixels_read;
 }
 
+static void compute_default_clut(AVPicture *frame, int w, int h)
+{
+    uint8_t list[256] = {0};
+    uint8_t list_inv[256];
+    int counttab[256] = {0};
+    int count, i, x, y;
+
+#define V(x,y) frame->data[0][(x) + (y)*frame->linesize[0]]
+    for (y = 0; y<h; y++) {
+        for (x = 0; x<w; x++) {
+            int v = V(x,y) + 1;
+            int vl = x     ? V(x-1,y) + 1 : 0;
+            int vr = x+1<w ? V(x+1,y) + 1 : 0;
+            int vt = y     ? V(x,y-1) + 1 : 0;
+            int vb = y+1<h ? V(x,y+1) + 1 : 0;
+            counttab[v-1] += !!((v!=vl) + (v!=vr) + (v!=vt) + (v!=vb));
+        }
+    }
+#define L(x,y) list[ frame->data[0][(x) + (y)*frame->linesize[0]] ]
+
+    for (i = 0; i<256; i++) {
+        int scoretab[256] = {0};
+        int bestscore = 0;
+        int bestv = 0;
+        for (y = 0; y<h; y++) {
+            for (x = 0; x<w; x++) {
+                int v = frame->data[0][x + y*frame->linesize[0]];
+                int l_m = list[v];
+                int l_l = x     ? L(x-1, y) : 1;
+                int l_r = x+1<w ? L(x+1, y) : 1;
+                int l_t = y     ? L(x, y-1) : 1;
+                int l_b = y+1<h ? L(x, y+1) : 1;
+                int score;
+                if (l_m)
+                    continue;
+                scoretab[v] += l_l + l_r + l_t + l_b;
+                score = 1024LL*scoretab[v] / counttab[v];
+                if (score > bestscore) {
+                    bestscore = score;
+                    bestv = v;
+                }
+            }
+        }
+        if (!bestscore)
+            break;
+        list    [ bestv ] = 1;
+        list_inv[     i ] = bestv;
+    }
+
+    count = i - 1;
+    for (i--; i>=0; i--) {
+        int v = i*255/count;
+        AV_WN32(frame->data[1] + 4*list_inv[i], RGBA(v/2,v,v/2,v));
+    }
+}
+
+
 static int save_subtitle_set(AVCodecContext *avctx, AVSubtitle *sub, int *got_output)
 {
     DVBSubContext *ctx = avctx->priv_data;
@@ -854,6 +912,9 @@ static int save_subtitle_set(AVCodecContext *avctx, AVSubtitle *sub, int *got_ou
             }
 
             memcpy(rect->pict.data[0], region->pbuf, region->buf_size);
+
+            if ((clut == &default_clut && ctx->compute_clut == -1) || ctx->compute_clut == 1)
+                compute_default_clut(&rect->pict, rect->w, rect->h);
 
             i++;
         }
@@ -1545,6 +1606,7 @@ static int dvbsub_decode(AVCodecContext *avctx,
     int i;
     int ret = 0;
     int got_segment = 0;
+    int got_dds = 0;
 
     ff_dlog(avctx, "DVB sub packet:\n");
 
@@ -1607,9 +1669,15 @@ static int dvbsub_decode(AVCodecContext *avctx,
             case DVBSUB_DISPLAYDEFINITION_SEGMENT:
                 ret = dvbsub_parse_display_definition_segment(avctx, p,
                                                               segment_length);
+                got_dds = 1;
                 break;
             case DVBSUB_DISPLAY_SEGMENT:
                 ret = dvbsub_display_end_segment(avctx, p, segment_length, sub, data_size);
+                if (got_segment == 15 && !got_dds && !avctx->width && !avctx->height) {
+                    // Default from ETSI EN 300 743 V1.3.1 (7.2.1)
+                    avctx->width  = 720;
+                    avctx->height = 576;
+                }
                 got_segment |= 16;
                 break;
             default:
@@ -1646,6 +1714,7 @@ end:
 #define DS AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_SUBTITLE_PARAM
 static const AVOption options[] = {
     {"compute_edt", "compute end of time using pts or timeout", offsetof(DVBSubContext, compute_edt), FF_OPT_TYPE_INT, {.i64 = 0}, 0, 1, DS},
+    {"compute_clut", "compute clut when not available(-1) or always(1) or never(0)", offsetof(DVBSubContext, compute_clut), FF_OPT_TYPE_INT, {.i64 = -1}, -1, 1, DS},
     {NULL}
 };
 static const AVClass dvbsubdec_class = {

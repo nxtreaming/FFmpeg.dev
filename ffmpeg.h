@@ -92,6 +92,7 @@ typedef struct OptionsContext {
 
     /* input/output options */
     int64_t start_time;
+    int64_t start_time_eof;
     int seek_timestamp;
     const char *format;
 
@@ -459,6 +460,12 @@ typedef struct OutputStream {
 
     /* packet quality factor */
     int quality;
+
+    /* packet picture type */
+    int pict_type;
+
+    /* frame encode sum of squared error values */
+    int64_t error[4];
 } OutputStream;
 
 typedef struct OutputFile {

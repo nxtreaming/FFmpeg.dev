@@ -382,7 +382,7 @@ static av_cold int vpx_init(AVCodecContext *avctx,
     VP8Context *ctx = avctx->priv_data;
     struct vpx_codec_enc_cfg enccfg = { 0 };
     struct vpx_codec_enc_cfg enccfg_alpha;
-    vpx_codec_flags_t flags = (avctx->flags & CODEC_FLAG_PSNR) ? VPX_CODEC_USE_PSNR : 0;
+    vpx_codec_flags_t flags = (avctx->flags & AV_CODEC_FLAG_PSNR) ? VPX_CODEC_USE_PSNR : 0;
     int res;
     vpx_img_fmt_t img_fmt = VPX_IMG_FMT_I420;
 #if CONFIG_LIBVPX_VP9_ENCODER
@@ -423,9 +423,9 @@ static av_cold int vpx_init(AVCodecContext *avctx,
     enccfg.g_threads      = avctx->thread_count;
     enccfg.g_lag_in_frames= ctx->lag_in_frames;
 
-    if (avctx->flags & CODEC_FLAG_PASS1)
+    if (avctx->flags & AV_CODEC_FLAG_PASS1)
         enccfg.g_pass = VPX_RC_FIRST_PASS;
-    else if (avctx->flags & CODEC_FLAG_PASS2)
+    else if (avctx->flags & AV_CODEC_FLAG_PASS2)
         enccfg.g_pass = VPX_RC_LAST_PASS;
     else
         enccfg.g_pass = VPX_RC_ONE_PASS;
@@ -687,9 +687,10 @@ static inline void cx_pktcpy(struct FrameListData *dst,
 static int storeframe(AVCodecContext *avctx, struct FrameListData *cx_frame,
                       AVPacket *pkt)
 {
-    int ret = ff_alloc_packet2(avctx, pkt, cx_frame->sz);
+    int ret = ff_alloc_packet2(avctx, pkt, cx_frame->sz, 0);
     uint8_t *side_data;
     if (ret >= 0) {
+        int pict_type;
         memcpy(pkt->data, cx_frame->buf, pkt->size);
         pkt->pts = pkt->dts = cx_frame->pts;
 #if FF_API_CODED_FRAME
@@ -700,29 +701,38 @@ FF_ENABLE_DEPRECATION_WARNINGS
 #endif
 
         if (!!(cx_frame->flags & VPX_FRAME_IS_KEY)) {
+            pict_type = AV_PICTURE_TYPE_I;
 #if FF_API_CODED_FRAME
 FF_DISABLE_DEPRECATION_WARNINGS
-            avctx->coded_frame->pict_type = AV_PICTURE_TYPE_I;
+            avctx->coded_frame->pict_type = pict_type;
 FF_ENABLE_DEPRECATION_WARNINGS
 #endif
             pkt->flags |= AV_PKT_FLAG_KEY;
         } else {
+            pict_type = AV_PICTURE_TYPE_P;
 #if FF_API_CODED_FRAME
 FF_DISABLE_DEPRECATION_WARNINGS
-            avctx->coded_frame->pict_type = AV_PICTURE_TYPE_P;
+            avctx->coded_frame->pict_type = pict_type;
 FF_ENABLE_DEPRECATION_WARNINGS
 #endif
         }
 
+        ff_side_data_set_encoder_stats(pkt, 0, cx_frame->sse + 1,
+                                       cx_frame->have_sse ? 3 : 0, pict_type);
+
         if (cx_frame->have_sse) {
             int i;
             /* Beware of the Y/U/V/all order! */
+#if FF_API_CODED_FRAME
+FF_DISABLE_DEPRECATION_WARNINGS
             avctx->coded_frame->error[0] = cx_frame->sse[1];
             avctx->coded_frame->error[1] = cx_frame->sse[2];
             avctx->coded_frame->error[2] = cx_frame->sse[3];
             avctx->coded_frame->error[3] = 0;    // alpha
-            for (i = 0; i < 4; ++i) {
-                avctx->error[i] += avctx->coded_frame->error[i];
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+            for (i = 0; i < 3; ++i) {
+                avctx->error[i] += cx_frame->sse[i + 1];
             }
             cx_frame->have_sse = 0;
         }
@@ -914,7 +924,7 @@ static int vp8_encode(AVCodecContext *avctx, AVPacket *pkt,
 
     coded_size = queue_frames(avctx, pkt);
 
-    if (!frame && avctx->flags & CODEC_FLAG_PASS1) {
+    if (!frame && avctx->flags & AV_CODEC_FLAG_PASS1) {
         unsigned int b64_size = AV_BASE64_SIZE(ctx->twopass_stats.sz);
 
         avctx->stats_out = av_malloc(b64_size);
@@ -1041,7 +1051,7 @@ AVCodec ff_libvpx_vp8_encoder = {
     .init           = vp8_init,
     .encode2        = vp8_encode,
     .close          = vp8_free,
-    .capabilities   = CODEC_CAP_DELAY | CODEC_CAP_AUTO_THREADS,
+    .capabilities   = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_AUTO_THREADS,
     .pix_fmts       = (const enum AVPixelFormat[]){ AV_PIX_FMT_YUV420P, AV_PIX_FMT_YUVA420P, AV_PIX_FMT_NONE },
     .priv_class     = &class_vp8,
     .defaults       = defaults,
@@ -1078,7 +1088,7 @@ AVCodec ff_libvpx_vp9_encoder = {
     .init           = vp9_init,
     .encode2        = vp8_encode,
     .close          = vp8_free,
-    .capabilities   = CODEC_CAP_DELAY | CODEC_CAP_AUTO_THREADS,
+    .capabilities   = AV_CODEC_CAP_DELAY | AV_CODEC_CAP_AUTO_THREADS,
     .profiles       = NULL_IF_CONFIG_SMALL(profiles),
     .priv_class     = &class_vp9,
     .defaults       = defaults,

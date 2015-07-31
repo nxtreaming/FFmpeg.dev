@@ -674,12 +674,12 @@ static int parse_video_info(AVIOContext *pb, AVStream *st)
         int ret;
         st->codec->extradata_size  = size - BMP_HEADER_SIZE;
         if (!(st->codec->extradata = av_malloc(st->codec->extradata_size +
-                                               FF_INPUT_BUFFER_PADDING_SIZE))) {
+                                               AV_INPUT_BUFFER_PADDING_SIZE))) {
             st->codec->extradata_size = 0;
             return AVERROR(ENOMEM);
         }
         memset(st->codec->extradata + st->codec->extradata_size , 0,
-               FF_INPUT_BUFFER_PADDING_SIZE);
+               AV_INPUT_BUFFER_PADDING_SIZE);
         if ((ret = avio_read(pb, st->codec->extradata,
                              st->codec->extradata_size)) < 0)
             return ret;
@@ -928,7 +928,7 @@ static int asf_read_data(AVFormatContext *s, const GUIDParseTable *g)
                size, asf->nb_packets);
     avio_skip(pb, 2); // skip reserved field
     asf->first_packet_offset = avio_tell(pb);
-    if (pb->seekable)
+    if (pb->seekable && !(asf->b_flags & ASF_FLAG_BROADCAST))
         align_position(pb, asf->offset, asf->data_size);
 
     return 0;
@@ -1308,12 +1308,14 @@ static int asf_read_packet_header(AVFormatContext *s)
 
     asf->packet_offset = avio_tell(pb);
     error_flags = avio_r8(pb); // read Error Correction Flags
-    if (error_flags & ASF_PACKET_FLAG_ERROR_CORRECTION_PRESENT)
+    if (error_flags & ASF_PACKET_FLAG_ERROR_CORRECTION_PRESENT) {
         if (!(error_flags & ASF_ERROR_CORRECTION_LENGTH_TYPE)) {
             size = error_flags & ASF_PACKET_ERROR_CORRECTION_DATA_SIZE;
             avio_skip(pb, size);
         }
-    len_flags       = avio_r8(pb);
+        len_flags       = avio_r8(pb);
+    } else
+        len_flags = error_flags;
     asf->prop_flags = avio_r8(pb);
     READ_LEN(len_flags & ASF_PPI_MASK_PACKET_LENGTH_FIELD_SIZE,
              ASF_PPI_FLAG_PACKET_LENGTH_FIELD_, asf->packet_size_internal);
@@ -1674,7 +1676,7 @@ static int asf_read_header(AVFormatContext *s)
             size = avio_rl64(pb);
             align_position(pb, asf->offset, size);
         }
-        if (asf->data_reached && !pb->seekable)
+        if (asf->data_reached && (!pb->seekable || (asf->b_flags & ASF_FLAG_BROADCAST)))
             break;
     }
 
