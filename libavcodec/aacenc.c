@@ -696,7 +696,7 @@ static int aac_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
             if (s->options.pns && s->coder->search_for_pns) {
                 for (ch = 0; ch < chans; ch++) {
                     s->cur_channel = start_ch + ch;
-                    s->coder->search_for_pns(s, avctx, &cpe->ch[ch], s->lambda);
+                    s->coder->search_for_pns(s, avctx, &cpe->ch[ch]);
                 }
             }
             s->cur_channel = start_ch;
@@ -707,11 +707,11 @@ static int aac_encode_frame(AVCodecContext *avctx, AVPacket *avpkt,
                         for (g = 0;  g < ics->num_swb; g++)
                             cpe->ms_mask[w*16+g] = 1;
                 } else if (s->coder->search_for_ms) {
-                    s->coder->search_for_ms(s, cpe, s->lambda);
+                    s->coder->search_for_ms(s, cpe);
                 }
             }
             if (chans > 1 && s->options.intensity_stereo && s->coder->search_for_is) {
-                s->coder->search_for_is(s, avctx, cpe, s->lambda);
+                s->coder->search_for_is(s, avctx, cpe);
                 if (cpe->is_mode) is_mode = 1;
             }
             if (s->coder->set_special_band_scalefactors)
@@ -905,7 +905,7 @@ static const AVOption aacenc_options[] = {
         {"auto",     "Selected by the Encoder", 0, AV_OPT_TYPE_CONST, {.i64 = -1 }, INT_MIN, INT_MAX, AACENC_FLAGS, "stereo_mode"},
         {"ms_off",   "Disable Mid/Side coding", 0, AV_OPT_TYPE_CONST, {.i64 =  0 }, INT_MIN, INT_MAX, AACENC_FLAGS, "stereo_mode"},
         {"ms_force", "Force Mid/Side for the whole frame if possible", 0, AV_OPT_TYPE_CONST, {.i64 =  1 }, INT_MIN, INT_MAX, AACENC_FLAGS, "stereo_mode"},
-    {"aac_coder", "", offsetof(AACEncContext, options.aac_coder), AV_OPT_TYPE_INT, {.i64 = AAC_CODER_TWOLOOP}, 0, AAC_CODER_NB-1, AACENC_FLAGS, "aac_coder"},
+    {"aac_coder", "Coding algorithm", offsetof(AACEncContext, options.aac_coder), AV_OPT_TYPE_INT, {.i64 = AAC_CODER_TWOLOOP}, 0, AAC_CODER_NB-1, AACENC_FLAGS, "aac_coder"},
         {"faac",     "FAAC-inspired method",      0, AV_OPT_TYPE_CONST, {.i64 = AAC_CODER_FAAC},    INT_MIN, INT_MAX, AACENC_FLAGS, "aac_coder"},
         {"anmr",     "ANMR method",               0, AV_OPT_TYPE_CONST, {.i64 = AAC_CODER_ANMR},    INT_MIN, INT_MAX, AACENC_FLAGS, "aac_coder"},
         {"twoloop",  "Two loop searching method", 0, AV_OPT_TYPE_CONST, {.i64 = AAC_CODER_TWOLOOP}, INT_MIN, INT_MAX, AACENC_FLAGS, "aac_coder"},
