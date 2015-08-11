@@ -66,7 +66,9 @@ const char program_name[] = "ffplay";
 const int program_birth_year = 2003;
 
 #define MAX_QUEUE_SIZE (15 * 1024 * 1024)
-#define MIN_FRAMES 5
+#define MIN_FRAMES 25
+#define EXTERNAL_CLOCK_MIN_FRAMES 2
+#define EXTERNAL_CLOCK_MAX_FRAMES 10
 
 /* Minimum SDL audio buffer size, in samples. */
 #define SDL_AUDIO_MIN_BUFFER_SIZE 512
@@ -102,7 +104,7 @@ const int program_birth_year = 2003;
 
 #define CURSOR_HIDE_DELAY 1000000
 
-static int64_t sws_flags = SWS_BICUBIC;
+static unsigned sws_flags = SWS_BICUBIC;
 
 typedef struct MyAVPacketList {
     AVPacket pkt;
@@ -1301,11 +1303,11 @@ static double get_master_clock(VideoState *is)
 }
 
 static void check_external_clock_speed(VideoState *is) {
-   if (is->video_stream >= 0 && is->videoq.nb_packets <= MIN_FRAMES / 2 ||
-       is->audio_stream >= 0 && is->audioq.nb_packets <= MIN_FRAMES / 2) {
+   if (is->video_stream >= 0 && is->videoq.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES ||
+       is->audio_stream >= 0 && is->audioq.nb_packets <= EXTERNAL_CLOCK_MIN_FRAMES) {
        set_clock_speed(&is->extclk, FFMAX(EXTERNAL_CLOCK_SPEED_MIN, is->extclk.speed - EXTERNAL_CLOCK_SPEED_STEP));
-   } else if ((is->video_stream < 0 || is->videoq.nb_packets > MIN_FRAMES * 2) &&
-              (is->audio_stream < 0 || is->audioq.nb_packets > MIN_FRAMES * 2)) {
+   } else if ((is->video_stream < 0 || is->videoq.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES) &&
+              (is->audio_stream < 0 || is->audioq.nb_packets > EXTERNAL_CLOCK_MAX_FRAMES)) {
        set_clock_speed(&is->extclk, FFMIN(EXTERNAL_CLOCK_SPEED_MAX, is->extclk.speed + EXTERNAL_CLOCK_SPEED_STEP));
    } else {
        double speed = is->extclk.speed;
@@ -1677,7 +1679,18 @@ static int queue_picture(VideoState *is, AVFrame *src_frame, double pts, double 
         av_picture_copy(&pict, (AVPicture *)src_frame,
                         src_frame->format, vp->width, vp->height);
 #else
-        av_opt_get_int(sws_opts, "sws_flags", 0, &sws_flags);
+        {
+            AVDictionaryEntry *e = av_dict_get(sws_dict, "sws_flags", NULL, 0);
+            if (e) {
+                const AVClass *class = sws_get_class();
+                const AVOption    *o = av_opt_find(&class, "sws_flags", NULL, 0,
+                                                   AV_OPT_SEARCH_FAKE_OBJ);
+                int ret = av_opt_eval_flags(&class, o, e->value, &sws_flags);
+                if (ret < 0)
+                    exit(1);
+            }
+        }
+
         is->img_convert_ctx = sws_getCachedContext(is->img_convert_ctx,
             vp->width, vp->height, src_frame->format, vp->width, vp->height,
             AV_PIX_FMT_YUV420P, sws_flags, NULL, NULL, NULL);
