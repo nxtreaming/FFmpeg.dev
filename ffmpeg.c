@@ -175,8 +175,8 @@ static int sub2video_get_blank_frame(InputStream *ist)
     AVFrame *frame = ist->sub2video.frame;
 
     av_frame_unref(frame);
-    ist->sub2video.frame->width  = ist->sub2video.w;
-    ist->sub2video.frame->height = ist->sub2video.h;
+    ist->sub2video.frame->width  = ist->dec_ctx->width  ? ist->dec_ctx->width  : ist->sub2video.w;
+    ist->sub2video.frame->height = ist->dec_ctx->height ? ist->dec_ctx->height : ist->sub2video.h;
     ist->sub2video.frame->format = AV_PIX_FMT_RGB32;
     if ((ret = av_frame_get_buffer(frame, 32)) < 0)
         return ret;
@@ -196,7 +196,9 @@ static void sub2video_copy_rect(uint8_t *dst, int dst_linesize, int w, int h,
         return;
     }
     if (r->x < 0 || r->x + r->w > w || r->y < 0 || r->y + r->h > h) {
-        av_log(NULL, AV_LOG_WARNING, "sub2video: rectangle overflowing\n");
+        av_log(NULL, AV_LOG_WARNING, "sub2video: rectangle (%d %d %d %d) overflowing %d %d\n",
+            r->x, r->y, r->w, r->h, w, h
+        );
         return;
     }
 
@@ -228,7 +230,6 @@ static void sub2video_push_ref(InputStream *ist, int64_t pts)
 
 static void sub2video_update(InputStream *ist, AVSubtitle *sub)
 {
-    int w = ist->sub2video.w, h = ist->sub2video.h;
     AVFrame *frame = ist->sub2video.frame;
     int8_t *dst;
     int     dst_linesize;
@@ -256,7 +257,7 @@ static void sub2video_update(InputStream *ist, AVSubtitle *sub)
     dst          = frame->data    [0];
     dst_linesize = frame->linesize[0];
     for (i = 0; i < num_rects; i++)
-        sub2video_copy_rect(dst, dst_linesize, w, h, sub->rects[i]);
+        sub2video_copy_rect(dst, dst_linesize, frame->width, frame->height, sub->rects[i]);
     sub2video_push_ref(ist, pts);
     ist->sub2video.end_pts = end_pts;
 }
@@ -297,7 +298,7 @@ static void sub2video_flush(InputStream *ist)
     if (ist->sub2video.end_pts < INT64_MAX)
         sub2video_update(ist, NULL);
     for (i = 0; i < ist->nb_filters; i++)
-        av_buffersrc_add_ref(ist->filters[i]->filter, NULL, 0);
+        av_buffersrc_add_frame(ist->filters[i]->filter, NULL);
 }
 
 /* end of sub2video hack */
@@ -1170,7 +1171,7 @@ static void do_video_out(AVFormatContext *s,
             ost->forced_keyframes_expr_const_values[FKF_T] = pts_time;
             res = av_expr_eval(ost->forced_keyframes_pexpr,
                                ost->forced_keyframes_expr_const_values, NULL);
-            av_dlog(NULL, "force_key_frame: n:%f n_forced:%f prev_forced_n:%f t:%f prev_forced_t:%f -> res:%f\n",
+            ff_dlog(NULL, "force_key_frame: n:%f n_forced:%f prev_forced_n:%f t:%f prev_forced_t:%f -> res:%f\n",
                     ost->forced_keyframes_expr_const_values[FKF_N],
                     ost->forced_keyframes_expr_const_values[FKF_N_FORCED],
                     ost->forced_keyframes_expr_const_values[FKF_PREV_FORCED_N],
@@ -2083,12 +2084,13 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output)
         if (ist->dec_ctx->codec_id == AV_CODEC_ID_H264) {
             ist->st->codec->has_b_frames = ist->dec_ctx->has_b_frames;
         } else
-            av_log_ask_for_sample(
-                ist->dec_ctx,
-                "has_b_frames is larger in decoder than demuxer %d > %d ",
-                ist->dec_ctx->has_b_frames,
-                ist->st->codec->has_b_frames
-            );
+            av_log(ist->dec_ctx, AV_LOG_WARNING,
+                   "has_b_frames is larger in decoder than demuxer %d > %d.\n"
+                   "If you want to help, upload a sample "
+                   "of this file to ftp://upload.ffmpeg.org/incoming/ "
+                   "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)",
+                   ist->dec_ctx->has_b_frames,
+                   ist->st->codec->has_b_frames);
     }
 
     if (*got_output || ret<0)
@@ -2264,11 +2266,7 @@ static int send_filter_eof(InputStream *ist)
 {
     int i, ret;
     for (i = 0; i < ist->nb_filters; i++) {
-#if 1
-        ret = av_buffersrc_add_ref(ist->filters[i]->filter, NULL, 0);
-#else
         ret = av_buffersrc_add_frame(ist->filters[i]->filter, NULL);
-#endif
         if (ret < 0)
             return ret;
     }

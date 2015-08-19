@@ -544,7 +544,7 @@ static int configure_output_audio_filter(FilterGraph *fg, OutputFilter *ofilter,
                    av_get_default_channel_layout(ost->audio_channels_mapped));
         for (i = 0; i < ost->audio_channels_mapped; i++)
             if (ost->audio_channels_map[i] != -1)
-                av_bprintf(&pan_buf, ":c%d=c%d", i, ost->audio_channels_map[i]);
+                av_bprintf(&pan_buf, "|c%d=c%d", i, ost->audio_channels_map[i]);
 
         AUTO_INSERT_FILTER("-map_channel", "pan", pan_buf.str);
         av_bprint_finalize(&pan_buf, NULL);
@@ -682,8 +682,8 @@ static int sub2video_prepare(InputStream *ist)
         }
         av_log(avf, AV_LOG_INFO, "sub2video: using %dx%d canvas\n", w, h);
     }
-    ist->sub2video.w = ist->dec_ctx->width  = ist->resample_width  = w;
-    ist->sub2video.h = ist->dec_ctx->height = ist->resample_height = h;
+    ist->sub2video.w = ist->resample_width  = w;
+    ist->sub2video.h = ist->resample_height = h;
 
     /* rectangles are AV_PIX_FMT_PAL8, but we have no guarantee that the
        palettes for all rectangles are identical or compatible */

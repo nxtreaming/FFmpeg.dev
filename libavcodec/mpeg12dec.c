@@ -1186,8 +1186,10 @@ static const enum AVPixelFormat mpeg1_hwaccel_pixfmt_list_420[] = {
 #if CONFIG_MPEG1_XVMC_HWACCEL
     AV_PIX_FMT_XVMC,
 #endif
-#if CONFIG_MPEG1_VDPAU_HWACCEL
+#if CONFIG_MPEG1_VDPAU_DECODER && FF_API_VDPAU
     AV_PIX_FMT_VDPAU_MPEG1,
+#endif
+#if CONFIG_MPEG1_VDPAU_HWACCEL
     AV_PIX_FMT_VDPAU,
 #endif
     AV_PIX_FMT_YUV420P,
@@ -1198,8 +1200,10 @@ static const enum AVPixelFormat mpeg2_hwaccel_pixfmt_list_420[] = {
 #if CONFIG_MPEG2_XVMC_HWACCEL
     AV_PIX_FMT_XVMC,
 #endif
-#if CONFIG_MPEG2_VDPAU_HWACCEL
+#if CONFIG_MPEG_VDPAU_DECODER && FF_API_VDPAU
     AV_PIX_FMT_VDPAU_MPEG2,
+#endif
+#if CONFIG_MPEG2_VDPAU_HWACCEL
     AV_PIX_FMT_VDPAU,
 #endif
 #if CONFIG_MPEG2_DXVA2_HWACCEL
@@ -1228,9 +1232,11 @@ static const enum AVPixelFormat mpeg12_pixfmt_list_444[] = {
     AV_PIX_FMT_NONE
 };
 
+#if FF_API_VDPAU
 static inline int uses_vdpau(AVCodecContext *avctx) {
     return avctx->pix_fmt == AV_PIX_FMT_VDPAU_MPEG1 || avctx->pix_fmt == AV_PIX_FMT_VDPAU_MPEG2;
 }
+#endif
 
 static enum AVPixelFormat mpeg_get_pixelformat(AVCodecContext *avctx)
 {
@@ -1256,7 +1262,11 @@ static enum AVPixelFormat mpeg_get_pixelformat(AVCodecContext *avctx)
 static void setup_hwaccel_for_pixfmt(AVCodecContext *avctx)
 {
     // until then pix_fmt may be changed right after codec init
-    if (avctx->hwaccel || uses_vdpau(avctx))
+    if (avctx->hwaccel
+#if FF_API_VDPAU
+        || uses_vdpau(avctx)
+#endif
+        )
         if (avctx->idct_algo == FF_IDCT_AUTO)
             avctx->idct_algo = FF_IDCT_SIMPLE;
 
@@ -1384,6 +1394,7 @@ static int mpeg_decode_postinit(AVCodecContext *avctx)
             case 1: avctx->chroma_sample_location = AVCHROMA_LOC_LEFT; break;
             case 2:
             case 3: avctx->chroma_sample_location = AVCHROMA_LOC_TOPLEFT; break;
+            default: av_assert0(0);
             }
         } // MPEG-2
 
@@ -1466,6 +1477,12 @@ static void mpeg_decode_sequence_extension(Mpeg1Context *s1)
     s->avctx->level         = get_bits(&s->gb, 4);
     s->progressive_sequence = get_bits1(&s->gb);   /* progressive_sequence */
     s->chroma_format        = get_bits(&s->gb, 2); /* chroma_format 1=420, 2=422, 3=444 */
+
+    if (!s->chroma_format) {
+        s->chroma_format = 1;
+        av_log(s->avctx, AV_LOG_WARNING, "Chroma format invalid\n");
+    }
+
     horiz_size_ext          = get_bits(&s->gb, 2);
     vert_size_ext           = get_bits(&s->gb, 2);
     s->width  |= (horiz_size_ext << 12);
@@ -2453,9 +2470,11 @@ static int decode_chunks(AVCodecContext *avctx, AVFrame *picture,
                         s2->er.error_count += s2->thread_context[i]->er.error_count;
                 }
 
+#if FF_API_VDPAU
                 if ((CONFIG_MPEG_VDPAU_DECODER || CONFIG_MPEG1_VDPAU_DECODER)
                     && uses_vdpau(avctx))
                     ff_vdpau_mpeg_picture_complete(s2, buf, buf_size, s->slice_count);
+#endif
 
                 ret = slice_end(avctx, picture);
                 if (ret < 0)
@@ -2704,10 +2723,12 @@ static int decode_chunks(AVCodecContext *avctx, AVFrame *picture,
                     return AVERROR_INVALIDDATA;
                 }
 
+#if FF_API_VDPAU
                 if (uses_vdpau(avctx)) {
                     s->slice_count++;
                     break;
                 }
+#endif
 
                 if (HAVE_THREADS &&
                     (avctx->active_thread_type & FF_THREAD_SLICE) &&
@@ -2933,7 +2954,7 @@ AVCodec ff_mpeg_xvmc_decoder = {
 #endif
 #endif /* FF_API_XVMC */
 
-#if CONFIG_MPEG_VDPAU_DECODER
+#if CONFIG_MPEG_VDPAU_DECODER && FF_API_VDPAU
 AVCodec ff_mpeg_vdpau_decoder = {
     .name           = "mpegvideo_vdpau",
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-1/2 video (VDPAU acceleration)"),
@@ -2949,7 +2970,7 @@ AVCodec ff_mpeg_vdpau_decoder = {
 };
 #endif
 
-#if CONFIG_MPEG1_VDPAU_DECODER
+#if CONFIG_MPEG1_VDPAU_DECODER && FF_API_VDPAU
 AVCodec ff_mpeg1_vdpau_decoder = {
     .name           = "mpeg1video_vdpau",
     .long_name      = NULL_IF_CONFIG_SMALL("MPEG-1 video (VDPAU acceleration)"),

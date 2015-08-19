@@ -9122,6 +9122,23 @@ If the specified expression is not valid, it is kept at its current
 value.
 @end table
 
+@section scale2ref
+
+Scale (resize) the input video, based on a reference video.
+
+See the scale filter for available options, scale2ref supports the same but
+uses the reference video instead of the main input as basis.
+
+@subsection Examples
+
+@itemize
+@item
+Scale a subtitle stream to match the main video in size before overlaying
+@example
+'scale2ref[b][a];[a][b]overlay'
+@end example
+@end itemize
+
 @section separatefields
 
 The @code{separatefields} takes a frame-based video input and splits
@@ -11656,6 +11673,38 @@ tools.
 
 Below is a description of the currently available multimedia filters.
 
+@section aphasemeter
+
+Convert input audio to a video output, displaying the audio phase.
+
+The filter accepts the following options:
+
+@table @option
+@item rate, r
+Set the output frame rate. Default value is @code{25}.
+
+@item size, s
+Set the video size for the output. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default value is @code{800x400}.
+
+@item rc
+@item gc
+@item bc
+Specify the red, green, blue contrast. Default values are @code{2},
+@code{7} and @code{1}.
+Allowed range is @code{[0, 255]}.
+
+@item mpc
+Set color which will be used for drawing median phase. If color is
+@code{none} which is default, no median phase value will be drawn.
+@end table
+
+The filter also exports the frame metadata @code{lavfi.aphasemeter.phase} which
+represents mean phase of current audio frame. Value is in range @code{[-1, 1]}.
+The @code{-1} means left and right channels are completely out of phase and
+@code{1} means channels are in phase.
+
 @section avectorscope
 
 Convert input audio to a video output, representing the audio vector
@@ -11681,6 +11730,9 @@ Lissajous rotated by 45 degrees.
 
 @item lissajous_xy
 Same as above but not rotated.
+
+@item polar
+Shape resembling half of circle.
 @end table
 
 Default value is @samp{lissajous}.

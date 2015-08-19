@@ -2947,9 +2947,7 @@ typedef struct AVCodecContext {
     int dct_algo;
 #define FF_DCT_AUTO    0
 #define FF_DCT_FASTINT 1
-#if FF_API_UNUSED_MEMBERS
 #define FF_DCT_INT     2
-#endif /* FF_API_UNUSED_MEMBERS */
 #define FF_DCT_MMX     3
 #define FF_DCT_ALTIVEC 5
 #define FF_DCT_FAAN    6
@@ -3715,6 +3713,9 @@ typedef struct AVHWAccel {
  * Hardware acceleration should be used for decoding even if the codec level
  * used is unknown or higher than the maximum supported level reported by the
  * hardware driver.
+ *
+ * It's generally a good idea to pass this flag unless you have a specific
+ * reason not to, as hardware tends to under-report supported levels.
  */
 #define AV_HWACCEL_FLAG_IGNORE_LEVEL (1 << 0)
 

@@ -19,6 +19,7 @@
  */
 
 #include "libavutil/avstring.h"
+#include "libavutil/internal.h"
 #include "libavutil/parseutils.h"
 #include "avformat.h"
 #include "internal.h"
@@ -38,6 +39,12 @@ typedef enum {
     DISCONNECTED
 } FTPState;
 
+typedef enum {
+    UNKNOWN_METHOD,
+    NLST,
+    MLSD
+} FTPListingMethod;
+
 typedef struct {
     const AVClass *class;
     URLContext *conn_control;                    /**< Control connection */
@@ -56,6 +63,8 @@ typedef struct {
     const char *anonymous_password;              /**< Password to be used for anonymous user. An email should be used. */
     int write_seekable;                          /**< Control seekability, 0 = disable, 1 = enable. */
     FTPState state;                              /**< State of data connection */
+    FTPListingMethod listing_method;             /**< Called listing method */
+    char *features;                              /**< List of server's features represented as raw response */
     char *dir_buffer;
     size_t dir_buffer_size;
     size_t dir_buffer_offset;
@@ -192,6 +201,8 @@ static int ftp_send_command(FTPContext *s, const char *command,
 {
     int err;
 
+    ff_dlog(s, "%s", command);
+
     if (response)
         *response = NULL;
 
@@ -273,7 +284,7 @@ static int ftp_passive_mode_epsv(FTPContext *s)
     end[-1] = '\0';
 
     s->server_data_port = atoi(start);
-    av_dlog(s, "Server data port: %d\n", s->server_data_port);
+    ff_dlog(s, "Server data port: %d\n", s->server_data_port);
 
     av_free(res);
     return 0;
@@ -319,7 +330,7 @@ static int ftp_passive_mode(FTPContext *s)
     start = av_strtok(end, ",", &end);
     if (!start) goto fail;
     s->server_data_port += atoi(start);
-    av_dlog(s, "Server data port: %d\n", s->server_data_port);
+    ff_dlog(s, "Server data port: %d\n", s->server_data_port);
 
     av_free(res);
     return 0;
@@ -449,15 +460,47 @@ static int ftp_set_dir(FTPContext *s)
     return 0;
 }
 
-static int ftp_list(FTPContext *s)
+static int ftp_list_mlsd(FTPContext *s)
 {
     static const char *command = "MLSD\r\n";
     static const int mlsd_codes[] = {150, 500, 0}; /* 500 is incorrect code */
 
     if (ftp_send_command(s, command, mlsd_codes, NULL) != 150)
         return AVERROR(ENOSYS);
-    s->state = LISTING_DIR;
+    s->listing_method = MLSD;
     return 0;
+}
+
+static int ftp_list_nlst(FTPContext *s)
+{
+    static const char *command = "NLST\r\n";
+    static const int nlst_codes[] = {226, 425, 426, 451, 450, 550, 0};
+
+    if (ftp_send_command(s, command, nlst_codes, NULL) != 226)
+        return AVERROR(ENOSYS);
+    s->listing_method = NLST;
+    return 0;
+}
+
+static int ftp_has_feature(FTPContext *s, const char *feature_name);
+
+static int ftp_list(FTPContext *s)
+{
+    int ret;
+    s->state = LISTING_DIR;
+
+    if ((ret = ftp_list_mlsd(s)) < 0)
+        ret = ftp_list_nlst(s);
+
+    return ret;
+}
+
+static int ftp_has_feature(FTPContext *s, const char *feature_name)
+{
+    if (!s->features)
+        return 0;
+
+    return av_stristr(s->features, feature_name) != NULL;
 }
 
 static int ftp_features(FTPContext *s)
@@ -466,15 +509,16 @@ static int ftp_features(FTPContext *s)
     static const char *enable_utf8_command = "OPTS UTF8 ON\r\n";
     static const int feat_codes[] = {211, 0};
     static const int opts_codes[] = {200, 451, 0};
-    char *feat = NULL;
 
-    if (ftp_send_command(s, feat_command, feat_codes, &feat) == 211) {
-        if (av_stristr(feat, "UTF8")) {
-            if (ftp_send_command(s, enable_utf8_command, opts_codes, NULL) == 200)
-                s->utf8 = 1;
-        }
+    av_freep(&s->features);
+    if (ftp_send_command(s, feat_command, feat_codes, &s->features) != 211) {
+        av_freep(&s->features);
     }
-    av_freep(&feat);
+
+    if (ftp_has_feature(s, "UTF8")) {
+        if (ftp_send_command(s, enable_utf8_command, opts_codes, NULL) == 200)
+            s->utf8 = 1;
+    }
 
     return 0;
 }
@@ -607,8 +651,10 @@ static int ftp_connect(URLContext *h, const char *url)
     FTPContext *s = h->priv_data;
 
     s->state = DISCONNECTED;
+    s->listing_method = UNKNOWN;
     s->filesize = -1;
     s->position = 0;
+    s->features = NULL;
 
     av_url_split(proto, sizeof(proto),
                  credencials, sizeof(credencials),
@@ -653,7 +699,7 @@ static int ftp_open(URLContext *h, const char *url, int flags)
     FTPContext *s = h->priv_data;
     int err;
 
-    av_dlog(h, "ftp protocol open\n");
+    ff_dlog(h, "ftp protocol open\n");
 
     if ((err = ftp_connect(h, url)) < 0)
         goto fail;
@@ -681,7 +727,7 @@ static int64_t ftp_seek(URLContext *h, int64_t pos, int whence)
     int err;
     int64_t new_pos, fake_pos;
 
-    av_dlog(h, "ftp protocol seek %"PRId64" %d\n", pos, whence);
+    ff_dlog(h, "ftp protocol seek %"PRId64" %d\n", pos, whence);
 
     switch(whence) {
     case AVSEEK_SIZE:
@@ -723,7 +769,7 @@ static int ftp_read(URLContext *h, unsigned char *buf, int size)
     FTPContext *s = h->priv_data;
     int read, err, retry_done = 0;
 
-    av_dlog(h, "ftp protocol read %d bytes\n", size);
+    ff_dlog(h, "ftp protocol read %d bytes\n", size);
   retry:
     if (s->state == DISCONNECTED) {
         /* optimization */
@@ -781,7 +827,7 @@ static int ftp_write(URLContext *h, const unsigned char *buf, int size)
     FTPContext *s = h->priv_data;
     int written;
 
-    av_dlog(h, "ftp protocol write %d bytes\n", size);
+    ff_dlog(h, "ftp protocol write %d bytes\n", size);
 
     if (s->state == DISCONNECTED) {
         if ((err = ftp_connect_data_connection(h)) < 0)
@@ -808,13 +854,14 @@ static int ftp_close(URLContext *h)
 {
     FTPContext *s = h->priv_data;
 
-    av_dlog(h, "ftp protocol close\n");
+    ff_dlog(h, "ftp protocol close\n");
 
     ftp_close_both_connections(s);
     av_freep(&s->user);
     av_freep(&s->password);
     av_freep(&s->hostname);
     av_freep(&s->path);
+    av_freep(&s->features);
 
     return 0;
 }
@@ -823,7 +870,7 @@ static int ftp_get_file_handle(URLContext *h)
 {
     FTPContext *s = h->priv_data;
 
-    av_dlog(h, "ftp protocol get_file_handle\n");
+    ff_dlog(h, "ftp protocol get_file_handle\n");
 
     if (s->conn_data)
         return ffurl_get_file_handle(s->conn_data);
@@ -835,7 +882,7 @@ static int ftp_shutdown(URLContext *h, int flags)
 {
     FTPContext *s = h->priv_data;
 
-    av_dlog(h, "ftp protocol shutdown\n");
+    ff_dlog(h, "ftp protocol shutdown\n");
 
     if (s->conn_data)
         return ffurl_shutdown(s->conn_data, flags);
@@ -878,13 +925,16 @@ static int64_t ftp_parse_date(const char *date)
     return INT64_C(1000000) * av_timegm(&tv);
 }
 
-/**
- * @return 0 on success, negative on error, positive on entry to discard.
- */
-static int ftp_parse_entry(char *mlsd, AVIODirEntry *next)
+static int ftp_parse_entry_nlst(char *line, AVIODirEntry *next)
+{
+    next->name = av_strdup(line);
+    return 0;
+}
+
+static int ftp_parse_entry_mlsd(char *mlsd, AVIODirEntry *next)
 {
     char *fact, *value;
-    av_dlog(NULL, "%s\n", mlsd);
+    ff_dlog(NULL, "%s\n", mlsd);
     while(fact = av_strtok(mlsd, ";", &mlsd)) {
         if (fact[0] == ' ') {
             next->name = av_strdup(&fact[1]);
@@ -912,6 +962,24 @@ static int ftp_parse_entry(char *mlsd, AVIODirEntry *next)
             next->size = strtoll(value, NULL, 10);
     }
     return 0;
+}
+
+/**
+ * @return 0 on success, negative on error, positive on entry to discard.
+ */
+static int ftp_parse_entry(URLContext *h, char *line, AVIODirEntry *next)
+{
+    FTPContext *s = h->priv_data;
+
+    switch (s->listing_method) {
+    case MLSD:
+        return ftp_parse_entry_mlsd(line, next);
+    case NLST:
+        return ftp_parse_entry_nlst(line, next);
+    case UNKNOWN_METHOD:
+    default:
+        return -1;
+    }
 }
 
 static int ftp_read_dir(URLContext *h, AVIODirEntry **next)
@@ -951,7 +1019,7 @@ static int ftp_read_dir(URLContext *h, AVIODirEntry **next)
         if (!*next)
             return AVERROR(ENOMEM);
         (*next)->utf8 = s->utf8;
-        ret = ftp_parse_entry(start, *next);
+        ret = ftp_parse_entry(h, start, *next);
         if (ret) {
             avio_free_directory_entry(next);
             if (ret < 0)

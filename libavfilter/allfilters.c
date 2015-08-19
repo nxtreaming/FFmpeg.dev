@@ -211,6 +211,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(ROTATE,         rotate,         vf);
     REGISTER_FILTER(SAB,            sab,            vf);
     REGISTER_FILTER(SCALE,          scale,          vf);
+    REGISTER_FILTER(SCALE2REF,      scale2ref,      vf);
     REGISTER_FILTER(SELECT,         select,         vf);
     REGISTER_FILTER(SENDCMD,        sendcmd,        vf);
     REGISTER_FILTER(SEPARATEFIELDS, separatefields, vf);
@@ -268,6 +269,7 @@ void avfilter_register_all(void)
 
     /* multimedia filters */
     REGISTER_FILTER(ADRAWGRAPH,     adrawgraph,     avf);
+    REGISTER_FILTER(APHASEMETER,    aphasemeter,    avf);
     REGISTER_FILTER(AVECTORSCOPE,   avectorscope,   avf);
     REGISTER_FILTER(CONCAT,         concat,         avf);
     REGISTER_FILTER(SHOWCQT,        showcqt,        avf);

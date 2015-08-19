@@ -1343,7 +1343,7 @@ COMPONENT_LIST="
 
 EXAMPLE_LIST="
     avio_reading_example
-    avio_list_dir_example
+    avio_dir_cmd_example
     decoding_encoding_example
     demuxing_decoding_example
     extract_mvs_example
@@ -2780,6 +2780,7 @@ repeatfields_filter_deps="gpl"
 resample_filter_deps="avresample"
 sab_filter_deps="gpl swscale"
 scale_filter_deps="swscale"
+scale2ref_filter_deps="swscale"
 select_filter_select="pixelutils"
 smartblur_filter_deps="gpl swscale"
 showcqt_filter_deps="avcodec"
@@ -2803,7 +2804,7 @@ zoompan_filter_deps="swscale"
 
 # examples
 avio_reading="avformat avcodec avutil"
-avio_list_dir="avformat avutil"
+avio_dir_cmd="avformat avutil"
 avcodec_example_deps="avcodec avutil"
 decoding_encoding_example_deps="avcodec avformat avutil"
 demuxing_decoding_example_deps="avcodec avformat avutil"
@@ -4795,7 +4796,7 @@ EOF
         enable vfp_args
     elif check_cpp_condition stddef.h "defined _M_ARM_FP && _M_ARM_FP >= 30"; then
         enable vfp_args
-    elif ! check_cpp_condition stddef.h "defined __ARM_PCS || defined __SOFTFP__"; then
+    elif ! check_cpp_condition stddef.h "defined __ARM_PCS || defined __SOFTFP__" && [ $target_os != darwin ]; then
         case "${cross_prefix:-$cc}" in
             *hardfloat*)         enable vfp_args;   fpabi=vfp ;;
             *) check_ld "cc" <<EOF && enable vfp_args && fpabi=vfp || fpabi=soft ;;
@@ -5225,7 +5226,7 @@ enabled libgsm            && { for gsm_hdr in "gsm.h" "gsm/gsm.h"; do
                                    check_lib "${gsm_hdr}" gsm_create -lgsm && break;
                                done || die "ERROR: libgsm not found"; }
 enabled libilbc           && require libilbc ilbc.h WebRtcIlbcfix_InitDecode -lilbc
-enabled libkvazaar        && require2 libkvazaar kvazaar.h kvz_api_get -lkvazaar
+enabled libkvazaar        && require_pkg_config kvazaar kvazaar.h kvz_api_get
 enabled libmfx            && require_pkg_config libmfx "mfx/mfxvideo.h" MFXInit
 enabled libmodplug        && require_pkg_config libmodplug libmodplug/modplug.h ModPlug_Load
 enabled libmp3lame        && require "libmp3lame >= 3.98.3" lame/lame.h lame_set_VBR_quality -lmp3lame
@@ -5374,6 +5375,9 @@ if ! disabled sdl; then
         else
             disable sdl
         fi
+    fi
+    if test $target_os = "mingw32"; then
+        sdl_libs="$sdl_libs -mconsole"
     fi
 fi
 enabled sdl && add_cflags $sdl_cflags && add_extralibs $sdl_libs
@@ -5831,6 +5835,7 @@ enabled removelogo_filter   && prepend avfilter_deps "avformat avcodec swscale"
 enabled resample_filter && prepend avfilter_deps "avresample"
 enabled sab_filter          && prepend avfilter_deps "swscale"
 enabled scale_filter    && prepend avfilter_deps "swscale"
+enabled scale2ref_filter    && prepend avfilter_deps "swscale"
 enabled showspectrum_filter && prepend avfilter_deps "avcodec"
 enabled smartblur_filter    && prepend avfilter_deps "swscale"
 enabled subtitles_filter    && prepend avfilter_deps "avformat avcodec"

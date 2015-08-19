@@ -839,7 +839,7 @@ static int save_subtitle_set(AVCodecContext *avctx, AVSubtitle *sub, int *got_ou
 
     /* Not touching AVSubtitles again*/
     if(sub->num_rects) {
-        avpriv_request_sample(ctx, "Different Version of Segment asked Twice\n");
+        avpriv_request_sample(ctx, "Different Version of Segment asked Twice");
         return AVERROR_PATCHWELCOME;
     }
     for (display = ctx->display_list; display; display = display->next) {
@@ -1090,7 +1090,7 @@ static int dvbsub_parse_object_segment(AVCodecContext *avctx,
         buf += 2;
 
         if (buf + top_field_len + bottom_field_len > buf_end) {
-            av_log(avctx, AV_LOG_ERROR, "Field data size too large\n");
+            av_log(avctx, AV_LOG_ERROR, "Field data size %d+%d too large\n", top_field_len, bottom_field_len);
             return AVERROR_INVALIDDATA;
         }
 
@@ -1718,9 +1718,9 @@ end:
 
 #define DS AV_OPT_FLAG_DECODING_PARAM | AV_OPT_FLAG_SUBTITLE_PARAM
 static const AVOption options[] = {
-    {"compute_edt", "compute end of time using pts or timeout", offsetof(DVBSubContext, compute_edt), FF_OPT_TYPE_INT, {.i64 = 0}, 0, 1, DS},
-    {"compute_clut", "compute clut when not available(-1) or always(1) or never(0)", offsetof(DVBSubContext, compute_clut), FF_OPT_TYPE_INT, {.i64 = -1}, -1, 1, DS},
-    {"dvb_substream", "", offsetof(DVBSubContext, substream), FF_OPT_TYPE_INT, {.i64 = -1}, -1, 63, DS},
+    {"compute_edt", "compute end of time using pts or timeout", offsetof(DVBSubContext, compute_edt), AV_OPT_TYPE_INT, {.i64 = 0}, 0, 1, DS},
+    {"compute_clut", "compute clut when not available(-1) or always(1) or never(0)", offsetof(DVBSubContext, compute_clut), AV_OPT_TYPE_INT, {.i64 = -1}, -1, 1, DS},
+    {"dvb_substream", "", offsetof(DVBSubContext, substream), AV_OPT_TYPE_INT, {.i64 = -1}, -1, 63, DS},
     {NULL}
 };
 static const AVClass dvbsubdec_class = {
