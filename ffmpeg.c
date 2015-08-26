@@ -713,7 +713,13 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, OutputStream *ost)
                                            &new_pkt.data, &new_pkt.size,
                                            pkt->data, pkt->size,
                                            pkt->flags & AV_PKT_FLAG_KEY);
-        if(a == 0 && new_pkt.data != pkt->data && new_pkt.destruct) {
+FF_DISABLE_DEPRECATION_WARNINGS
+        if(a == 0 && new_pkt.data != pkt->data
+#if FF_API_DESTRUCT_PACKET
+           && new_pkt.destruct
+#endif
+           ) {
+FF_ENABLE_DEPRECATION_WARNINGS
             uint8_t *t = av_malloc(new_pkt.size + AV_INPUT_BUFFER_PADDING_SIZE); //the new should be a subset of the old so cannot overflow
             if(t) {
                 memcpy(t, new_pkt.data, new_pkt.size);
@@ -1763,7 +1769,9 @@ static void flush_encoders(void)
                 ret = encode(enc, &pkt, NULL, &got_packet);
                 update_benchmark("flush %s %d.%d", desc, ost->file_index, ost->index);
                 if (ret < 0) {
-                    av_log(NULL, AV_LOG_FATAL, "%s encoding failed\n", desc);
+                    av_log(NULL, AV_LOG_FATAL, "%s encoding failed: %s\n",
+                           desc,
+                           av_err2str(ret));
                     exit_program(1);
                 }
                 if (ost->logfile && enc->stats_out) {
@@ -1879,17 +1887,22 @@ static void do_streamcopy(InputStream *ist, OutputStream *ost, const AVPacket *p
 
     opkt.duration = av_rescale_q(pkt->duration, ist->st->time_base, ost->st->time_base);
     opkt.flags    = pkt->flags;
-
     // FIXME remove the following 2 lines they shall be replaced by the bitstream filters
-    if (  ost->enc_ctx->codec_id != AV_CODEC_ID_H264
-       && ost->enc_ctx->codec_id != AV_CODEC_ID_MPEG1VIDEO
-       && ost->enc_ctx->codec_id != AV_CODEC_ID_MPEG2VIDEO
-       && ost->enc_ctx->codec_id != AV_CODEC_ID_VC1
+    if (  ost->st->codec->codec_id != AV_CODEC_ID_H264
+       && ost->st->codec->codec_id != AV_CODEC_ID_MPEG1VIDEO
+       && ost->st->codec->codec_id != AV_CODEC_ID_MPEG2VIDEO
+       && ost->st->codec->codec_id != AV_CODEC_ID_VC1
        ) {
-        if (av_parser_change(ost->parser, ost->st->codec,
+        int ret = av_parser_change(ost->parser, ost->st->codec,
                              &opkt.data, &opkt.size,
                              pkt->data, pkt->size,
-                             pkt->flags & AV_PKT_FLAG_KEY)) {
+                             pkt->flags & AV_PKT_FLAG_KEY);
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_FATAL, "av_parser_change failed: %s\n",
+                   av_err2str(ret));
+            exit_program(1);
+        }
+        if (ret) {
             opkt.buf = av_buffer_create(opkt.data, opkt.size, av_buffer_default_free, NULL, 0);
             if (!opkt.buf)
                 exit_program(1);
@@ -1900,9 +1913,16 @@ static void do_streamcopy(InputStream *ist, OutputStream *ost, const AVPacket *p
     }
     av_copy_packet_side_data(&opkt, pkt);
 
-    if (ost->st->codec->codec_type == AVMEDIA_TYPE_VIDEO && (of->ctx->oformat->flags & AVFMT_RAWPICTURE)) {
+    if (ost->st->codec->codec_type == AVMEDIA_TYPE_VIDEO &&
+        ost->st->codec->codec_id == AV_CODEC_ID_RAWVIDEO &&
+        (of->ctx->oformat->flags & AVFMT_RAWPICTURE)) {
         /* store AVPicture in AVPacket, as expected by the output format */
-        avpicture_fill(&pict, opkt.data, ost->st->codec->pix_fmt, ost->st->codec->width, ost->st->codec->height);
+        int ret = avpicture_fill(&pict, opkt.data, ost->st->codec->pix_fmt, ost->st->codec->width, ost->st->codec->height);
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_FATAL, "avpicture_fill failed: %s\n",
+                   av_err2str(ret));
+            exit_program(1);
+        }
         opkt.data = (uint8_t *)&pict;
         opkt.size = sizeof(AVPicture);
         opkt.flags |= AV_PKT_FLAG_KEY;

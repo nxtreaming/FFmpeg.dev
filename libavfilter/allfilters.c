@@ -241,11 +241,13 @@ void avfilter_register_all(void)
     REGISTER_FILTER(TRIM,           trim,           vf);
     REGISTER_FILTER(UNSHARP,        unsharp,        vf);
     REGISTER_FILTER(USPP,           uspp,           vf);
+    REGISTER_FILTER(VECTORSCOPE,    vectorscope,    vf);
     REGISTER_FILTER(VFLIP,          vflip,          vf);
     REGISTER_FILTER(VIDSTABDETECT,  vidstabdetect,  vf);
     REGISTER_FILTER(VIDSTABTRANSFORM, vidstabtransform, vf);
     REGISTER_FILTER(VIGNETTE,       vignette,       vf);
     REGISTER_FILTER(W3FDIF,         w3fdif,         vf);
+    REGISTER_FILTER(WAVEFORM,       waveform,       vf);
     REGISTER_FILTER(XBR,            xbr,            vf);
     REGISTER_FILTER(YADIF,          yadif,          vf);
     REGISTER_FILTER(ZMQ,            zmq,            vf);
@@ -273,6 +275,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(AVECTORSCOPE,   avectorscope,   avf);
     REGISTER_FILTER(CONCAT,         concat,         avf);
     REGISTER_FILTER(SHOWCQT,        showcqt,        avf);
+    REGISTER_FILTER(SHOWFREQS,      showfreqs,      avf);
     REGISTER_FILTER(SHOWSPECTRUM,   showspectrum,   avf);
     REGISTER_FILTER(SHOWVOLUME,     showvolume,     avf);
     REGISTER_FILTER(SHOWWAVES,      showwaves,      avf);
