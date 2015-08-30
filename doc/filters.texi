@@ -6015,6 +6015,51 @@ ffmpeg -i LEFT -i RIGHT -filter_complex framepack=frameseq OUTPUT
 ffmpeg -i LEFT -i RIGHT -filter_complex [0:v]scale=w=iw/2[left],[1:v]scale=w=iw/2[right],[left][right]framepack=sbs OUTPUT
 @end example
 
+@section framerate
+
+Change the frame rate by interpolating new video output frames from the source
+frames.
+
+This filter is not designed to function correctly with interlaced media. If
+you wish to change the frame rate of interlaced media then you are required
+to deinterlace before this filter and re-interlace after this filter.
+
+A description of the accepted options follows.
+
+@table @option
+@item fps
+Specify the output frames per second. This option can also be specified
+as a value alone. The default is @code{50}.
+
+@item interp_start
+Specify the start of a range where the output frame will be created as a
+linear interpolation of two frames. The range is [@code{0}-@code{255}],
+the default is @code{15}.
+
+@item interp_end
+Specify the end of a range where the output frame will be created as a
+linear interpolation of two frames. The range is [@code{0}-@code{255}],
+the default is @code{240}.
+
+@item scene
+Specify the level at which a scene change is detected as a value between
+0 and 100 to indicate a new scene; a low value reflects a low
+probability for the current frame to introduce a new scene, while a higher
+value means the current frame is more likely to be one.
+The default is @code{7}.
+
+@item flags
+Specify flags influencing the filter process.
+
+Available value for @var{flags} is:
+
+@table @option
+@item scene_change_detect, scd
+Enable scene change detection using the value of the option @var{scene}.
+This flag is enabled by default.
+@end table
+@end table
+
 @section framestep
 
 Select one frame every N-th frame.
@@ -6587,6 +6632,21 @@ It accepts the following option:
 Set the scaling dimension: @code{2} for @code{hq2x}, @code{3} for
 @code{hq3x} and @code{4} for @code{hq4x}.
 Default is @code{3}.
+@end table
+
+@section hstack
+Stack input videos horizontally.
+
+All streams must be of same pixel format and of same height.
+
+Note that this filter is faster than using @ref{overlay} and @ref{pad} filter
+to create same output.
+
+The filter accept the following option:
+
+@table @option
+@item nb_inputs
+Set number of input streams. Default is 2.
 @end table
 
 @section hue
@@ -7736,6 +7796,7 @@ Set chroma strength.
 Must be a double value in the range 0-1000, default is @code{1.0}.
 @end table
 
+@anchor{pad}
 @section pad
 
 Add paddings to the input image, and place the original input at the
@@ -10505,7 +10566,7 @@ a vectorscope).
 This filter accepts the following options:
 
 @table @option
-@item mode
+@item mode, m
 Set vectorscope mode.
 
 It accepts the following values:
@@ -10526,6 +10587,11 @@ Actual color components values present in video frame are displayed on graph.
 Similar as color2 but higher frequency of same values @code{x} and @code{y}
 on graph increases value of another color component, which is luminance by
 default values of @code{x} and @code{y}.
+
+@item color4
+Actual colors present in video frame are displayed on graph. If two different
+colors map to same position on graph then color with higher value of component
+not present in graph is picked.
 @end table
 
 @item x
@@ -10534,9 +10600,25 @@ Set which color component will be represented on X-axis. Default is @code{1}.
 @item y
 Set which color component will be represented on Y-axis. Default is @code{2}.
 
-@item intensity
+@item intensity, i
 Set intensity, used by modes: gray, color and color3 for increasing brightness
 of color component which represents frequency of (X, Y) location in graph.
+
+@item envelope, e
+@table @samp
+@item none
+No envelope, this is default.
+
+@item instant
+Instant envelope, even darkest single pixel will be clearly highlighted.
+
+@item peak
+Hold maximum and minimum values presented in graph over time. This way you
+can still spot out of range values without constantly looking at vectorscope.
+
+@item peak+instant
+Peak and instant envelope combined together.
+@end table
 @end table
 
 @anchor{vidstabdetect}
@@ -10891,6 +10973,21 @@ vignette='PI/4+random(1)*PI/50':eval=frame
 @end example
 
 @end itemize
+
+@section vstack
+Stack input videos vertically.
+
+All streams must be of same pixel format and of same width.
+
+Note that this filter is faster than using @ref{overlay} and @ref{pad} filter
+to create same output.
+
+The filter accept the following option:
+
+@table @option
+@item nb_inputs
+Set number of input streams. Default is 2.
+@end table
 
 @section w3fdif
 
@@ -11646,6 +11743,7 @@ ffplay -f lavfi life=s=300x200:mold=10:r=60:ratio=0.1:death_color=#C83232:life_c
 @end example
 @end itemize
 
+@anchor{allrgb}
 @anchor{allyuv}
 @anchor{color}
 @anchor{haldclutsrc}
@@ -11654,7 +11752,9 @@ ffplay -f lavfi life=s=300x200:mold=10:r=60:ratio=0.1:death_color=#C83232:life_c
 @anchor{smptebars}
 @anchor{smptehdbars}
 @anchor{testsrc}
-@section allyuv, color, haldclutsrc, nullsrc, rgbtestsrc, smptebars, smptehdbars, testsrc
+@section allrgb, allyuv, color, haldclutsrc, nullsrc, rgbtestsrc, smptebars, smptehdbars, testsrc
+
+The @code{allrgb} source returns frames of size 4096x4096 of all rgb colors.
 
 The @code{allyuv} source returns frames of size 4096x4096 of all yuv colors.
 

@@ -158,6 +158,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(FORMAT,         format,         vf);
     REGISTER_FILTER(FPS,            fps,            vf);
     REGISTER_FILTER(FRAMEPACK,      framepack,      vf);
+    REGISTER_FILTER(FRAMERATE,      framerate,      vf);
     REGISTER_FILTER(FRAMESTEP,      framestep,      vf);
     REGISTER_FILTER(FREI0R,         frei0r,         vf);
     REGISTER_FILTER(FSPP,           fspp,           vf);
@@ -169,6 +170,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(HISTOGRAM,      histogram,      vf);
     REGISTER_FILTER(HQDN3D,         hqdn3d,         vf);
     REGISTER_FILTER(HQX,            hqx,            vf);
+    REGISTER_FILTER(HSTACK,         hstack,         vf);
     REGISTER_FILTER(HUE,            hue,            vf);
     REGISTER_FILTER(IDET,           idet,           vf);
     REGISTER_FILTER(IL,             il,             vf);
@@ -246,6 +248,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(VIDSTABDETECT,  vidstabdetect,  vf);
     REGISTER_FILTER(VIDSTABTRANSFORM, vidstabtransform, vf);
     REGISTER_FILTER(VIGNETTE,       vignette,       vf);
+    REGISTER_FILTER(VSTACK,         vstack,         vf);
     REGISTER_FILTER(W3FDIF,         w3fdif,         vf);
     REGISTER_FILTER(WAVEFORM,       waveform,       vf);
     REGISTER_FILTER(XBR,            xbr,            vf);
@@ -253,6 +256,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(ZMQ,            zmq,            vf);
     REGISTER_FILTER(ZOOMPAN,        zoompan,        vf);
 
+    REGISTER_FILTER(ALLRGB,         allrgb,         vsrc);
     REGISTER_FILTER(ALLYUV,         allyuv,         vsrc);
     REGISTER_FILTER(CELLAUTO,       cellauto,       vsrc);
     REGISTER_FILTER(COLOR,          color,          vsrc);

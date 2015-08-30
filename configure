@@ -1312,12 +1312,6 @@ check_host_cpp_condition(){
 EOF
 }
 
-apply(){
-    file=$1
-    shift
-    "$@" < "$file" > "$file.tmp" && mv "$file.tmp" "$file" || rm "$file.tmp"
-}
-
 cp_if_changed(){
     cmp -s "$1" "$2" && echo "$2 is unchanged" && return
     mkdir -p "$(dirname $2)"
@@ -2425,6 +2419,8 @@ hevc_d3d11va_hwaccel_select="hevc_decoder"
 hevc_dxva2_hwaccel_deps="dxva2 DXVA_PicParams_HEVC"
 hevc_dxva2_hwaccel_select="hevc_decoder"
 hevc_qsv_hwaccel_deps="libmfx"
+hevc_vaapi_hwaccel_deps="vaapi VAPictureParameterBufferHEVC"
+hevc_vaapi_hwaccel_select="hevc_decoder"
 hevc_vdpau_hwaccel_deps="vdpau VdpPictureInfoHEVC"
 hevc_vdpau_hwaccel_select="hevc_decoder"
 mpeg_vdpau_decoder_deps="vdpau"
@@ -2974,8 +2970,9 @@ if test -f configure; then
     source_path=.
 else
     source_path=$(cd $(dirname "$0"); pwd)
-    echo "$source_path" | grep -q '[[:blank:]]' &&
-        die "Out of tree builds are impossible with whitespace in source path."
+    case "$source_path" in
+        *[[:blank:]]*) die "Out of tree builds are impossible with whitespace in source path." ;;
+    esac
     test -e "$source_path/config.h" &&
         die "Out of tree builds are impossible with config.h in source dir."
 fi
@@ -3546,6 +3543,7 @@ tms470_flags(){
 probe_cc(){
     pfx=$1
     _cc=$2
+    first=$3
 
     unset _type _ident _cc_c _cc_e _cc_o _flags _cflags
     unset _ld_o _ldflags _ld_lib _ld_path
@@ -3571,6 +3569,12 @@ probe_cc(){
         case $gcc_basever in
             2*) _depflags='-MMD -MF $(@:.o=.d) -MT $@' ;;
         esac
+        if [ "$first" = true ]; then
+            case $gcc_basever in
+                4.2*)
+                warn "gcc 4.2 is outdated and may miscompile FFmpeg. Please use a newer compiler." ;;
+            esac
+        fi
         _cflags_speed='-O3'
         _cflags_size='-Os'
     elif $_cc --version 2>/dev/null | grep -q ^icc; then
@@ -3733,7 +3737,7 @@ set_ccvars(){
     fi
 }
 
-probe_cc cc "$cc"
+probe_cc cc "$cc" "true"
 cflags_filter=$_flags_filter
 cflags_speed=$_cflags_speed
 cflags_size=$_cflags_size
@@ -5145,6 +5149,8 @@ check_type "windows.h dxva.h" "DXVA_PicParams_HEVC" -DWINAPI_FAMILY=WINAPI_FAMIL
 check_type "windows.h d3d11.h" "ID3D11VideoDecoder"
 check_type "d3d9.h dxva2api.h" DXVA2_ConfigPictureDecode -D_WIN32_WINNT=0x0602
 
+check_type "va/va.h" "VAPictureParameterBufferHEVC"
+
 check_type "vdpau/vdpau.h" "VdpPictureInfoHEVC"
 
 if ! disabled w32threads && ! enabled pthreads; then
@@ -5949,6 +5955,10 @@ echo "makeinfo enabled          ${makeinfo-no}"
 echo "makeinfo supports HTML    ${makeinfo_html-no}"
 test -n "$random_seed" &&
     echo "random seed               ${random_seed}"
+echo
+
+echo "Enabled programs:"
+print_enabled '' $PROGRAM_LIST | print_3_columns
 echo
 
 echo "External libraries:"
