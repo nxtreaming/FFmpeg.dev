@@ -1265,12 +1265,6 @@ static int parse_packet(AVFormatContext *s, AVPacket *pkt, int stream_index)
         if (out_pkt.data == pkt->data && out_pkt.size == pkt->size) {
             out_pkt.buf = pkt->buf;
             pkt->buf    = NULL;
-#if FF_API_DESTRUCT_PACKET
-FF_DISABLE_DEPRECATION_WARNINGS
-            out_pkt.destruct = pkt->destruct;
-            pkt->destruct = NULL;
-FF_ENABLE_DEPRECATION_WARNINGS
-#endif
         }
         if ((ret = av_dup_packet(&out_pkt)) < 0)
             goto fail;
@@ -3091,10 +3085,18 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
     // new streams might appear, no options for those
     int orig_nb_streams = ic->nb_streams;
     int flush_codecs;
+#if FF_API_PROBESIZE_32
     int64_t max_analyze_duration = ic->max_analyze_duration2;
+#else
+    int64_t max_analyze_duration = ic->max_analyze_duration;
+#endif
     int64_t max_stream_analyze_duration;
     int64_t max_subtitle_analyze_duration;
+#if FF_API_PROBESIZE_32
     int64_t probesize = ic->probesize2;
+#else
+    int64_t probesize = ic->probesize;
+#endif
 
     if (!max_analyze_duration)
         max_analyze_duration = ic->max_analyze_duration;
@@ -4304,8 +4306,9 @@ int avformat_match_stream_specifier(AVFormatContext *s, AVStream *st,
     if (*spec <= '9' && *spec >= '0') /* opt:index */
         return strtol(spec, NULL, 0) == st->index;
     else if (*spec == 'v' || *spec == 'a' || *spec == 's' || *spec == 'd' ||
-             *spec == 't') { /* opt:[vasdt] */
+             *spec == 't' || *spec == 'V') { /* opt:[vasdtV] */
         enum AVMediaType type;
+        int nopic = 0;
 
         switch (*spec++) {
         case 'v': type = AVMEDIA_TYPE_VIDEO;      break;
@@ -4313,15 +4316,20 @@ int avformat_match_stream_specifier(AVFormatContext *s, AVStream *st,
         case 's': type = AVMEDIA_TYPE_SUBTITLE;   break;
         case 'd': type = AVMEDIA_TYPE_DATA;       break;
         case 't': type = AVMEDIA_TYPE_ATTACHMENT; break;
+        case 'V': type = AVMEDIA_TYPE_VIDEO; nopic = 1; break;
         default:  av_assert0(0);
         }
         if (type != st->codec->codec_type)
             return 0;
+        if (nopic && (st->disposition & AV_DISPOSITION_ATTACHED_PIC))
+            return 0;
         if (*spec++ == ':') { /* possibly followed by :index */
             int i, index = strtol(spec, NULL, 0);
             for (i = 0; i < s->nb_streams; i++)
-                if (s->streams[i]->codec->codec_type == type && index-- == 0)
-                   return i == st->index;
+                if (s->streams[i]->codec->codec_type == type &&
+                    !(nopic && (st->disposition & AV_DISPOSITION_ATTACHED_PIC)) &&
+                    index-- == 0)
+                    return i == st->index;
             return 0;
         }
         return 1;

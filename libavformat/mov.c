@@ -1710,7 +1710,7 @@ static void mov_parse_stsd_video(MOVContext *c, AVIOContext *pb,
     if ((color_depth == 2) || (color_depth == 4) || (color_depth == 8)) {
         /* for palette traversal */
         unsigned int color_start, color_count, color_end;
-        unsigned char a, r, g, b;
+        unsigned int a, r, g, b;
 
         if (color_greyscale) {
             int color_index, color_dec;
@@ -2506,7 +2506,7 @@ static int mov_read_ctts(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         av_log(c->fc, AV_LOG_TRACE, "count=%d, duration=%d\n",
                 count, duration);
 
-        if (FFABS(duration) > (1<<28) && i+2<entries) {
+        if (FFNABS(duration) < -(1<<28) && i+2<entries) {
             av_log(c->fc, AV_LOG_WARNING, "CTTS invalid\n");
             av_freep(&sc->ctts_data);
             sc->ctts_count = 0;
