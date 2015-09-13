@@ -700,7 +700,7 @@ void avpriv_color_frame(AVFrame *frame, const int c[4])
         int bytes  = is_chroma ? FF_CEIL_RSHIFT(frame->width,  desc->log2_chroma_w) : frame->width;
         int height = is_chroma ? FF_CEIL_RSHIFT(frame->height, desc->log2_chroma_h) : frame->height;
         for (y = 0; y < height; y++) {
-            if (desc->comp[0].depth_minus1 >= 8) {
+            if (desc->comp[0].depth >= 9) {
                 for (x = 0; x<bytes; x++)
                     ((uint16_t*)dst)[x] = c[p];
             }else
@@ -1227,9 +1227,9 @@ int attribute_align_arg avcodec_open2(AVCodecContext *avctx, const AVCodec *code
         goto free_and_end;
     }
 
-    // only call ff_set_dimensions() for non H.264/VP6F codecs so as not to overwrite previously setup dimensions
+    // only call ff_set_dimensions() for non H.264/VP6F/DXV codecs so as not to overwrite previously setup dimensions
     if (!(avctx->coded_width && avctx->coded_height && avctx->width && avctx->height &&
-          (avctx->codec_id == AV_CODEC_ID_H264 || avctx->codec_id == AV_CODEC_ID_VP6F))) {
+          (avctx->codec_id == AV_CODEC_ID_H264 || avctx->codec_id == AV_CODEC_ID_VP6F || avctx->codec_id == AV_CODEC_ID_DXV))) {
     if (avctx->coded_width && avctx->coded_height)
         ret = ff_set_dimensions(avctx, avctx->coded_width, avctx->coded_height);
     else if (avctx->width && avctx->height)
@@ -2095,7 +2095,8 @@ int attribute_align_arg avcodec_decode_video2(AVCodecContext *avctx, AVFrame *pi
         else {
             ret = avctx->codec->decode(avctx, picture, got_picture_ptr,
                                        &tmp);
-            picture->pkt_dts = avpkt->dts;
+            if (!(avctx->codec->caps_internal & FF_CODEC_CAP_SETS_PKT_DTS))
+                picture->pkt_dts = avpkt->dts;
 
             if(!avctx->has_b_frames){
                 av_frame_set_pkt_pos(picture, avpkt->pos);
@@ -2546,26 +2547,6 @@ static enum AVCodecID remap_deprecated_codec_id(enum AVCodecID id)
     switch(id){
         //This is for future deprecatec codec ids, its empty since
         //last major bump but will fill up again over time, please don't remove it
-//         case AV_CODEC_ID_UTVIDEO_DEPRECATED: return AV_CODEC_ID_UTVIDEO;
-        case AV_CODEC_ID_BRENDER_PIX_DEPRECATED         : return AV_CODEC_ID_BRENDER_PIX;
-        case AV_CODEC_ID_OPUS_DEPRECATED                : return AV_CODEC_ID_OPUS;
-        case AV_CODEC_ID_TAK_DEPRECATED                 : return AV_CODEC_ID_TAK;
-        case AV_CODEC_ID_PAF_AUDIO_DEPRECATED           : return AV_CODEC_ID_PAF_AUDIO;
-        case AV_CODEC_ID_PCM_S16BE_PLANAR_DEPRECATED    : return AV_CODEC_ID_PCM_S16BE_PLANAR;
-        case AV_CODEC_ID_PCM_S24LE_PLANAR_DEPRECATED    : return AV_CODEC_ID_PCM_S24LE_PLANAR;
-        case AV_CODEC_ID_PCM_S32LE_PLANAR_DEPRECATED    : return AV_CODEC_ID_PCM_S32LE_PLANAR;
-        case AV_CODEC_ID_ADPCM_VIMA_DEPRECATED          : return AV_CODEC_ID_ADPCM_VIMA;
-        case AV_CODEC_ID_ESCAPE130_DEPRECATED           : return AV_CODEC_ID_ESCAPE130;
-        case AV_CODEC_ID_EXR_DEPRECATED                 : return AV_CODEC_ID_EXR;
-        case AV_CODEC_ID_G2M_DEPRECATED                 : return AV_CODEC_ID_G2M;
-        case AV_CODEC_ID_PAF_VIDEO_DEPRECATED           : return AV_CODEC_ID_PAF_VIDEO;
-        case AV_CODEC_ID_WEBP_DEPRECATED                : return AV_CODEC_ID_WEBP;
-        case AV_CODEC_ID_HEVC_DEPRECATED                : return AV_CODEC_ID_HEVC;
-        case AV_CODEC_ID_MVC1_DEPRECATED                : return AV_CODEC_ID_MVC1;
-        case AV_CODEC_ID_MVC2_DEPRECATED                : return AV_CODEC_ID_MVC2;
-        case AV_CODEC_ID_SANM_DEPRECATED                : return AV_CODEC_ID_SANM;
-        case AV_CODEC_ID_SGIRLE_DEPRECATED              : return AV_CODEC_ID_SGIRLE;
-        case AV_CODEC_ID_VP7_DEPRECATED                 : return AV_CODEC_ID_VP7;
         default                                         : return id;
     }
 }
@@ -2725,7 +2706,7 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
                  "%s", enc->pix_fmt == AV_PIX_FMT_NONE ? "none" :
                      av_get_pix_fmt_name(enc->pix_fmt));
             if (enc->bits_per_raw_sample && enc->pix_fmt != AV_PIX_FMT_NONE &&
-                enc->bits_per_raw_sample <= av_pix_fmt_desc_get(enc->pix_fmt)->comp[0].depth_minus1)
+                enc->bits_per_raw_sample < av_pix_fmt_desc_get(enc->pix_fmt)->comp[0].depth)
                 av_strlcatf(detail, sizeof(detail), "%d bpc, ", enc->bits_per_raw_sample);
             if (enc->color_range != AVCOL_RANGE_UNSPECIFIED)
                 av_strlcatf(detail, sizeof(detail), "%s, ",

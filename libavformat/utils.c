@@ -3113,7 +3113,7 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
         max_analyze_duration        = 5*AV_TIME_BASE;
         max_subtitle_analyze_duration = 30*AV_TIME_BASE;
         if (!strcmp(ic->iformat->name, "flv"))
-            max_stream_analyze_duration = 30*AV_TIME_BASE;
+            max_stream_analyze_duration = 90*AV_TIME_BASE;
     }
 
     if (ic->pb)
@@ -3348,7 +3348,7 @@ int avformat_find_stream_info(AVFormatContext *ic, AVDictionary **options)
 
             if (t >= limit) {
                 av_log(ic, AV_LOG_VERBOSE, "max_analyze_duration %"PRId64" reached at %"PRId64" microseconds st:%d\n",
-                       max_analyze_duration,
+                       limit,
                        t, pkt->stream_index);
                 if (ic->flags & AVFMT_FLAG_NOBUFFER)
                     av_packet_unref(pkt);

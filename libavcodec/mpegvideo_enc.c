@@ -22,6 +22,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+/*
+ * non linear quantizers with large QPs and VBV with restrictive qmin fixes sponsored by NOA GmbH
+ */
+
 /**
  * @file
  * The simplest mpeg encoder (well, it was the simplest!).
