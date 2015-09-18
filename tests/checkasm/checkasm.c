@@ -60,6 +60,9 @@ static const struct {
 #if CONFIG_BSWAPDSP
     { "bswapdsp", checkasm_check_bswapdsp },
 #endif
+#if CONFIG_FLACDSP
+    { "flacdsp", checkasm_check_flacdsp },
+#endif
 #if CONFIG_H264PRED
     { "h264pred", checkasm_check_h264pred },
 #endif
@@ -68,6 +71,9 @@ static const struct {
 #endif
 #if CONFIG_V210_ENCODER
     { "v210enc", checkasm_check_v210enc },
+#endif
+#if CONFIG_VP9_DECODER
+    { "vp9dsp", checkasm_check_vp9dsp },
 #endif
     { NULL }
 };

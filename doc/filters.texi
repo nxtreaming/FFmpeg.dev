@@ -641,6 +641,41 @@ Force the output to either unsigned 8-bit or signed 16-bit stereo
 aformat=sample_fmts=u8|s16:channel_layouts=stereo
 @end example
 
+@section alimiter
+
+The limiter prevents input signal from raising over a desired threshold.
+This limiter uses lookahead technology to prevent your signal from distorting.
+It means that there is a small delay after signal is processed. Keep in mind
+that the delay it produces is the attack time you set.
+
+The filter accepts the following options:
+
+@table @option
+@item limit
+Don't let signals above this level pass the limiter. The removed amplitude is
+added automatically. Default is 1.
+
+@item attack
+The limiter will reach its attenuation level in this amount of time in
+milliseconds. Default is 5 milliseconds.
+
+@item release
+Come back from limiting to attenuation 1.0 in this amount of milliseconds.
+Default is 50 milliseconds.
+
+@item asc
+When gain reduction is always needed ASC takes care of releasing to an
+average reduction level rather than reaching a reduction of 0 in the release
+time.
+
+@item asc_level
+Select how much the release time is affected by ASC, 0 means nearly no changes
+in release time while 1 produces higher release times.
+@end table
+
+Depending on picked setting it is recommended to upsample input 2x or 4x times
+with @ref{aresample} before applying this filter.
+
 @section allpass
 
 Apply a two-pole all-pass filter with central frequency (in Hz)
@@ -1970,6 +2005,9 @@ threshold or gain).
 Controls need to be defined using the following syntax:
 c0=@var{value0}|c1=@var{value1}|c2=@var{value2}|..., where
 @var{valuei} is the value set on the @var{i}-th control.
+Alternatively they can be also defined using the following syntax:
+@var{value0}|@var{value1}|@var{value2}|..., where
+@var{valuei} is the value set on the @var{i}-th control.
 If @option{controls} is set to @code{help}, all available controls and
 their valid ranges are printed.
 
@@ -2040,6 +2078,20 @@ ladspa=file=caps:Click:c=c1=20'
 Apply @code{C* Eq10X2 - Stereo 10-band equaliser} effect:
 @example
 ladspa=caps:Eq10X2:c=c0=-48|c9=-24|c3=12|c4=2
+@end example
+
+@item
+Increase volume by 20dB using fast lookahead limiter from Steve Harris
+@code{SWH Plugins} collection:
+@example
+ladspa=fast_lookahead_limiter_1913:fastLookaheadLimiter:20|0|2
+@end example
+
+@item
+Attenuate low frequencies using Multiband EQ from Steve Harris
+@code{SWH Plugins} collection:
+@example
+ladspa=mbeq_1197:mbeq:-24|-24|-24|0|0|0|0|0|0|0|0|0|0|0|0
 @end example
 @end itemize
 
@@ -2355,6 +2407,130 @@ pressing the record button and the start of the performance:
 silenceremove=1:5:0.02
 @end example
 @end itemize
+
+@section stereotools
+
+This filter has some handy utilities to manage stereo signals, for converting
+M/S stereo recordings to L/R signal while having control over the parameters
+or spreading the stereo image of master track.
+
+The filter accepts the following options:
+
+@table @option
+@item level_in
+Set input level before filtering for both channels. Defaults is 1.
+Allowed range is from 0.015625 to 64.
+
+@item level_out
+Set output level after filtering for both channels. Defaults is 1.
+Allowed range is from 0.015625 to 64.
+
+@item balance_in
+Set input balance between both channels. Default is 0.
+Allowed range is from -1 to 1.
+
+@item balance_out
+Set output balance between both channels. Default is 0.
+Allowed range is from -1 to 1.
+
+@item softclip
+Enable softclipping. Results in analog distortion instead of harsh digital 0dB
+clipping. Disabled by default.
+
+@item mutel
+Mute the left channel. Disabled by default.
+
+@item muter
+Mute the right channel. Disabled by default.
+
+@item phasel
+Change the phase of the left channel. Disabled by default.
+
+@item phaser
+Change the phase of the right channel. Disabled by default.
+
+@item mode
+Set stereo mode. Available values are:
+
+@table @samp
+@item lr>lr
+Left/Right to Left/Right, this is default.
+
+@item lr>ms
+Left/Right to Mid/Side.
+
+@item ms>lr
+Mid/Side to Left/Right.
+
+@item lr>ll
+Left/Right to Left/Left.
+
+@item lr>rr
+Left/Right to Right/Right.
+
+@item lr>l+r
+Left/Right to Left + Right.
+
+@item lr>rl
+Left/Right to Right/Left.
+@end table
+
+@item slev
+Set level of side signal. Default is 1.
+Allowed range is from 0.015625 to 64.
+
+@item sbal
+Set balance of side signal. Default is 0.
+Allowed range is from -1 to 1.
+
+@item mlev
+Set level of the middle signal. Default is 1.
+Allowed range is from 0.015625 to 64.
+
+@item mpan
+Set middle signal pan. Default is 0. Allowed range is from -1 to 1.
+
+@item base
+Set stereo base between mono and inversed channels. Default is 0.
+Allowed range is from -1 to 1.
+
+@item delay
+Set delay in milliseconds how much to delay left from right channel and
+vice versa. Default is 0. Allowed range is from -20 to 20.
+
+@item sclevel
+Set S/C level. Default is 1. Allowed range is from 1 to 100.
+
+@item phase
+Set the stereo phase in degrees. Default is 0. Allowed range is from 0 to 360.
+@end table
+
+@section stereowiden
+
+This filter enhance the stereo effect by suppressing signal common to both
+channels and by delaying the signal of left into right and vice versa,
+thereby widening the stereo effect.
+
+The filter accepts the following options:
+
+@table @option
+@item delay
+Time in milliseconds of the delay of left signal into right and vice versa.
+Default is 20 milliseconds.
+
+@item feedback
+Amount of gain in delayed signal into right and vice versa. Gives a delay
+effect of left signal in right output and vice versa which gives widening
+effect. Default is 0.3.
+
+@item crossfeed
+Cross feed of left into right with inverted phase. This helps in suppressing
+the mono. If the value is 1 it will cancel all the signal common to both
+channels. Default is 0.3.
+
+@item drymix
+Set level of input signal of original channel. Default is 0.8.
+@end table
 
 @section treble
 
@@ -13131,6 +13307,8 @@ It accepts the following values:
 @item bhann
 @item sine
 @item nuttall
+@item lanczos
+@item gauss
 @end table
 Default is @code{hanning}.
 
@@ -13142,7 +13320,7 @@ which means optimal overlap for selected window function will be picked.
 Set time averaging. Setting this to 0 will display current maximal peaks.
 Default is @code{1}, which means time averaging is disabled.
 
-@item color
+@item colors
 Specify list of colors separated by space or by '|' which will be used to
 draw channel frequencies. Unrecognized or missing colors will be replaced
 by white color.

@@ -142,7 +142,7 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
     AVFilterContext *ctx = inlink->dst;
     LADSPAContext *s = ctx->priv;
     AVFrame *out;
-    int i, h;
+    int i, h, p;
 
     if (!s->nb_outputs ||
         (av_frame_is_writable(in) && s->nb_inputs == s->nb_outputs &&
@@ -159,13 +159,15 @@ static int filter_frame(AVFilterLink *inlink, AVFrame *in)
 
     for (h = 0; h < s->nb_handles; h++) {
         for (i = 0; i < s->nb_inputs; i++) {
+            p = s->nb_handles > 1 ? h : i;
             s->desc->connect_port(s->handles[h], s->ipmap[i],
-                                  (LADSPA_Data*)in->extended_data[i]);
+                                  (LADSPA_Data*)in->extended_data[p]);
         }
 
         for (i = 0; i < s->nb_outputs; i++) {
+            p = s->nb_handles > 1 ? h : i;
             s->desc->connect_port(s->handles[h], s->opmap[i],
-                                  (LADSPA_Data*)out->extended_data[i]);
+                                  (LADSPA_Data*)out->extended_data[p]);
         }
 
         s->desc->run(s->handles[h], in->nb_samples);
@@ -396,7 +398,7 @@ static av_cold int init(AVFilterContext *ctx)
     AVFilterPad pad = { NULL };
     char *p, *arg, *saveptr = NULL;
     unsigned long nb_ports;
-    int i;
+    int i, j = 0;
 
     if (!s->dl_name) {
         av_log(ctx, AV_LOG_ERROR, "No plugin name provided\n");
@@ -543,8 +545,11 @@ static av_cold int init(AVFilterContext *ctx)
         p = NULL;
 
         if (sscanf(arg, "c%d=%f", &i, &val) != 2) {
-            av_log(ctx, AV_LOG_ERROR, "Invalid syntax.\n");
-            return AVERROR(EINVAL);
+            if (sscanf(arg, "%f", &val) != 1) {
+                av_log(ctx, AV_LOG_ERROR, "Invalid syntax.\n");
+                return AVERROR(EINVAL);
+            }
+            i = j++;
         }
 
         if ((ret = set_control(ctx, i, val)) < 0)

@@ -52,6 +52,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(AFADE,          afade,          af);
     REGISTER_FILTER(AFORMAT,        aformat,        af);
     REGISTER_FILTER(AINTERLEAVE,    ainterleave,    af);
+    REGISTER_FILTER(ALIMITER,       alimiter,       af);
     REGISTER_FILTER(ALLPASS,        allpass,        af);
     REGISTER_FILTER(AMERGE,         amerge,         af);
     REGISTER_FILTER(AMIX,           amix,           af);
@@ -101,6 +102,8 @@ void avfilter_register_all(void)
     REGISTER_FILTER(SIDECHAINCOMPRESS, sidechaincompress, af);
     REGISTER_FILTER(SILENCEDETECT,  silencedetect,  af);
     REGISTER_FILTER(SILENCEREMOVE,  silenceremove,  af);
+    REGISTER_FILTER(STEREOTOOLS,    stereotools,    af);
+    REGISTER_FILTER(STEREOWIDEN,    stereowiden,    af);
     REGISTER_FILTER(TREBLE,         treble,         af);
     REGISTER_FILTER(VOLUME,         volume,         af);
     REGISTER_FILTER(VOLUMEDETECT,   volumedetect,   af);
