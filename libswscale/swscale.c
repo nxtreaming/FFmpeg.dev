@@ -240,6 +240,7 @@ static void lumRangeFromJpeg16_c(int16_t *_dst, int width)
         dst[i] = (dst[i]*(14071/4) + (33561947<<4)/4)>>12;
 }
 
+#ifndef NEW_FILTER
 // *** horizontal scale Y line to temp buffer
 static av_always_inline void hyscale(SwsContext *c, int16_t *dst, int dstWidth,
                                      const uint8_t *src_in[4],
@@ -311,6 +312,7 @@ static av_always_inline void hcscale(SwsContext *c, int16_t *dst1,
     if (c->chrConvertRange)
         c->chrConvertRange(dst1, dst2, dstWidth);
 }
+#endif /* NEW_FILTER */
 
 #define DEBUG_SWSCALE_BUFFERS 0
 #define DEBUG_BUFFERS(...)                      \
@@ -478,17 +480,18 @@ static int swscale(SwsContext *c, const uint8_t *src[],
     ff_init_slice_from_src(vout_slice, (uint8_t**)dst, dstStride, c->dstW,
             dstY, dstH, dstY >> c->chrDstVSubSample,
             FF_CEIL_RSHIFT(dstH, c->chrDstVSubSample));
+    if (srcSliceY == 0) {
+        hout_slice->plane[0].sliceY = lastInLumBuf + 1;
+        hout_slice->plane[1].sliceY = lastInChrBuf + 1;
+        hout_slice->plane[2].sliceY = lastInChrBuf + 1;
+        hout_slice->plane[3].sliceY = lastInLumBuf + 1;
 
-    hout_slice->plane[0].sliceY = lastInLumBuf + 1;
-    hout_slice->plane[1].sliceY = lastInChrBuf + 1;
-    hout_slice->plane[2].sliceY = lastInChrBuf + 1;
-    hout_slice->plane[3].sliceY = lastInLumBuf + 1;
-
-    hout_slice->plane[0].sliceH =
-    hout_slice->plane[1].sliceH =
-    hout_slice->plane[2].sliceH =
-    hout_slice->plane[3].sliceH = 0;
-    hout_slice->width = dstW;
+        hout_slice->plane[0].sliceH =
+        hout_slice->plane[1].sliceH =
+        hout_slice->plane[2].sliceH =
+        hout_slice->plane[3].sliceH = 0;
+        hout_slice->width = dstW;
+    }
 #endif
 
     for (; dstY < dstH; dstY++) {
@@ -524,8 +527,8 @@ static int swscale(SwsContext *c, const uint8_t *src[],
 #ifdef NEW_FILTER
             hasLumHoles = lastInLumBuf != firstLumSrcY - 1;
             if (hasLumHoles) {
-                hout_slice->plane[0].sliceY = lastInLumBuf + 1;
-                hout_slice->plane[3].sliceY = lastInLumBuf + 1;
+                hout_slice->plane[0].sliceY = firstLumSrcY;
+                hout_slice->plane[3].sliceY = firstLumSrcY;
                 hout_slice->plane[0].sliceH =
                 hout_slice->plane[3].sliceH = 0;
             }
@@ -536,8 +539,8 @@ static int swscale(SwsContext *c, const uint8_t *src[],
 #ifdef NEW_FILTER
             hasChrHoles = lastInChrBuf != firstChrSrcY - 1;
             if (hasChrHoles) {
-                hout_slice->plane[1].sliceY = lastInChrBuf + 1;
-                hout_slice->plane[2].sliceY = lastInChrBuf + 1;
+                hout_slice->plane[1].sliceY = firstChrSrcY;
+                hout_slice->plane[2].sliceY = firstChrSrcY;
                 hout_slice->plane[1].sliceH =
                 hout_slice->plane[2].sliceH = 0;
             }

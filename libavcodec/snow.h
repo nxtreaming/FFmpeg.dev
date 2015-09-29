@@ -121,7 +121,6 @@ typedef struct SnowContext{
     H264QpelContext h264qpel;
     MpegvideoEncDSPContext mpvencdsp;
     SnowDWTContext dwt;
-    const AVFrame *new_picture;
     AVFrame *input_picture;              ///< new_picture with the internal linesizes
     AVFrame *current_picture;
     AVFrame *last_picture[MAX_REF_FRAMES];
@@ -565,6 +564,8 @@ static inline int get_symbol(RangeCoder *c, uint8_t *state, int is_signed){
         e= 0;
         while(get_rac(c, state+1 + FFMIN(e,9))){ //1..10
             e++;
+            if (e > 31)
+                return AVERROR_INVALIDDATA;
         }
 
         a= 1;

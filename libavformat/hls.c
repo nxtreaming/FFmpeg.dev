@@ -495,19 +495,6 @@ static int ensure_playlist(HLSContext *c, struct playlist **pls, const char *url
     return 0;
 }
 
-static int open_in(HLSContext *c, AVIOContext **in, const char *url)
-{
-    AVDictionary *tmp = NULL;
-    int ret;
-
-    av_dict_copy(&tmp, c->avio_opts, 0);
-
-    ret = avio_open2(in, url, AVIO_FLAG_READ, c->interrupt_callback, &tmp);
-
-    av_dict_free(&tmp);
-    return ret;
-}
-
 static int url_connect(struct playlist *pls, AVDictionary *opts, AVDictionary *opts2)
 {
     AVDictionary *tmp = NULL;
@@ -516,17 +503,21 @@ static int url_connect(struct playlist *pls, AVDictionary *opts, AVDictionary *o
     av_dict_copy(&tmp, opts, 0);
     av_dict_copy(&tmp, opts2, 0);
 
-    if ((ret = av_opt_set_dict(pls->input, &tmp)) < 0)
-        goto fail;
-
-    if ((ret = ffurl_connect(pls->input, NULL)) < 0) {
+    if ((ret = ffurl_connect(pls->input, &tmp)) < 0) {
         ffurl_close(pls->input);
         pls->input = NULL;
     }
 
-fail:
     av_dict_free(&tmp);
     return ret;
+}
+
+static void update_options(char **dest, const char *name, void *src)
+{
+    av_freep(dest);
+    av_opt_get(src, name, 0, (uint8_t**)dest);
+    if (*dest && !strlen(*dest))
+        av_freep(dest);
 }
 
 static int open_url(HLSContext *c, URLContext **uc, const char *url, AVDictionary *opts)
@@ -538,6 +529,12 @@ static int open_url(HLSContext *c, URLContext **uc, const char *url, AVDictionar
     av_dict_copy(&tmp, opts, 0);
 
     ret = ffurl_open(uc, url, AVIO_FLAG_READ, c->interrupt_callback, &tmp);
+    if( ret >= 0) {
+        // update cookies on http response with setcookies.
+        URLContext *u = *uc;
+        update_options(&c->cookies, "cookies", u->priv_data);
+        av_dict_set(&opts, "cookies", c->cookies, 0);
+    }
 
     av_dict_free(&tmp);
 
@@ -962,18 +959,9 @@ static void intercept_id3(struct playlist *pls, uint8_t *buf,
         pls->is_id3_timestamped = (pls->id3_mpegts_timestamp != AV_NOPTS_VALUE);
 }
 
-static void update_options(char **dest, const char *name, void *src)
-{
-    av_freep(dest);
-    av_opt_get(src, name, 0, (uint8_t**)dest);
-    if (*dest && !strlen(*dest))
-        av_freep(dest);
-}
-
 static int open_input(HLSContext *c, struct playlist *pls)
 {
     AVDictionary *opts = NULL;
-    AVDictionary *opts2 = NULL;
     int ret;
     struct segment *seg = pls->segments[pls->cur_seq_no - pls->start_seq_no];
 
@@ -982,9 +970,6 @@ static int open_input(HLSContext *c, struct playlist *pls)
     av_dict_set(&opts, "cookies", c->cookies, 0);
     av_dict_set(&opts, "headers", c->headers, 0);
     av_dict_set(&opts, "seekable", "0", 0);
-
-    // Same opts for key request (ffurl_open mutilates the opts so it cannot be used twice)
-    av_dict_copy(&opts2, opts, 0);
 
     if (seg->size >= 0) {
         /* try to restrict the HTTP request to the part we want
@@ -1003,14 +988,12 @@ static int open_input(HLSContext *c, struct playlist *pls)
         char iv[33], key[33], url[MAX_URL_SIZE];
         if (strcmp(seg->key, pls->key_url)) {
             URLContext *uc;
-            if (open_url(pls->parent->priv_data, &uc, seg->key, opts2) == 0) {
+            if (open_url(pls->parent->priv_data, &uc, seg->key, opts) == 0) {
                 if (ffurl_read_complete(uc, pls->key, sizeof(pls->key))
                     != sizeof(pls->key)) {
                     av_log(NULL, AV_LOG_ERROR, "Unable to read key file %s\n",
                            seg->key);
                 }
-                update_options(&c->cookies, "cookies", uc->priv_data);
-                av_dict_set(&opts, "cookies", c->cookies, 0);
                 ffurl_close(uc);
             } else {
                 av_log(NULL, AV_LOG_ERROR, "Unable to open key file %s\n",
@@ -1047,7 +1030,7 @@ static int open_input(HLSContext *c, struct playlist *pls)
     /* Seek to the requested position. If this was a HTTP request, the offset
      * should already be where want it to, but this allows e.g. local testing
      * without a HTTP server. */
-    if (ret == 0 && seg->key_type == KEY_NONE) {
+    if (ret == 0 && seg->key_type == KEY_NONE && seg->url_offset) {
         int seekret = ffurl_seek(pls->input, seg->url_offset, SEEK_SET);
         if (seekret < 0) {
             av_log(pls->parent, AV_LOG_ERROR, "Unable to seek to offset %"PRId64" of HLS segment '%s'\n", seg->url_offset, seg->url);
@@ -1059,7 +1042,6 @@ static int open_input(HLSContext *c, struct playlist *pls)
 
 cleanup:
     av_dict_free(&opts);
-    av_dict_free(&opts2);
     pls->cur_seg_offset = 0;
     return ret;
 }

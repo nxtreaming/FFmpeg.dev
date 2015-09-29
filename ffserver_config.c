@@ -42,8 +42,8 @@ static void report_config_error(const char *filename, int line_num,
                                 int log_level, int *errors, const char *fmt,
                                 ...);
 
-#define ERROR(...)   report_config_error(config->filename, config->line_num,\
-                                         AV_LOG_ERROR, &config->errors,  __VA_ARGS__)
+#define ERROR(...) report_config_error(config->filename, config->line_num,\
+                                       AV_LOG_ERROR, &config->errors, __VA_ARGS__)
 #define WARNING(...) report_config_error(config->filename, config->line_num,\
                                          AV_LOG_WARNING, &config->warnings, __VA_ARGS__)
 
@@ -116,7 +116,8 @@ void ffserver_parse_acl_row(FFServerStream *stream, FFServerStream* feed,
 {
     char arg[1024];
     FFServerIPAddressACL acl;
-    int errors = 0;
+    FFServerIPAddressACL *nacl;
+    FFServerIPAddressACL **naclp;
 
     ffserver_get_arg(arg, sizeof(arg), &p);
     if (av_strcasecmp(arg, "allow") == 0)
@@ -126,7 +127,7 @@ void ffserver_parse_acl_row(FFServerStream *stream, FFServerStream* feed,
     else {
         fprintf(stderr, "%s:%d: ACL action '%s' should be ALLOW or DENY.\n",
                 filename, line_num, arg);
-        errors++;
+        goto bail;
     }
 
     ffserver_get_arg(arg, sizeof(arg), &p);
@@ -135,9 +136,10 @@ void ffserver_parse_acl_row(FFServerStream *stream, FFServerStream* feed,
         fprintf(stderr,
                 "%s:%d: ACL refers to invalid host or IP address '%s'\n",
                 filename, line_num, arg);
-        errors++;
-    } else
-        acl.last = acl.first;
+        goto bail;
+    }
+
+    acl.last = acl.first;
 
     ffserver_get_arg(arg, sizeof(arg), &p);
 
@@ -146,37 +148,37 @@ void ffserver_parse_acl_row(FFServerStream *stream, FFServerStream* feed,
             fprintf(stderr,
                     "%s:%d: ACL refers to invalid host or IP address '%s'\n",
                     filename, line_num, arg);
-            errors++;
+            goto bail;
         }
     }
 
-    if (!errors) {
-        FFServerIPAddressACL *nacl = av_mallocz(sizeof(*nacl));
-        FFServerIPAddressACL **naclp = 0;
+    nacl = av_mallocz(sizeof(*nacl));
+    naclp = 0;
 
-        acl.next = 0;
-        *nacl = acl;
+    acl.next = 0;
+    *nacl = acl;
 
-        if (stream)
-            naclp = &stream->acl;
-        else if (feed)
-            naclp = &feed->acl;
-        else if (ext_acl)
-            naclp = &ext_acl;
-        else {
-            fprintf(stderr, "%s:%d: ACL found not in <Stream> or <Feed>\n",
-                    filename, line_num);
-            errors++;
-        }
+    if (stream)
+        naclp = &stream->acl;
+    else if (feed)
+        naclp = &feed->acl;
+    else if (ext_acl)
+        naclp = &ext_acl;
+    else
+        fprintf(stderr, "%s:%d: ACL found not in <Stream> or <Feed>\n",
+                filename, line_num);
 
-        if (naclp) {
-            while (*naclp)
-                naclp = &(*naclp)->next;
+    if (naclp) {
+        while (*naclp)
+            naclp = &(*naclp)->next;
 
-            *naclp = nacl;
-        } else
-            av_free(nacl);
-    }
+        *naclp = nacl;
+    } else
+        av_free(nacl);
+
+bail:
+  return;
+
 }
 
 /* add a codec and set the default parameters */

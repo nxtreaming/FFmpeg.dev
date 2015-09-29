@@ -641,6 +641,57 @@ Force the output to either unsigned 8-bit or signed 16-bit stereo
 aformat=sample_fmts=u8|s16:channel_layouts=stereo
 @end example
 
+@section agate
+
+A gate is mainly used to reduce lower parts of a signal. This kind of signal
+processing reduces disturbing noise between useful signals.
+
+Gating is done by detecting the volume below a chosen level @var{threshold}
+and divide it by the factor set with @var{ratio}. The bottom of the noise
+floor is set via @var{range}. Because an exact manipulation of the signal
+would cause distortion of the waveform the reduction can be levelled over
+time. This is done by setting @var{attack} and @var{release}.
+
+@var{attack} determines how long the signal has to fall below the threshold
+before any reduction will occur and @var{release} sets the time the signal
+has to raise above the threshold to reduce the reduction again.
+Shorter signals than the chosen attack time will be left untouched.
+
+@table @option
+@item level_in
+Set input level before filtering.
+
+@item range
+Set the level of gain reduction when the signal is below the threshold.
+
+@item threshold
+If a signal rises above this level the gain reduction is released.
+
+@item ratio
+Set a ratio about which the signal is reduced.
+
+@item attack
+Amount of milliseconds the signal has to rise above the threshold before gain
+reduction stops.
+
+@item release
+Amount of milliseconds the signal has to fall below the threshold before the
+reduction is increased again.
+
+@item makeup
+Set amount of amplification of signal after processing.
+
+@item knee
+Curve the sharp knee around the threshold to enter gain reduction more softly.
+
+@item detection
+Choose if exact signal should be taken for detection or an RMS like one.
+
+@item link
+Choose if the average level between all channels or the louder channel affects
+the reduction.
+@end table
+
 @section alimiter
 
 The limiter prevents input signal from raising over a desired threshold.
@@ -2241,6 +2292,87 @@ At end of filtering it displays @code{track_gain} and @code{track_peak}.
 Convert the audio sample format, sample rate and channel layout. It is
 not meant to be used directly.
 
+@section rubberband
+Apply time-stretching and pitch-shifting with librubberband.
+
+The filter accepts the following options:
+
+@table @option
+@item tempo
+Set tempo scale factor.
+
+@item pitch
+Set pitch scale factor.
+
+@item transients
+Set transients detector.
+Possible values are:
+@table @var
+@item crisp
+@item mixed
+@item smooth
+@end table
+
+@item detector
+Set detector.
+Possible values are:
+@table @var
+@item compound
+@item percussive
+@item soft
+@end table
+
+@item phase
+Set phase.
+Possible values are:
+@table @var
+@item laminar
+@item independent
+@end table
+
+@item window
+Set processing window size.
+Possible values are:
+@table @var
+@item standard
+@item short
+@item long
+@end table
+
+@item smoothing
+Set smoothing.
+Possible values are:
+@table @var
+@item off
+@item on
+@end table
+
+@item formant
+Enable formant preservation when shift pitching.
+Possible values are:
+@table @var
+@item shifted
+@item preserved
+@end table
+
+@item pitchq
+Set pitch quality.
+Possible values are:
+@table @var
+@item quality
+@item speed
+@item consistency
+@end table
+
+@item channels
+Set channels.
+Possible values are:
+@table @var
+@item apart
+@item together
+@end table
+@end table
+
 @section sidechaincompress
 
 This filter acts like normal compressor but has the ability to compress
@@ -2566,6 +2698,25 @@ slope
 
 @item width, w
 Determine how steep is the filter's shelf transition.
+@end table
+
+@section tremolo
+
+Sinusoidal amplitude modulation.
+
+The filter accepts the following options:
+
+@table @option
+@item f
+Modulation frequency in Hertz. Modulation frequencies in the subharmonic range
+(20 Hz or lower) will result in a tremolo effect.
+This filter may also be used as a ring modulator by specifying
+a modulation frequency higher than 20 Hz.
+Range is 0.1 - 20000.0. Default value is 5.0 Hz.
+
+@item d
+Depth of modulation as a percentage. Range is 0.0 - 1.0.
+Default value is 0.5.
 @end table
 
 @section volume
@@ -3342,6 +3493,7 @@ of @var{all_mode}. Default value is @code{normal}.
 Available values for component modes are:
 @table @samp
 @item addition
+@item addition128
 @item and
 @item average
 @item burn
@@ -3553,6 +3705,51 @@ boxblur=2:1:cr=0:ar=0
 Set the luma and chroma radii to a fraction of the video dimension:
 @example
 boxblur=luma_radius=min(h\,w)/10:luma_power=1:chroma_radius=min(cw\,ch)/10:chroma_power=1
+@end example
+@end itemize
+
+@section chromakey
+YUV colorspace color/chroma keying.
+
+The filter accepts the following options:
+
+@table @option
+@item color
+The color which will be replaced with transparency.
+
+@item similarity
+Similarity percentage with the key color.
+
+0.01 matches only the exact key color, while 1.0 matches everything.
+
+@item blend
+Blend percentage.
+
+0.0 makes pixels either fully transparent, or not transparent at all.
+
+Higher values result in semi-transparent pixels, with a higher transparency
+the more similar the pixels color is to the key color.
+
+@item yuv
+Signals that the color passed is already in YUV instead of RGB.
+
+Litteral colors like "green" or "red" don't make sense with this enabled anymore.
+This can be used to pass exact YUV values as hexadecimal numbers.
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Make every green pixel in the input image transparent:
+@example
+ffmpeg -i input.png -vf chromakey=green out.png
+@end example
+
+@item
+Overlay a greenscreen-video on top of a static black background.
+@example
+ffmpeg -f lavfi -i color=c=black:s=1280x720 -i video.mp4 -shortest -filter_complex "[1:v]chromakey=0x70de77:0.1:0.2[ckout];[0:v][ckout]overlay[out]" -map "[out]" output.mkv
 @end example
 @end itemize
 
@@ -5309,7 +5506,7 @@ The filter accepts the following options:
 @table @option
 @item contrast
 Set the contrast expression. The value must be a float value in range
-@code{-2.0} to @code{2.0}. The default value is "0".
+@code{-2.0} to @code{2.0}. The default value is "1".
 
 @item brightness
 Set the brightness expression. The value must be a float value in
@@ -7428,6 +7625,69 @@ lutyuv=y='bitand(val, 128+64+32)'
 @end example
 @end itemize
 
+@section maskedmerge
+
+Merge the first input stream with the second input stream using per pixel
+weights in the third input stream.
+
+A value of 0 in the third stream pixel component means that pixel component
+from first stream is returned unchanged, while maximum value (eg. 255 for
+8-bit videos) means that pixel component from second stream is returned
+unchanged. Intermediate values define the amount of merging between both
+input stream's pixel components.
+
+This filter accepts the following options:
+@table @option
+@item planes
+Set which planes will be processed as bitmap, unprocessed planes will be
+copied from first stream.
+By default value 0xf, all planes will be processed.
+@end table
+
+@section mcdeint
+
+Apply motion-compensation deinterlacing.
+
+It needs one field per frame as input and must thus be used together
+with yadif=1/3 or equivalent.
+
+This filter accepts the following options:
+@table @option
+@item mode
+Set the deinterlacing mode.
+
+It accepts one of the following values:
+@table @samp
+@item fast
+@item medium
+@item slow
+use iterative motion estimation
+@item extra_slow
+like @samp{slow}, but use multiple reference frames.
+@end table
+Default value is @samp{fast}.
+
+@item parity
+Set the picture field parity assumed for the input video. It must be
+one of the following values:
+
+@table @samp
+@item 0, tff
+assume top field first
+@item 1, bff
+assume bottom field first
+@end table
+
+Default value is @samp{bff}.
+
+@item qp
+Set per-block quantization parameter (QP) used by the internal
+encoder.
+
+Higher values should result in a smoother motion vector field but less
+optimal individual vectors. Default value is 1.
+@end table
+
 @section mergeplanes
 
 Merge color channel components from several video streams.
@@ -7486,50 +7746,6 @@ Cast a rgb24 clip to yuv444p:
 format=rgb24,mergeplanes=0x000102:yuv444p
 @end example
 @end itemize
-
-@section mcdeint
-
-Apply motion-compensation deinterlacing.
-
-It needs one field per frame as input and must thus be used together
-with yadif=1/3 or equivalent.
-
-This filter accepts the following options:
-@table @option
-@item mode
-Set the deinterlacing mode.
-
-It accepts one of the following values:
-@table @samp
-@item fast
-@item medium
-@item slow
-use iterative motion estimation
-@item extra_slow
-like @samp{slow}, but use multiple reference frames.
-@end table
-Default value is @samp{fast}.
-
-@item parity
-Set the picture field parity assumed for the input video. It must be
-one of the following values:
-
-@table @samp
-@item 0, tff
-assume top field first
-@item 1, bff
-assume bottom field first
-@end table
-
-Default value is @samp{bff}.
-
-@item qp
-Set per-block quantization parameter (QP) used by the internal
-encoder.
-
-Higher values should result in a smoother motion vector field but less
-optimal individual vectors. Default value is 1.
-@end table
 
 @section mpdecimate
 
