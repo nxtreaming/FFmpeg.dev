@@ -19,7 +19,7 @@
  */
 
 /**
- * @file
+ * @file: ffplay.c
  * simple media player based on the FFmpeg libraries
  */
 
