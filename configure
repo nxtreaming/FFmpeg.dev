@@ -1332,18 +1332,37 @@ cp_if_changed(){
 # CONFIG_LIST contains configurable options, while HAVE_LIST is for
 # system-dependent things.
 
-COMPONENT_LIST="
+AVCODEC_COMPONENTS="
     bsfs
     decoders
-    demuxers
     encoders
-    filters
     hwaccels
-    indevs
-    muxers
-    outdevs
     parsers
+"
+
+AVDEVICE_COMPONENTS="
+    indevs
+    outdevs
+"
+AVFILTER_COMPONENTS="
+    filters
+"
+AVFORMAT_COMPONENTS="
+    demuxers
+    muxers
     protocols
+"
+
+AVRESAMPLE_COMPONENTS=""
+AVUTIL_COMPONENTS=""
+
+COMPONENT_LIST="
+    $AVCODEC_COMPONENTS
+    $AVDEVICE_COMPONENTS
+    $AVFILTER_COMPONENTS
+    $AVFORMAT_COMPONENTS
+    $AVRESAMPLE_COMPONENTS
+    $AVUTIL_COMPONENTS
 "
 
 EXAMPLE_LIST="
@@ -1885,6 +1904,7 @@ HAVE_LIST="
     dos_paths
     dxva2api_cobj
     dxva2_lib
+    winrt
     libc_msvcrt
     libdc1394_1
     libdc1394_2
@@ -2400,7 +2420,7 @@ vda_deps="VideoDecodeAcceleration_VDADecoder_h pthreads"
 vda_extralibs="-framework CoreFoundation -framework VideoDecodeAcceleration -framework QuartzCore"
 vdpau_deps="vdpau_vdpau_h vdpau_vdpau_x11_h"
 videotoolbox_deps="VideoToolbox_VideoToolbox_h pthreads"
-videotoolbox_extralibs="-framework CoreFoundation -framework VideoToolbox -framework CoreMedia -framework QuartzCore"
+videotoolbox_extralibs="-framework CoreFoundation -framework VideoToolbox -framework CoreMedia -framework QuartzCore -framework CoreVideo"
 xvmc_deps="X11_extensions_XvMClib_h"
 
 h263_vaapi_hwaccel_deps="vaapi"
@@ -2984,7 +3004,7 @@ target_path='$(CURDIR)'
 
 # since the object filename is not given with the -MM flag, the compiler
 # is only able to print the basename, and we must add the path ourselves
-DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< 2>/dev/null | sed -e "/^\#.*/d" -e "s,^[[:space:]]*$(*F)\\.o,$(@D)/$(*F).o," > $(@:.o=.d)'
+DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< 2>/dev/null | sed -e "/^\#.*/d" -e "s,^[[:space:]]*$(@F),$(@D)/$(@F)," > $(@:.o=.d)'
 DEPFLAGS='-MM'
 
 # find source path
@@ -3175,6 +3195,18 @@ for e in $env; do
 done
 
 disabled logging && logfile=/dev/null
+
+# Disable all the library-specific components if the library itself
+# is disabled, see AVCODEC_LIST and following _LIST variables.
+
+disable_components(){
+    disabled ${1} && disable $(
+        eval components="\$$(toupper ${1})_COMPONENTS"
+        map 'eval echo \${$(toupper ${v%s})_LIST}' $components
+    )
+}
+
+map 'disable_components $v' $LIBRARY_LIST
 
 echo "# $0 $FFMPEG_CONFIGURATION" > $logfile
 set >> $logfile
@@ -3590,7 +3622,8 @@ probe_cc(){
         gcc_ext_ver=$(expr "$gcc_version" : ".*$gcc_pkg_ver $gcc_basever \\(.*\\)")
         _ident=$(cleanws "gcc $gcc_basever $gcc_pkg_ver $gcc_ext_ver")
         case $gcc_basever in
-            2*) _depflags='-MMD -MF $(@:.o=.d) -MT $@' ;;
+            2*) ;;
+            *) _depflags='-MMD -MF $(@:.o=.d) -MT $@' ;;
         esac
         if [ "$first" = true ]; then
             case $gcc_basever in
@@ -4098,6 +4131,15 @@ elif enabled mips; then
             disable mips64r6
             disable msa
         ;;
+        *)
+            disable mipsfpu
+            disable mips32r2
+            disable mips32r5
+            disable mips64r6
+            disable mipsdspr1
+            disable mipsdspr2
+            disable msa
+        ;;
     esac
 
 elif enabled ppc; then
@@ -4321,6 +4363,7 @@ case $target_os in
             echo "hwcap_1 = OVERRIDE;" > mapfile &&
             add_ldflags -Wl,-M,mapfile
         nm_default='nm -P -g'
+        SLIB_CREATE_DEF_CMD='$(Q)perl $(SRC_PATH)/compat/solaris/make_sunver.pl $$(filter %.ver,$$^) $(OBJS) | grep -v @ > $(SUBDIR)lib$(NAME).ver-sol2'
         ;;
     netbsd)
         disable symver
@@ -5203,9 +5246,15 @@ check_type "va/va.h" "VAPictureParameterBufferHEVC"
 
 check_type "vdpau/vdpau.h" "VdpPictureInfoHEVC"
 
+check_cpp_condition windows.h "!WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)" && enable winrt || disable winrt
+
 if ! disabled w32threads && ! enabled pthreads; then
     check_func_headers "windows.h process.h" _beginthreadex &&
         enable w32threads || disable w32threads
+    if ! enabled w32threads && enabled winrt; then
+        check_func_headers "windows.h" CreateThread &&
+            enable w32threads || disable w32threads
+    fi
 fi
 
 # check for some common methods of building with pthread support
@@ -5640,10 +5689,14 @@ enabled xmm_clobber_test &&
                   -Wl,--wrap,sws_scale ||
     disable xmm_clobber_test
 
-echo "X{};" > $TMPV
+echo "X { local: *; };" > $TMPV
 if test_ldflags -Wl,--version-script,$TMPV; then
     append SHFLAGS '-Wl,--version-script,\$(SUBDIR)lib\$(NAME).ver'
-    check_cc <<EOF && enable symver_asm_label
+elif test_ldflags -Wl,-M,$TMPV; then
+    append SHFLAGS '-Wl,-M,\$(SUBDIR)lib\$(NAME).ver-sol2'
+fi
+
+check_cc <<EOF && enable symver_asm_label
 void ff_foo(void) __asm__ ("av_foo@VERSION");
 void ff_foo(void) { ${inline_asm+__asm__($quotes);} }
 EOF
@@ -5651,7 +5704,6 @@ EOF
 __asm__(".symver ff_foo,av_foo@VERSION");
 void ff_foo(void) {}
 EOF
-fi
 
 if [ -z "$optflags" ]; then
     if enabled small; then

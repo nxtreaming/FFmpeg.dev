@@ -241,7 +241,7 @@ enum AVCodecID {
     AV_CODEC_ID_ANM,
     AV_CODEC_ID_BINKVIDEO,
     AV_CODEC_ID_IFF_ILBM,
-    AV_CODEC_ID_IFF_BYTERUN1,
+#define AV_CODEC_ID_IFF_BYTERUN1 AV_CODEC_ID_IFF_ILBM
     AV_CODEC_ID_KGV1,
     AV_CODEC_ID_YOP,
     AV_CODEC_ID_VP8,
@@ -393,6 +393,7 @@ enum AVCodecID {
     AV_CODEC_ID_ADPCM_IMA_RAD,
     AV_CODEC_ID_ADPCM_G726LE,
     AV_CODEC_ID_ADPCM_THP_LE,
+    AV_CODEC_ID_ADPCM_PSX,
 
     /* AMR */
     AV_CODEC_ID_AMR_NB = 0x12000,
@@ -540,6 +541,7 @@ enum AVCodecID {
     AV_CODEC_ID_MPEG4SYSTEMS = 0x20001, /**< _FAKE_ codec to indicate a MPEG-4 Systems
                                 * stream (only used by libavformat) */
     AV_CODEC_ID_FFMETADATA = 0x21000,   ///< Dummy codec for streams containing only metadata information.
+    AV_CODEC_ID_WRAPPED_AVFRAME = 0x21001, ///< Passthrough codec, AVFrames wrapped in AVPacket
 };
 
 /**
@@ -5026,6 +5028,11 @@ typedef struct AVBitStreamFilterContext {
     struct AVBitStreamFilter *filter;
     AVCodecParserContext *parser;
     struct AVBitStreamFilterContext *next;
+    /**
+     * Internal default arguments, used if NULL is passed to av_bitstream_filter_filter().
+     * Not for access by library users.
+     */
+    char *args;
 } AVBitStreamFilterContext;
 
 

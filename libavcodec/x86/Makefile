@@ -56,6 +56,7 @@ OBJS-$(CONFIG_PRORES_DECODER)          += x86/proresdsp_init.o
 OBJS-$(CONFIG_PRORES_LGPL_DECODER)     += x86/proresdsp_init.o
 OBJS-$(CONFIG_RV40_DECODER)            += x86/rv40dsp_init.o
 OBJS-$(CONFIG_SVQ1_ENCODER)            += x86/svq1enc_init.o
+OBJS-$(CONFIG_TAK_DECODER)             += x86/takdsp_init.o
 OBJS-$(CONFIG_TRUEHD_DECODER)          += x86/mlpdsp_init.o
 OBJS-$(CONFIG_TTA_DECODER)             += x86/ttadsp_init.o
 OBJS-$(CONFIG_V210_DECODER)            += x86/v210-init.o
@@ -125,6 +126,7 @@ YASM-OBJS-$(CONFIG_QPELDSP)            += x86/qpeldsp.o                 \
                                           x86/fpel.o                    \
                                           x86/qpel.o
 YASM-OBJS-$(CONFIG_RV34DSP)            += x86/rv34dsp.o
+YASM-OBJS-$(CONFIG_IDCTDSP)            += x86/simple_idct10.o
 YASM-OBJS-$(CONFIG_VIDEODSP)           += x86/videodsp.o
 YASM-OBJS-$(CONFIG_VP3DSP)             += x86/vp3dsp.o
 YASM-OBJS-$(CONFIG_VP8DSP)             += x86/vp8dsp.o                  \
@@ -152,6 +154,7 @@ YASM-OBJS-$(CONFIG_PRORES_DECODER)     += x86/proresdsp.o
 YASM-OBJS-$(CONFIG_PRORES_LGPL_DECODER) += x86/proresdsp.o
 YASM-OBJS-$(CONFIG_RV40_DECODER)       += x86/rv40dsp.o
 YASM-OBJS-$(CONFIG_SVQ1_ENCODER)       += x86/svq1enc.o
+YASM-OBJS-$(CONFIG_TAK_DECODER)        += x86/takdsp.o
 YASM-OBJS-$(CONFIG_TRUEHD_DECODER)     += x86/mlpdsp.o
 YASM-OBJS-$(CONFIG_TTA_DECODER)        += x86/ttadsp.o
 YASM-OBJS-$(CONFIG_V210_ENCODER)       += x86/v210enc.o
@@ -162,6 +165,7 @@ YASM-OBJS-$(CONFIG_VP6_DECODER)        += x86/vp6dsp.o
 YASM-OBJS-$(CONFIG_VP9_DECODER)        += x86/vp9intrapred.o            \
                                           x86/vp9intrapred_16bpp.o      \
                                           x86/vp9itxfm.o                \
+                                          x86/vp9itxfm_16bpp.o          \
                                           x86/vp9lpf.o                  \
                                           x86/vp9lpf_16bpp.o            \
                                           x86/vp9mc.o                   \

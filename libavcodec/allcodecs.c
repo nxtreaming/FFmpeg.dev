@@ -203,7 +203,6 @@ void avcodec_register_all(void)
     REGISTER_DECODER(HQX,               hqx);
     REGISTER_ENCDEC (HUFFYUV,           huffyuv);
     REGISTER_DECODER(IDCIN,             idcin);
-    REGISTER_DECODER(IFF_BYTERUN1,      iff_byterun1);
     REGISTER_DECODER(IFF_ILBM,          iff_ilbm);
     REGISTER_DECODER(INDEO2,            indeo2);
     REGISTER_DECODER(INDEO3,            indeo3);
@@ -338,6 +337,7 @@ void avcodec_register_all(void)
     REGISTER_DECODER(VP9,               vp9);
     REGISTER_DECODER(VQA,               vqa);
     REGISTER_DECODER(WEBP,              webp);
+    REGISTER_ENCODER(WRAPPED_AVFRAME,   wrapped_avframe);
     REGISTER_ENCDEC (WMV1,              wmv1);
     REGISTER_ENCDEC (WMV2,              wmv2);
     REGISTER_DECODER(WMV3,              wmv3);
@@ -509,6 +509,7 @@ void avcodec_register_all(void)
     REGISTER_ENCDEC (ADPCM_IMA_WAV,     adpcm_ima_wav);
     REGISTER_DECODER(ADPCM_IMA_WS,      adpcm_ima_ws);
     REGISTER_ENCDEC (ADPCM_MS,          adpcm_ms);
+    REGISTER_DECODER(ADPCM_PSX,         adpcm_psx);
     REGISTER_DECODER(ADPCM_SBPRO_2,     adpcm_sbpro_2);
     REGISTER_DECODER(ADPCM_SBPRO_3,     adpcm_sbpro_3);
     REGISTER_DECODER(ADPCM_SBPRO_4,     adpcm_sbpro_4);

@@ -15,6 +15,13 @@ libavutil:     2015-08-28
 
 API changes, most recent first:
 
+2015-10-15 - xxxxxxx - lavf 57.4.100
+  Remove the latm demuxer that was a duplicate of the loas demuxer.
+
+2015-10-14 - xxxxxxx - lavu 55.4.100 / lavu 55.2.0 - dict.h
+  Change return type of av_dict_copy() from void to int, so that a proper
+  error code can be reported.
+
 2015-09-29 - xxxxxxx - lavc 57.3.100 / lavc 57.2.0 - avcodec.h
   Change type of AVPacket.duration from int to int64_t.
 
@@ -1051,9 +1058,6 @@ lavd 54.4.100 / 54.0.0, lavfi 3.5.0
 
 2012-11-11 - 03b0787 / 5980f5d - lavu 52.6.100 / 52.2.0 - audioconvert.h
   Rename audioconvert.h to channel_layout.h. audioconvert.h is now deprecated.
-
-2012-11-05 - 7d26be6 / dfde8a3 - lavu 52.5.100 / 52.1.0 - intmath.h
-  Add av_ctz() for trailing zero bit count
 
 2012-10-21 - e3a91c5 / a893655 - lavu 51.77.100 / 51.45.0 - error.h
   Add AVERROR_EXPERIMENTAL

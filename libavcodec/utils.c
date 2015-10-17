@@ -409,7 +409,7 @@ void avcodec_align_dimensions2(AVCodecContext *s, int *width, int *height,
         break;
     }
 
-    if (s->codec_id == AV_CODEC_ID_IFF_ILBM || s->codec_id == AV_CODEC_ID_IFF_BYTERUN1) {
+    if (s->codec_id == AV_CODEC_ID_IFF_ILBM) {
         w_align = FFMAX(w_align, 8);
     }
 
@@ -3063,6 +3063,7 @@ int av_get_audio_frame_duration(AVCodecContext *avctx, int frame_bytes)
             switch (id) {
             case AV_CODEC_ID_ADPCM_AFC:
                 return frame_bytes / (9 * ch) * 16;
+            case AV_CODEC_ID_ADPCM_PSX:
             case AV_CODEC_ID_ADPCM_DTK:
                 return frame_bytes / (16 * ch) * 28;
             case AV_CODEC_ID_ADPCM_4XM:
@@ -3266,7 +3267,7 @@ int av_lockmgr_register(int (*cb)(void **mutex, enum AVLockOp op))
 
 int ff_lock_avcodec(AVCodecContext *log_ctx, const AVCodec *codec)
 {
-    if (codec->caps_internal & FF_CODEC_CAP_INIT_THREADSAFE)
+    if (codec->caps_internal & FF_CODEC_CAP_INIT_THREADSAFE || !codec->init)
         return 0;
 
     if (lockmgr_cb) {
@@ -3292,7 +3293,7 @@ int ff_lock_avcodec(AVCodecContext *log_ctx, const AVCodec *codec)
 
 int ff_unlock_avcodec(const AVCodec *codec)
 {
-    if (codec->caps_internal & FF_CODEC_CAP_INIT_THREADSAFE)
+    if (codec->caps_internal & FF_CODEC_CAP_INIT_THREADSAFE || !codec->init)
         return 0;
 
     av_assert0(ff_avcodec_locked);

@@ -312,7 +312,6 @@ OBJS-$(CONFIG_HUFFYUV_DECODER)         += huffyuv.o huffyuvdec.o
 OBJS-$(CONFIG_HUFFYUV_ENCODER)         += huffyuv.o huffyuvenc.o
 OBJS-$(CONFIG_IDCIN_DECODER)           += idcinvideo.o
 OBJS-$(CONFIG_IDF_DECODER)             += bintext.o cga_data.o
-OBJS-$(CONFIG_IFF_BYTERUN1_DECODER)    += iff.o
 OBJS-$(CONFIG_IFF_ILBM_DECODER)        += iff.o
 OBJS-$(CONFIG_IMC_DECODER)             += imc.o
 OBJS-$(CONFIG_INDEO2_DECODER)          += indeo2.o
@@ -491,7 +490,7 @@ OBJS-$(CONFIG_SVQ1_ENCODER)            += svq1enc.o svq1.o    \
                                           h263.o ituh263enc.o
 OBJS-$(CONFIG_SVQ3_DECODER)            += svq3.o svq13.o mpegutils.o
 OBJS-$(CONFIG_TEXT_DECODER)            += textdec.o ass.o
-OBJS-$(CONFIG_TAK_DECODER)             += takdec.o tak.o
+OBJS-$(CONFIG_TAK_DECODER)             += takdec.o tak.o takdsp.o
 OBJS-$(CONFIG_TARGA_DECODER)           += targa.o
 OBJS-$(CONFIG_TARGA_ENCODER)           += targaenc.o rle.o
 OBJS-$(CONFIG_TARGA_Y216_DECODER)      += targa_y216dec.o
@@ -571,6 +570,7 @@ OBJS-$(CONFIG_WMV2_ENCODER)            += wmv2enc.o wmv2.o \
                                           msmpeg4.o msmpeg4enc.o msmpeg4data.o
 OBJS-$(CONFIG_WNV1_DECODER)            += wnv1.o
 OBJS-$(CONFIG_WS_SND1_DECODER)         += ws-snd1.o
+OBJS-$(CONFIG_WRAPPED_AVFRAME_ENCODER) += wrapped_avframe.o
 OBJS-$(CONFIG_XAN_DPCM_DECODER)        += dpcm.o
 OBJS-$(CONFIG_XAN_WC3_DECODER)         += xan.o
 OBJS-$(CONFIG_XAN_WC4_DECODER)         += xxan.o
@@ -687,6 +687,7 @@ OBJS-$(CONFIG_ADPCM_IMA_WAV_ENCODER)      += adpcmenc.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_IMA_WS_DECODER)       += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_MS_DECODER)           += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_MS_ENCODER)           += adpcmenc.o adpcm_data.o
+OBJS-$(CONFIG_ADPCM_PSX_DECODER)          += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_SBPRO_2_DECODER)      += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_SBPRO_3_DECODER)      += adpcm.o adpcm_data.o
 OBJS-$(CONFIG_ADPCM_SBPRO_4_DECODER)      += adpcm.o adpcm_data.o
@@ -916,6 +917,8 @@ SKIPHEADERS                            += %_tablegen.h                  \
                                           tableprint_vlc.h              \
                                           aaccoder_twoloop.h            \
                                           aaccoder_trellis.h            \
+                                          aacenc_quantization.h         \
+                                          aacenc_quantization_misc.h    \
                                           $(ARCH)/vp56_arith.h          \
 
 SKIPHEADERS-$(CONFIG_D3D11VA)          += d3d11va.h dxva2_internal.h
@@ -957,7 +960,6 @@ HOSTPROGS = aac_tablegen                                                \
             aacps_fixed_tablegen                                        \
             aacsbr_tablegen                                             \
             aacsbr_fixed_tablegen                                       \
-            cabac_tablegen                                              \
             cbrt_tablegen                                               \
             cbrt_fixed_tablegen                                         \
             cos_tablegen                                                \
@@ -987,7 +989,7 @@ else
 $(SUBDIR)%_tablegen$(HOSTEXESUF): HOSTCFLAGS += -DCONFIG_SMALL=0
 endif
 
-GEN_HEADERS = cabac_tables.h cbrt_tables.h cbrt_fixed_tables.h aacps_tables.h aacps_fixed_tables.h aacsbr_tables.h \
+GEN_HEADERS = cbrt_tables.h cbrt_fixed_tables.h aacps_tables.h aacps_fixed_tables.h aacsbr_tables.h \
               aacsbr_fixed_tables.h aac_tables.h dsd_tables.h dv_tables.h     \
               sinewin_tables.h sinewin_fixed_tables.h mpegaudio_tables.h motionpixels_tables.h \
               pcm_tables.h qdm2_tables.h
@@ -1005,7 +1007,6 @@ $(SUBDIR)aacsbr.o: $(SUBDIR)aacsbr_tables.h
 $(SUBDIR)aacsbr_fixed.o: $(SUBDIR)aacsbr_fixed_tables.h
 $(SUBDIR)aactab.o: $(SUBDIR)aac_tables.h
 $(SUBDIR)aactab_fixed.o: $(SUBDIR)aac_fixed_tables.h
-$(SUBDIR)cabac.o: $(SUBDIR)cabac_tables.h
 $(SUBDIR)dsddec.o: $(SUBDIR)dsd_tables.h
 $(SUBDIR)dvenc.o: $(SUBDIR)dv_tables.h
 $(SUBDIR)sinewin.o: $(SUBDIR)sinewin_tables.h
