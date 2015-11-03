@@ -673,7 +673,7 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, OutputStream *ost)
      */
     if (!(avctx->codec_type == AVMEDIA_TYPE_VIDEO && avctx->codec)) {
         if (ost->frame_number >= ost->max_frames) {
-            av_free_packet(pkt);
+            av_packet_unref(pkt);
             return;
         }
         ost->frame_number++;
@@ -720,7 +720,7 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, OutputStream *ost)
         if (a > 0) {
             pkt->side_data = NULL;
             pkt->side_data_elems = 0;
-            av_free_packet(pkt);
+            av_packet_unref(pkt);
             new_pkt.buf = av_buffer_create(new_pkt.data, new_pkt.size,
                                            av_buffer_default_free, NULL, 0);
             if (!new_pkt.buf)
@@ -797,7 +797,7 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, OutputStream *ost)
         main_return_code = 1;
         close_all_output_streams(ost, MUXER_FINISHED | ENCODER_FINISHED, ENCODER_FINISHED);
     }
-    av_free_packet(pkt);
+    av_packet_unref(pkt);
 }
 
 static void close_output_stream(OutputStream *ost)
@@ -1264,7 +1264,7 @@ static void do_video_out(AVFormatContext *s,
 
 static double psnr(double d)
 {
-    return -10.0 * log(d) / log(10.0);
+    return -10.0 * log10(d);
 }
 
 static void do_video_stats(OutputStream *ost, int frame_size)
@@ -1774,7 +1774,7 @@ static void flush_encoders(void)
                     break;
                 }
                 if (ost->finished & MUXER_FINISHED) {
-                    av_free_packet(&pkt);
+                    av_packet_unref(&pkt);
                     continue;
                 }
                 av_packet_rescale_ts(&pkt, enc->time_base, ost->st->time_base);
@@ -1945,6 +1945,22 @@ int guess_input_channel_layout(InputStream *ist)
     return 1;
 }
 
+static void check_decode_result(InputStream *ist, int *got_output, int ret)
+{
+    if (*got_output || ret<0)
+        decode_error_stat[ret<0] ++;
+
+    if (ret < 0 && exit_on_error)
+        exit_program(1);
+
+    if (exit_on_error && *got_output && ist) {
+        if (av_frame_get_decode_error_flags(ist->decoded_frame) || (ist->decoded_frame->flags & AV_FRAME_FLAG_CORRUPT)) {
+            av_log(NULL, AV_LOG_FATAL, "%s: corrupt decoded frame in stream %d\n", input_files[ist->file_index]->ctx->filename, ist->st->index);
+            exit_program(1);
+        }
+    }
+}
+
 static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output)
 {
     AVFrame *decoded_frame, *f;
@@ -1967,11 +1983,7 @@ static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output)
         ret = AVERROR_INVALIDDATA;
     }
 
-    if (*got_output || ret<0)
-        decode_error_stat[ret<0] ++;
-
-    if (ret < 0 && exit_on_error)
-        exit_program(1);
+    check_decode_result(ist, got_output, ret);
 
     if (!*got_output || ret < 0)
         return ret;
@@ -2108,11 +2120,7 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output)
                    ist->st->codec->has_b_frames);
     }
 
-    if (*got_output || ret<0)
-        decode_error_stat[ret<0] ++;
-
-    if (ret < 0 && exit_on_error)
-        exit_program(1);
+    check_decode_result(ist, got_output, ret);
 
     if (*got_output && ret >= 0) {
         if (ist->dec_ctx->width  != decoded_frame->width ||
@@ -2220,11 +2228,7 @@ static int transcode_subtitles(InputStream *ist, AVPacket *pkt, int *got_output)
     int i, ret = avcodec_decode_subtitle2(ist->dec_ctx,
                                           &subtitle, got_output, pkt);
 
-    if (*got_output || ret<0)
-        decode_error_stat[ret<0] ++;
-
-    if (ret < 0 && exit_on_error)
-        exit_program(1);
+    check_decode_result(NULL, got_output, ret);
 
     if (ret < 0 || !*got_output) {
         if (!pkt->size)
@@ -3028,6 +3032,11 @@ static int transcode_init(void)
 
             set_encoder_id(output_files[ost->file_index], ost);
 
+#if CONFIG_LIBMFX
+            if (qsv_transcode_init(ost))
+                exit_program(1);
+#endif
+
             if (!ost->filter &&
                 (enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO ||
                  enc_ctx->codec_type == AVMEDIA_TYPE_AUDIO)) {
@@ -3518,7 +3527,6 @@ static void *input_thread(void *arg)
             av_thread_message_queue_set_err_recv(f->in_thread_queue, ret);
             break;
         }
-        av_dup_packet(&pkt);
         ret = av_thread_message_queue_send(f->in_thread_queue, &pkt, flags);
         if (flags && ret == AVERROR(EAGAIN)) {
             flags = 0;
@@ -3533,7 +3541,7 @@ static void *input_thread(void *arg)
                 av_log(f->ctx, AV_LOG_ERROR,
                        "Unable to send packet to main thread: %s\n",
                        av_err2str(ret));
-            av_free_packet(&pkt);
+            av_packet_unref(&pkt);
             av_thread_message_queue_set_err_recv(f->in_thread_queue, ret);
             break;
         }
@@ -3554,7 +3562,7 @@ static void free_input_threads(void)
             continue;
         av_thread_message_queue_set_err_send(f->in_thread_queue, AVERROR_EOF);
         while (av_thread_message_queue_recv(f->in_thread_queue, &pkt, 0) >= 0)
-            av_free_packet(&pkt);
+            av_packet_unref(&pkt);
 
         pthread_join(f->thread, NULL);
         f->joined = 1;
@@ -3710,7 +3718,8 @@ static int seek_to_start(InputFile *ifile, AVFormatContext *is)
                                         ifile->time_base);
     }
 
-    ifile->loop--;
+    if (ifile->loop > 0)
+        ifile->loop--;
 
     return ret;
 }
@@ -3738,7 +3747,7 @@ static int process_input(int file_index)
         ifile->eagain = 1;
         return ret;
     }
-    if ((ret < 0) && (ifile->loop > 1)) {
+    if (ret < 0 && ifile->loop) {
         if ((ret = seek_to_start(ifile, is)) < 0)
             return ret;
         ret = get_input_packet(ifile, &pkt);
@@ -3794,6 +3803,11 @@ static int process_input(int file_index)
 
     if (ist->discard)
         goto discard_packet;
+
+    if (exit_on_error && (pkt.flags & AV_PKT_FLAG_CORRUPT)) {
+        av_log(NULL, AV_LOG_FATAL, "%s: corrupt input packet in stream %d\n", is->filename, pkt.stream_index);
+        exit_program(1);
+    }
 
     if (debug_ts) {
         av_log(NULL, AV_LOG_INFO, "demuxer -> ist_index:%d type:%s "
@@ -3961,7 +3975,7 @@ static int process_input(int file_index)
 
     ret = 0;
 discard_packet:
-    av_free_packet(&pkt);
+    av_packet_unref(&pkt);
 
     return ret;
 }
@@ -4069,6 +4083,7 @@ static int transcode(void)
     OutputStream *ost;
     InputStream *ist;
     int64_t timer_start;
+    int64_t total_packets_written = 0;
 
     ret = transcode_init();
     if (ret < 0)
@@ -4133,7 +4148,11 @@ static int transcode(void)
     /* write the trailer if needed and close file */
     for (i = 0; i < nb_output_files; i++) {
         os = output_files[i]->ctx;
-        av_write_trailer(os);
+        if ((ret = av_write_trailer(os)) < 0) {
+            av_log(NULL, AV_LOG_ERROR, "Error writing trailer of %s: %s", os->filename, av_err2str(ret));
+            if (exit_on_error)
+                exit_program(1);
+        }
     }
 
     /* dump report by using the first video and audio streams */
@@ -4145,6 +4164,12 @@ static int transcode(void)
         if (ost->encoding_needed) {
             av_freep(&ost->enc_ctx->stats_in);
         }
+        total_packets_written += ost->packets_written;
+    }
+
+    if (!total_packets_written && (abort_on_flags & ABORT_ON_FLAG_EMPTY_OUTPUT)) {
+        av_log(NULL, AV_LOG_FATAL, "Empty output\n");
+        exit_program(1);
     }
 
     /* close each decoder */

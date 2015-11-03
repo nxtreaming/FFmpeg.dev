@@ -2719,6 +2719,22 @@ Depth of modulation as a percentage. Range is 0.0 - 1.0.
 Default value is 0.5.
 @end table
 
+@section vibrato
+
+Sinusoidal phase modulation.
+
+The filter accepts the following options:
+
+@table @option
+@item f
+Modulation frequency in Hertz.
+Range is 0.1 - 20000.0. Default value is 5.0 Hz.
+
+@item d
+Depth of modulation as a percentage. Range is 0.0 - 1.0.
+Default value is 0.5.
+@end table
+
 @section volume
 
 Adjust the input audio volume.
@@ -8939,7 +8955,8 @@ The description of the accepted parameters follows.
 @table @option
 @item stats_file, f
 If specified the filter will use the named file to save the PSNR of
-each individual frame.
+each individual frame. When filename equals "-" the data is sent to
+standard output.
 @end table
 
 The file printed if @var{stats_file} is selected, contains a sequence of
@@ -9945,6 +9962,26 @@ Set the size of the box used to represent one palette color entry. Default is
 @code{30} (for a @code{30x30} pixel box).
 @end table
 
+@section shuffleframes
+
+Reorder and/or duplicate video frames.
+
+It accepts the following parameters:
+
+@table @option
+@item mapping
+Set the destination indexes of input frames.
+This is space or '|' separated list of indexes that maps input frames to output
+frames. Number of indexes also sets maximal value that each index may have.
+@end table
+
+The first frame has the index 0. The default is to keep the input unchanged.
+
+Swap second and third frame of every three frames of the input:
+@example
+ffmpeg -i INPUT -vf "shuffleframes=0 2 1" OUTPUT
+@end example
+
 @section shuffleplanes
 
 Reorder and/or duplicate video planes.
@@ -10225,7 +10262,8 @@ The description of the accepted parameters follows.
 @table @option
 @item stats_file, f
 If specified the filter will use the named file to save the SSIM of
-each individual frame.
+each individual frame. When filename equals "-" the data is sent to
+standard output.
 @end table
 
 The file printed if @var{stats_file} is selected, contains a sequence of
@@ -11856,6 +11894,177 @@ zoompan=z='min(zoom+0.0015,1.5)':d=700:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'
 @end example
 @end itemize
 
+@section zscale
+Scale (resize) the input video, using the z.lib library:
+https://github.com/sekrit-twc/zimg.
+
+The zscale filter forces the output display aspect ratio to be the same
+as the input, by changing the output sample aspect ratio.
+
+If the input image format is different from the format requested by
+the next filter, the zscale filter will convert the input to the
+requested format.
+
+@subsection Options
+The filter accepts the following options.
+
+@table @option
+@item width, w
+@item height, h
+Set the output video dimension expression. Default value is the input
+dimension.
+
+If the @var{width} or @var{w} is 0, the input width is used for the output.
+If the @var{height} or @var{h} is 0, the input height is used for the output.
+
+If one of the values is -1, the zscale filter will use a value that
+maintains the aspect ratio of the input image, calculated from the
+other specified dimension. If both of them are -1, the input size is
+used
+
+If one of the values is -n with n > 1, the zscale filter will also use a value
+that maintains the aspect ratio of the input image, calculated from the other
+specified dimension. After that it will, however, make sure that the calculated
+dimension is divisible by n and adjust the value if necessary.
+
+See below for the list of accepted constants for use in the dimension
+expression.
+
+@item size, s
+Set the video size. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+
+@item dither, d
+Set the dither type.
+
+Possible values are:
+@table @var
+@item none
+@item ordered
+@item random
+@item error_diffusion
+@end table
+
+Default is none.
+
+@item filter, f
+Set the resize filter type.
+
+Possible values are:
+@table @var
+@item point
+@item bilinear
+@item bicubic
+@item spline16
+@item spline36
+@item lanczos
+@end table
+
+Default is bilinear.
+
+@item range, r
+Set the color range.
+
+Possible values are:
+@table @var
+@item input
+@item limited
+@item full
+@end table
+
+Default is same as input.
+
+@item primaries, p
+Set the color primaries.
+
+Possible values are:
+@table @var
+@item input
+@item 709
+@item unspecified
+@item 170m
+@item 240m
+@item 2020
+@end table
+
+Default is same as input.
+
+@item transfer, t
+Set the transfer characteristics.
+
+Possible values are:
+@table @var
+@item input
+@item 709
+@item unspecified
+@item 601
+@item linear
+@item 2020_10
+@item 2020_12
+@end table
+
+Default is same as input.
+
+@item matrix, m
+Set the colorspace matrix.
+
+Possible value are:
+@table @var
+@item input
+@item 709
+@item unspecified
+@item 470bg
+@item 170m
+@item 2020_ncl
+@item 2020_cl
+@end table
+
+Default is same as input.
+@end table
+
+The values of the @option{w} and @option{h} options are expressions
+containing the following constants:
+
+@table @var
+@item in_w
+@item in_h
+The input width and height
+
+@item iw
+@item ih
+These are the same as @var{in_w} and @var{in_h}.
+
+@item out_w
+@item out_h
+The output (scaled) width and height
+
+@item ow
+@item oh
+These are the same as @var{out_w} and @var{out_h}
+
+@item a
+The same as @var{iw} / @var{ih}
+
+@item sar
+input sample aspect ratio
+
+@item dar
+The input display aspect ratio. Calculated from @code{(iw / ih) * sar}.
+
+@item hsub
+@item vsub
+horizontal and vertical input chroma subsample values. For example for the
+pixel format "yuv422p" @var{hsub} is 2 and @var{vsub} is 1.
+
+@item ohsub
+@item ovsub
+horizontal and vertical output chroma subsample values. For example for the
+pixel format "yuv422p" @var{hsub} is 2 and @var{vsub} is 1.
+@end table
+
+@table @option
+@end table
+
 @c man end VIDEO FILTERS
 
 @chapter Video Sources
@@ -12749,7 +12958,7 @@ This mode requires a build with @code{libswresample}.
 Treat mono input files as "dual mono". If a mono file is intended for playback
 on a stereo system, its EBU R128 measurement will be perceptually incorrect.
 If set to @code{true}, this option will compensate for this effect.
-Multi-channel input files are not effected by this option.
+Multi-channel input files are not affected by this option.
 
 @item panlaw
 Set a specific pan law to be used for the measurement of dual mono files.
@@ -13428,21 +13637,48 @@ settb=AVTB
 @end itemize
 
 @section showcqt
-Convert input audio to a video output representing
-frequency spectrum logarithmically (using constant Q transform with
-Brown-Puckette algorithm), with musical tone scale, from E0 to D#10 (10 octaves).
+Convert input audio to a video output representing frequency spectrum
+logarithmically using Brown-Puckette constant Q transform algorithm with
+direct frequency domain coefficient calculation (but the transform itself
+is not really constant Q, instead the Q factor is actually variable/clamped),
+with musical tone scale, from E0 to D#10.
 
 The filter accepts the following options:
 
 @table @option
-@item volume
-Specify transform volume (multiplier) expression. The expression can contain
-variables:
+@item size, s
+Specify the video size for the output. It must be even. For the syntax of this option,
+check the @ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+Default value is @code{1920x1080}.
+
+@item fps, rate, r
+Set the output frame rate. Default value is @code{25}.
+
+@item bar_h
+Set the bargraph height. It must be even. Default value is @code{-1} which
+computes the bargraph height automatically.
+
+@item axis_h
+Set the axis height. It must be even. Default value is @code{-1} which computes
+the axis height automatically.
+
+@item sono_h
+Set the sonogram height. It must be even. Default value is @code{-1} which
+computes the sonogram height automatically.
+
+@item fullhd
+Set the fullhd resolution. This option is deprecated, use @var{size}, @var{s}
+instead. Default value is @code{1}.
+
+@item sono_v, volume
+Specify the sonogram volume expression. It can contain variables:
 @table @option
+@item bar_v
+the @var{bar_v} evaluated expression
 @item frequency, freq, f
-the frequency where transform is evaluated
+the frequency where it is evaluated
 @item timeclamp, tc
-value of timeclamp option
+the value of @var{timeclamp} option
 @end table
 and functions:
 @table @option
@@ -13451,75 +13687,112 @@ A-weighting of equal loudness
 @item b_weighting(f)
 B-weighting of equal loudness
 @item c_weighting(f)
-C-weighting of equal loudness
+C-weighting of equal loudness.
 @end table
 Default value is @code{16}.
 
-@item tlength
-Specify transform length expression. The expression can contain variables:
+@item bar_v, volume2
+Specify the bargraph volume expression. It can contain variables:
 @table @option
+@item sono_v
+the @var{sono_v} evaluated expression
 @item frequency, freq, f
-the frequency where transform is evaluated
+the frequency where it is evaluated
 @item timeclamp, tc
-value of timeclamp option
+the value of @var{timeclamp} option
 @end table
-Default value is @code{384/f*tc/(384/f+tc)}.
+and functions:
+@table @option
+@item a_weighting(f)
+A-weighting of equal loudness
+@item b_weighting(f)
+B-weighting of equal loudness
+@item c_weighting(f)
+C-weighting of equal loudness.
+@end table
+Default value is @code{sono_v}.
 
-@item timeclamp
+@item sono_g, gamma
+Specify the sonogram gamma. Lower gamma makes the spectrum more contrast,
+higher gamma makes the spectrum having more range. Default value is @code{3}.
+Acceptable range is @code{[1, 7]}.
+
+@item bar_g, gamma2
+Specify the bargraph gamma. Default value is @code{1}. Acceptable range is
+@code{[1, 7]}.
+
+@item timeclamp, tc
 Specify the transform timeclamp. At low frequency, there is trade-off between
 accuracy in time domain and frequency domain. If timeclamp is lower,
 event in time domain is represented more accurately (such as fast bass drum),
 otherwise event in frequency domain is represented more accurately
-(such as bass guitar). Acceptable value is [0.1, 1.0]. Default value is @code{0.17}.
+(such as bass guitar). Acceptable range is @code{[0.1, 1]}. Default value is @code{0.17}.
+
+@item basefreq
+Specify the transform base frequency. Default value is @code{20.01523126408007475},
+which is frequency 50 cents below E0. Acceptable range is @code{[10, 100000]}.
+
+@item endfreq
+Specify the transform end frequency. Default value is @code{20495.59681441799654},
+which is frequency 50 cents above D#10. Acceptable range is @code{[10, 100000]}.
 
 @item coeffclamp
-Specify the transform coeffclamp. If coeffclamp is lower, transform is
-more accurate, otherwise transform is faster. Acceptable value is [0.1, 10.0].
-Default value is @code{1.0}.
+This option is deprecated and ignored.
 
-@item gamma
-Specify gamma. Lower gamma makes the spectrum more contrast, higher gamma
-makes the spectrum having more range. Acceptable value is [1.0, 7.0].
-Default value is @code{3.0}.
+@item tlength
+Specify the transform length in time domain. Use this option to control accuracy
+trade-off between time domain and frequency domain at every frequency sample.
+It can contain variables:
+@table @option
+@item frequency, freq, f
+the frequency where it is evaluated
+@item timeclamp, tc
+the value of @var{timeclamp} option.
+@end table
+Default value is @code{384*tc/(384+tc*f)}.
 
-@item gamma2
-Specify gamma of bargraph. Acceptable value is [1.0, 7.0].
-Default value is @code{1.0}.
+@item count
+Specify the transform count for every video frame. Default value is @code{6}.
+Acceptable range is @code{[1, 30]}.
+
+@item fcount
+Specify the transform count for every single pixel. Default value is @code{0},
+which makes it computed automatically. Acceptable range is @code{[0, 10]}.
 
 @item fontfile
-Specify font file for use with freetype. If not specified, use embedded font.
+Specify font file for use with freetype to draw the axis. If not specified,
+use embedded font. Note that drawing with font file or embedded font is not
+implemented with custom @var{basefreq} and @var{endfreq}, use @var{axisfile}
+option instead.
 
 @item fontcolor
 Specify font color expression. This is arithmetic expression that should return
-integer value 0xRRGGBB. The expression can contain variables:
+integer value 0xRRGGBB. It can contain variables:
 @table @option
 @item frequency, freq, f
-the frequency where transform is evaluated
+the frequency where it is evaluated
 @item timeclamp, tc
-value of timeclamp option
+the value of @var{timeclamp} option
 @end table
 and functions:
 @table @option
 @item midi(f)
 midi number of frequency f, some midi numbers: E0(16), C1(24), C2(36), A4(69)
 @item r(x), g(x), b(x)
-red, green, and blue value of intensity x
+red, green, and blue value of intensity x.
 @end table
 Default value is @code{st(0, (midi(f)-59.5)/12);
 st(1, if(between(ld(0),0,1), 0.5-0.5*cos(2*PI*ld(0)), 0));
-r(1-ld(1)) + b(ld(1))}
+r(1-ld(1)) + b(ld(1))}.
 
-@item fullhd
-If set to 1 (the default), the video size is 1920x1080 (full HD),
-if set to 0, the video size is 960x540. Use this option to make CPU usage lower.
+@item axisfile
+Specify image file to draw the axis. This option override @var{fontfile} and
+@var{fontcolor} option.
 
-@item fps
-Specify video fps. Default value is @code{25}.
-
-@item count
-Specify number of transform per frame, so there are fps*count transforms
-per second. Note that audio data rate must be divisible by fps*count.
-Default value is @code{6}.
+@item axis, text
+Enable/disable drawing text to the axis. If it is set to @code{0}, drawing to
+the axis is disabled, ignoring @var{fontfile} and @var{axisfile} option.
+Default value is @code{1}.
 
 @end table
 
@@ -13539,9 +13812,15 @@ ffplay -f lavfi 'amovie=a.mp3, asplit [a][out1]; [a] showcqt=fps=30:count=5 [out
 @end example
 
 @item
-Playing at 960x540 and lower CPU usage:
+Playing at 1280x720:
 @example
-ffplay -f lavfi 'amovie=a.mp3, asplit [a][out1]; [a] showcqt=fullhd=0:count=3 [out0]'
+ffplay -f lavfi 'amovie=a.mp3, asplit [a][out1]; [a] showcqt=s=1280x720:count=4 [out0]'
+@end example
+
+@item
+Disable sonogram display:
+@example
+sono_h=0
 @end example
 
 @item
@@ -13552,36 +13831,41 @@ ffplay -f lavfi 'aevalsrc=0.1*sin(2*PI*55*t)+0.1*sin(4*PI*55*t)+0.1*sin(6*PI*55*
 @end example
 
 @item
-Same as above, but with more accuracy in frequency domain (and slower):
+Same as above, but with more accuracy in frequency domain:
 @example
 ffplay -f lavfi 'aevalsrc=0.1*sin(2*PI*55*t)+0.1*sin(4*PI*55*t)+0.1*sin(6*PI*55*t)+0.1*sin(8*PI*55*t),
                  asplit[a][out1]; [a] showcqt=timeclamp=0.5 [out0]'
 @end example
 
 @item
-B-weighting of equal loudness
+Custom volume:
 @example
-volume=16*b_weighting(f)
-@end example
-
-@item
-Lower Q factor
-@example
-tlength=100/f*tc/(100/f+tc)
-@end example
-
-@item
-Custom fontcolor, C-note is colored green, others are colored blue
-@example
-fontcolor='if(mod(floor(midi(f)+0.5),12), 0x0000FF, g(1))'
+bar_v=10:sono_v=bar_v*a_weighting(f)
 @end example
 
 @item
 Custom gamma, now spectrum is linear to the amplitude.
 @example
-gamma=2:gamma2=2
+bar_g=2:sono_g=2
 @end example
 
+@item
+Custom tlength equation:
+@example
+tc=0.33:tlength='st(0,0.17); 384*tc / (384 / ld(0) + tc*f /(1-ld(0))) + 384*tc / (tc*f / ld(0) + 384 /(1-ld(0)))'
+@end example
+
+@item
+Custom fontcolor and fontfile, C-note is colored green, others are colored blue:
+@example
+fontcolor='if(mod(floor(midi(f)+0.5),12), 0x0000FF, g(1))':fontfile=myfont.ttf
+@end example
+
+@item
+Custom frequency range with custom axis using image file:
+@example
+axisfile=myaxis.png:basefreq=40:endfreq=10000
+@end example
 @end itemize
 
 @section showfreqs
