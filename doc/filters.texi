@@ -1170,42 +1170,6 @@ Number of occasions (not the number of samples) that the signal attained either
 Overall bit depth of audio. Number of bits used for each sample.
 @end table
 
-@section astreamsync
-
-Forward two audio streams and control the order the buffers are forwarded.
-
-The filter accepts the following options:
-
-@table @option
-@item expr, e
-Set the expression deciding which stream should be
-forwarded next: if the result is negative, the first stream is forwarded; if
-the result is positive or zero, the second stream is forwarded. It can use
-the following variables:
-
-@table @var
-@item b1 b2
-number of buffers forwarded so far on each stream
-@item s1 s2
-number of samples forwarded so far on each stream
-@item t1 t2
-current timestamp of each stream
-@end table
-
-The default value is @code{t1-t2}, which means to always forward the stream
-that has a smaller timestamp.
-@end table
-
-@subsection Examples
-
-Stress-test @code{amerge} by randomly sending buffers on the wrong
-input, while avoiding too much of a desynchronization:
-@example
-amovie=file.ogg [a] ; amovie=file.mp3 [b] ;
-[a] [b] astreamsync=(2*random(1))-1+tanh(5*(t1-t2)) [a2] [b2] ;
-[a2] [b2] amerge
-@end example
-
 @section asyncts
 
 Synchronize audio data with timestamps by squeezing/stretching it and/or
@@ -3192,6 +3156,46 @@ ffplay -f lavfi flite=text='No more be grieved for which that thou hast done.'
 
 For more information about libflite, check:
 @url{http://www.speech.cs.cmu.edu/flite/}
+
+@section anoisesrc
+
+Generate a noise audio signal.
+
+The filter accepts the following options:
+
+@table @option
+@item sample_rate, r
+Specify the sample rate. Default value is 48000 Hz.
+
+@item amplitude, a
+Specify the amplitude (0.0 - 1.0) of the generated audio stream. Default value
+is 1.0.
+
+@item duration, d
+Specify the duration of the generated audio stream. Not specifying this option
+results in noise with an infinite length.
+
+@item color, colour, c
+Specify the color of noise. Available noise colors are white, pink, and brown.
+Default color is white.
+
+@item seed, s
+Specify a value used to seed the PRNG.
+
+@item nb_samples, n
+Set the number of samples per each output frame, default is 1024.
+@end table
+
+@subsection Examples
+
+@itemize
+
+@item
+Generate 60 seconds of pink noise, with a 44.1 kHz sampling rate and an amplitude of 0.5:
+@example
+anoisesrc=d=60:c=pink:r=44100:a=0.5
+@end example
+@end itemize
 
 @section sine
 
@@ -13067,6 +13071,22 @@ Note: in case of auto-inserted filter between the permission filter and the
 following one, the permission might not be received as expected in that
 following filter. Inserting a @ref{format} or @ref{aformat} filter before the
 perms/aperms filter can avoid this problem.
+
+@section realtime, arealtime
+
+Slow down filtering to match real time approximatively.
+
+These filters will pause the filtering for a variable amount of time to
+match the output rate with the input timestamps.
+They are similar to the @option{re} option to @code{ffmpeg}.
+
+They accept the following options:
+
+@table @option
+@item limit
+Time limit for the pauses. Any pause longer than that will be considered
+a timestamp discontinuity and reset the timer. Default is 2 seconds.
+@end table
 
 @section select, aselect
 
