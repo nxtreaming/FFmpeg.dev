@@ -691,6 +691,13 @@ static void write_frame(AVFormatContext *s, AVPacket *pkt, OutputStream *ost)
             else
                 ost->error[i] = -1;
         }
+
+        if (ost->frame_rate.num && ost->is_cfr) {
+            if (pkt->duration > 0)
+                av_log(NULL, AV_LOG_WARNING, "Overriding packet duration by frame rate, this should not happen\n");
+            pkt->duration = av_rescale_q(1, av_inv_q(ost->frame_rate),
+                                         ost->st->time_base);
+        }
     }
 
     if (bsfc)
@@ -997,11 +1004,11 @@ static void do_video_out(AVFormatContext *s,
                                           ost->last_nb0_frames[1],
                                           ost->last_nb0_frames[2]);
     } else {
-        delta0 = sync_ipts - ost->sync_opts;
+        delta0 = sync_ipts - ost->sync_opts; // delta0 is the "drift" between the input frame (next_picture) and where it would fall in the output.
         delta  = delta0 + duration;
 
         /* by default, we output a single frame */
-        nb0_frames = 0;
+        nb0_frames = 0; // tracks the number of times the PREVIOUS frame should be duplicated, mostly for variable framerate (VFR)
         nb_frames = 1;
 
         format_video_sync = video_sync_method;
@@ -1020,25 +1027,25 @@ static void do_video_out(AVFormatContext *s,
                 format_video_sync = VSYNC_VSCFR;
             }
         }
+        ost->is_cfr = (format_video_sync == VSYNC_CFR || format_video_sync == VSYNC_VSCFR);
 
         if (delta0 < 0 &&
             delta > 0 &&
             format_video_sync != VSYNC_PASSTHROUGH &&
             format_video_sync != VSYNC_DROP) {
-            double cor = FFMIN(-delta0, duration);
             if (delta0 < -0.6) {
                 av_log(NULL, AV_LOG_WARNING, "Past duration %f too large\n", -delta0);
             } else
-                av_log(NULL, AV_LOG_DEBUG, "Cliping frame in rate conversion by %f\n", -delta0);
-            sync_ipts += cor;
-            duration -= cor;
-            delta0 += cor;
+                av_log(NULL, AV_LOG_DEBUG, "Clipping frame in rate conversion by %f\n", -delta0);
+            sync_ipts = ost->sync_opts;
+            duration += delta0;
+            delta0 = 0;
         }
 
         switch (format_video_sync) {
         case VSYNC_VSCFR:
-            if (ost->frame_number == 0 && delta - duration >= 0.5) {
-                av_log(NULL, AV_LOG_DEBUG, "Not duplicating %d initial frames\n", (int)lrintf(delta - duration));
+            if (ost->frame_number == 0 && delta0 >= 0.5) {
+                av_log(NULL, AV_LOG_DEBUG, "Not duplicating %d initial frames\n", (int)lrintf(delta0));
                 delta = duration;
                 delta0 = 0;
                 ost->sync_opts = lrint(sync_ipts);
@@ -1078,22 +1085,22 @@ static void do_video_out(AVFormatContext *s,
             sizeof(ost->last_nb0_frames[0]) * (FF_ARRAY_ELEMS(ost->last_nb0_frames) - 1));
     ost->last_nb0_frames[0] = nb0_frames;
 
-    if (nb0_frames == 0 && ost->last_droped) {
+    if (nb0_frames == 0 && ost->last_dropped) {
         nb_frames_drop++;
         av_log(NULL, AV_LOG_VERBOSE,
                "*** dropping frame %d from stream %d at ts %"PRId64"\n",
                ost->frame_number, ost->st->index, ost->last_frame->pts);
     }
-    if (nb_frames > (nb0_frames && ost->last_droped) + (nb_frames > nb0_frames)) {
+    if (nb_frames > (nb0_frames && ost->last_dropped) + (nb_frames > nb0_frames)) {
         if (nb_frames > dts_error_threshold * 30) {
             av_log(NULL, AV_LOG_ERROR, "%d frame duplication too large, skipping\n", nb_frames - 1);
             nb_frames_drop++;
             return;
         }
-        nb_frames_dup += nb_frames - (nb0_frames && ost->last_droped) - (nb_frames > nb0_frames);
+        nb_frames_dup += nb_frames - (nb0_frames && ost->last_dropped) - (nb_frames > nb0_frames);
         av_log(NULL, AV_LOG_VERBOSE, "*** %d dup!\n", nb_frames - 1);
     }
-    ost->last_droped = nb_frames == nb0_frames && next_picture;
+    ost->last_dropped = nb_frames == nb0_frames && next_picture;
 
   /* duplicates frame if needed */
   for (i = 0; i < nb_frames; i++) {
@@ -1644,7 +1651,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
             pts = FFMAX(pts, av_rescale_q(av_stream_get_end_pts(ost->st),
                                           ost->st->time_base, AV_TIME_BASE_Q));
         if (is_last_report)
-            nb_frames_drop += ost->last_droped;
+            nb_frames_drop += ost->last_dropped;
     }
 
     secs = FFABS(pts) / AV_TIME_BASE;
@@ -1817,7 +1824,6 @@ static void do_streamcopy(InputStream *ist, OutputStream *ost, const AVPacket *p
     InputFile   *f = input_files [ist->file_index];
     int64_t start_time = (of->start_time == AV_NOPTS_VALUE) ? 0 : of->start_time;
     int64_t ost_tb_start_time = av_rescale_q(start_time, AV_TIME_BASE_Q, ost->st->time_base);
-    int64_t ist_tb_start_time = av_rescale_q(start_time, AV_TIME_BASE_Q, ist->st->time_base);
     AVPicture pict;
     AVPacket opkt;
 
@@ -1827,13 +1833,13 @@ static void do_streamcopy(InputStream *ist, OutputStream *ost, const AVPacket *p
         !ost->copy_initial_nonkeyframes)
         return;
 
-    if (pkt->pts == AV_NOPTS_VALUE) {
-        if (!ost->frame_number && ist->pts < start_time &&
-            !ost->copy_prior_start)
-            return;
-    } else {
-        if (!ost->frame_number && pkt->pts < ist_tb_start_time &&
-            !ost->copy_prior_start)
+    if (!ost->frame_number && !ost->copy_prior_start) {
+        int64_t comp_start = start_time;
+        if (copy_ts && f->start_time != AV_NOPTS_VALUE)
+            comp_start = FFMAX(start_time, f->start_time + f->ts_offset);
+        if (pkt->pts == AV_NOPTS_VALUE ?
+            ist->pts < comp_start :
+            pkt->pts < av_rescale_q(comp_start, AV_TIME_BASE_Q, ist->st->time_base))
             return;
     }
 
@@ -2467,6 +2473,9 @@ static void print_sdp(void)
         }
     }
 
+    if (!j)
+        goto fail;
+
     av_sdp_create(avc, j, sdp, sizeof(sdp));
 
     if (!sdp_filename) {
@@ -2482,6 +2491,7 @@ static void print_sdp(void)
         }
     }
 
+fail:
     av_freep(&avc);
 }
 
@@ -2979,6 +2989,7 @@ static int transcode_init(void)
                 enc_ctx->audio_service_type = dec_ctx->audio_service_type;
                 enc_ctx->block_align        = dec_ctx->block_align;
                 enc_ctx->initial_padding    = dec_ctx->delay;
+                enc_ctx->profile            = dec_ctx->profile;
 #if FF_API_AUDIOENC_DELAY
                 enc_ctx->delay              = dec_ctx->delay;
 #endif
@@ -3390,8 +3401,12 @@ static OutputStream *choose_output(void)
 
     for (i = 0; i < nb_output_streams; i++) {
         OutputStream *ost = output_streams[i];
-        int64_t opts = av_rescale_q(ost->st->cur_dts, ost->st->time_base,
+        int64_t opts = ost->st->cur_dts == AV_NOPTS_VALUE ? INT64_MIN :
+                       av_rescale_q(ost->st->cur_dts, ost->st->time_base,
                                     AV_TIME_BASE_Q);
+        if (ost->st->cur_dts == AV_NOPTS_VALUE)
+            av_log(NULL, AV_LOG_DEBUG, "cur_dts is invalid (this is harmless if it occurs once at the start per stream)\n");
+
         if (!ost->finished && opts < opts_min) {
             opts_min = opts;
             ost_min  = ost->unavailable ? NULL : ost;

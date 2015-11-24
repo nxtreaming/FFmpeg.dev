@@ -194,6 +194,14 @@ static int mov_read_covr(MOVContext *c, AVIOContext *pb, int type, int len)
     if (ret < 0)
         return ret;
 
+    if (pkt.size >= 8 && id != AV_CODEC_ID_BMP) {
+        if (AV_RB64(pkt.data) == 0x89504e470d0a1a0a) {
+            id = AV_CODEC_ID_PNG;
+        } else {
+            id = AV_CODEC_ID_MJPEG;
+        }
+    }
+
     st->disposition              |= AV_DISPOSITION_ATTACHED_PIC;
 
     st->attached_pic              = pkt;
@@ -422,6 +430,7 @@ retry:
             if (snprintf(str, str_size_alloc, "%f", val) >= str_size_alloc) {
                 av_log(c->fc, AV_LOG_ERROR,
                        "Failed to store the float32 number (%f) in string.\n", val);
+                av_free(str);
                 return AVERROR_INVALIDDATA;
             }
         } else {
@@ -453,6 +462,9 @@ static int mov_read_chpl(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     int i, nb_chapters, str_len, version;
     char str[256+1];
     int ret;
+
+    if (c->ignore_chapters)
+        return 0;
 
     if ((atom.size -= 5) < 0)
         return 0;
@@ -506,7 +518,7 @@ static int mov_read_dref(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         return AVERROR(ENOMEM);
     sc->drefs_count = entries;
 
-    for (i = 0; i < sc->drefs_count; i++) {
+    for (i = 0; i < entries; i++) {
         MOVDref *dref = &sc->drefs[i];
         uint32_t size = avio_rb32(pb);
         int64_t next = avio_tell(pb) + size - 4;
@@ -562,7 +574,7 @@ static int mov_read_dref(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                 av_log(c->fc, AV_LOG_DEBUG, "type %d, len %d\n", type, len);
                 if (len&1)
                     len += 1;
-                if (type == 2 || type == 18) { // absolute path
+                if (type == 2) { // absolute path
                     av_free(dref->path);
                     dref->path = av_mallocz(len+1);
                     if (!dref->path)
@@ -573,15 +585,13 @@ static int mov_read_dref(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                         av_freep(&dref->path);
                         return ret;
                     }
-                    if (type == 18) // no additional processing needed
-                        continue;
                     if (len > volume_len && !strncmp(dref->path, dref->volume, volume_len)) {
                         len -= volume_len;
                         memmove(dref->path, dref->path+volume_len, len);
                         dref->path[len] = 0;
                     }
                     for (j = 0; j < len; j++)
-                        if (dref->path[j] == ':')
+                        if (dref->path[j] == ':' || dref->path[j] == 0)
                             dref->path[j] = '/';
                     av_log(c->fc, AV_LOG_DEBUG, "path %s\n", dref->path);
                 } else if (type == 0) { // directory name
@@ -603,6 +613,11 @@ static int mov_read_dref(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                 } else
                     avio_skip(pb, len);
             }
+        } else {
+            av_log(c->fc, AV_LOG_DEBUG, "Unknown dref type 0x08%x size %d\n",
+                   dref->type, size);
+            entries--;
+            i--;
         }
         avio_seek(pb, next, SEEK_SET);
     }
@@ -709,7 +724,7 @@ static int mov_read_dac3(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         return 0;
     st = c->fc->streams[c->fc->nb_streams-1];
 
-    ast = (enum AVAudioServiceType*)ff_stream_new_side_data(st, AV_PKT_DATA_AUDIO_SERVICE_TYPE,
+    ast = (enum AVAudioServiceType*)av_stream_new_side_data(st, AV_PKT_DATA_AUDIO_SERVICE_TYPE,
                                                             sizeof(*ast));
     if (!ast)
         return AVERROR(ENOMEM);
@@ -741,7 +756,7 @@ static int mov_read_dec3(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         return 0;
     st = c->fc->streams[c->fc->nb_streams-1];
 
-    ast = (enum AVAudioServiceType*)ff_stream_new_side_data(st, AV_PKT_DATA_AUDIO_SERVICE_TYPE,
+    ast = (enum AVAudioServiceType*)av_stream_new_side_data(st, AV_PKT_DATA_AUDIO_SERVICE_TYPE,
                                                             sizeof(*ast));
     if (!ast)
         return AVERROR(ENOMEM);
@@ -3406,9 +3421,8 @@ static int mov_read_tkhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     if (width && height && sc->display_matrix) {
         double disp_transform[2];
 
-#define SQR(a) ((a)*(double)(a))
         for (i = 0; i < 2; i++)
-            disp_transform[i] = sqrt(SQR(display_matrix[i][0]) + SQR(display_matrix[i][1]));
+            disp_transform[i] = hypot(display_matrix[i][0], display_matrix[i][1]);
 
         if (disp_transform[0] > 0       && disp_transform[1] > 0 &&
             disp_transform[0] < (1<<24) && disp_transform[1] < (1<<24) &&
@@ -4627,7 +4641,7 @@ static int mov_read_header(AVFormatContext *s)
     av_log(mov->fc, AV_LOG_TRACE, "on_parse_exit_offset=%"PRId64"\n", avio_tell(pb));
 
     if (pb->seekable) {
-        if (mov->chapter_track > 0)
+        if (mov->chapter_track > 0 && !mov->ignore_chapters)
             mov_read_chapters(s);
         for (i = 0; i < s->nb_streams; i++)
             if (s->streams[i]->codec->codec_tag == AV_RL32("tmcd"))
@@ -4925,7 +4939,7 @@ static int mov_seek_fragment(AVFormatContext *s, AVStream *st, int64_t timestamp
 
     for (i = 0; i < mov->fragment_index_count; i++) {
         if (mov->fragment_index_data[i]->track_id == st->id) {
-            MOVFragmentIndex *index = index = mov->fragment_index_data[i];
+            MOVFragmentIndex *index = mov->fragment_index_data[i];
             for (j = index->item_count - 1; j >= 0; j--) {
                 if (index->items[j].time <= timestamp) {
                     if (index->items[j].headers_read)
@@ -5038,6 +5052,8 @@ static const AVOption mov_options[] = {
         OFFSET(seek_individually), AV_OPT_TYPE_INT, { .i64 = 1 },
         0, 1, FLAGS},
     {"ignore_editlist", "", OFFSET(ignore_editlist), AV_OPT_TYPE_INT, {.i64 = 0},
+        0, 1, FLAGS},
+    {"ignore_chapters", "", OFFSET(ignore_chapters), AV_OPT_TYPE_BOOL, {.i64 = 0},
         0, 1, FLAGS},
     {"use_mfra_for",
         "use mfra for fragment timestamps",

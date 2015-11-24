@@ -96,7 +96,7 @@ static double bessel(double x) {
         -1.2207067397808979846e+10,
          1.0377081058062166144e+07,
         -4.8527560179962773045e+03,
-         1.0L,
+         1.0,
     };
     static const double p2[] = {
         -2.2210262233306573296e-04,
@@ -115,7 +115,7 @@ static double bessel(double x) {
         -6.0228002066743340583e+01,
          8.5539563258012929600e+01,
         -3.1446690275135491500e+01,
-        1.0L,
+        1.0,
     };
     double y, r, factor;
     if (x == 0)
@@ -144,24 +144,34 @@ static double bessel(double x) {
 static int build_filter(ResampleContext *c, void *filter, double factor, int tap_count, int alloc, int phase_count, int scale,
                         int filter_type, double kaiser_beta){
     int ph, i;
-    double x, y, w, t;
+    double x, y, w, t, s;
     double *tab = av_malloc_array(tap_count+1,  sizeof(*tab));
+    double *sin_lut = av_malloc_array(phase_count / 2 + 1, sizeof(*sin_lut));
     const int center= (tap_count-1)/2;
 
-    if (!tab)
-        return AVERROR(ENOMEM);
+    if (!tab || !sin_lut)
+        goto fail;
 
     /* if upsampling, only need to interpolate, no filter */
     if (factor > 1.0)
         factor = 1.0;
 
     av_assert0(phase_count == 1 || phase_count % 2 == 0);
+
+    if (factor == 1.0) {
+        for (ph = 0; ph <= phase_count / 2; ph++)
+            sin_lut[ph] = sin(M_PI * ph / phase_count);
+    }
     for(ph = 0; ph <= phase_count / 2; ph++) {
         double norm = 0;
+        s = sin_lut[ph];
         for(i=0;i<=tap_count;i++) {
             x = M_PI * ((double)(i - center) - (double)ph / phase_count) * factor;
             if (x == 0) y = 1.0;
-            else        y = sin(x) / x;
+            else if (factor == 1.0)
+                y = s / x;
+            else
+                y = sin(x) / x;
             switch(filter_type){
             case SWR_FILTER_TYPE_CUBIC:{
                 const float d= -0.5; //first order derivative = -0.5
@@ -170,8 +180,8 @@ static int build_filter(ResampleContext *c, void *filter, double factor, int tap
                 else      y=                       d*(-4 + 8*x - 5*x*x + x*x*x);
                 break;}
             case SWR_FILTER_TYPE_BLACKMAN_NUTTALL:
-                w = 2.0*x / (factor*tap_count) + M_PI;
-                t = cos(w);
+                w = 2.0*x / (factor*tap_count);
+                t = -cos(w);
                 y *= 0.3635819 - 0.4891775 * t + 0.1365995 * (2*t*t-1) - 0.0106411 * (4*t*t*t - 3*t);
                 break;
             case SWR_FILTER_TYPE_KAISER:
@@ -183,6 +193,7 @@ static int build_filter(ResampleContext *c, void *filter, double factor, int tap
             }
 
             tab[i] = y;
+            s = -s;
             if (i < tap_count)
                 norm += y;
         }
@@ -278,7 +289,9 @@ static int build_filter(ResampleContext *c, void *filter, double factor, int tap
     }
 #endif
 
+fail:
     av_free(tab);
+    av_free(sin_lut);
     return 0;
 }
 
@@ -342,6 +355,10 @@ static ResampleContext *resample_init(ResampleContext *c, int out_rate, int in_r
     c->compensation_distance= 0;
     if(!av_reduce(&c->src_incr, &c->dst_incr, out_rate, in_rate * (int64_t)phase_count, INT32_MAX/2))
         goto error;
+    while (c->dst_incr < (1<<20) && c->src_incr < (1<<20)) {
+        c->dst_incr *= 2;
+        c->src_incr *= 2;
+    }
     c->ideal_dst_incr = c->dst_incr;
     c->dst_incr_div   = c->dst_incr / c->src_incr;
     c->dst_incr_mod   = c->dst_incr % c->src_incr;

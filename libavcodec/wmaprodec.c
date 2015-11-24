@@ -1612,7 +1612,7 @@ static int decode_packet(AVCodecContext *avctx, void *data,
 
         /** parse packet header */
         init_get_bits(gb, buf, s->buf_bit_size);
-        if (avctx->codec_id == AV_CODEC_ID_WMAPRO) {
+        if (avctx->codec_id != AV_CODEC_ID_XMA2) {
             packet_sequence_number = get_bits(gb, 4);
             skip_bits(gb, 2);
         } else {
@@ -1631,7 +1631,7 @@ static int decode_packet(AVCodecContext *avctx, void *data,
                 num_bits_prev_frame);
 
         /** check for packet loss */
-        if (avctx->codec_id == AV_CODEC_ID_WMAPRO && !s->packet_loss &&
+        if (avctx->codec_id != AV_CODEC_ID_XMA2 && !s->packet_loss &&
             ((s->packet_sequence_number + 1) & 0xF) != packet_sequence_number) {
             s->packet_loss = 1;
             av_log(avctx, AV_LOG_ERROR,
@@ -1692,6 +1692,11 @@ static int decode_packet(AVCodecContext *avctx, void *data,
             s->packet_done = !decode_frame(s, data, got_frame_ptr);
         } else
             s->packet_done = 1;
+    }
+
+    if (remaining_bits(s, gb) < 0) {
+        av_log(avctx, AV_LOG_ERROR, "Overread %d\n", -remaining_bits(s, gb));
+        s->packet_loss = 1;
     }
 
     if (s->packet_done && !s->packet_loss &&

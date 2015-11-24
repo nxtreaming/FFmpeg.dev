@@ -110,9 +110,21 @@ struct AVFormatInternal {
      */
     AVRational offset_timebase;
 
+#if FF_API_COMPUTE_PKT_FIELDS2
+    int missing_ts_warning;
+#endif
+
     int inject_global_side_data;
 
     int avoid_negative_ts_use_pts;
+};
+
+struct AVStreamInternal {
+    /**
+     * Set to 1 if the codec allows reordering, so pts can be different
+     * from dts.
+     */
+    int reorder;
 };
 
 #ifdef __GNUC__
@@ -454,13 +466,6 @@ static inline int ff_rename(const char *oldpath, const char *newpath, void *logc
     }
     return ret;
 }
-
-/**
- * Add new side data to a stream. If a side data of this type already exists, it
- * is replaced.
- */
-uint8_t *ff_stream_new_side_data(AVStream *st, enum AVPacketSideDataType type,
-                                 int size);
 
 /**
  * Allocate extradata with additional AV_INPUT_BUFFER_PADDING_SIZE at end

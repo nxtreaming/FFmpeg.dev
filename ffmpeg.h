@@ -414,13 +414,14 @@ typedef struct OutputStream {
     int64_t max_frames;
     AVFrame *filtered_frame;
     AVFrame *last_frame;
-    int last_droped;
+    int last_dropped;
     int last_nb0_frames[3];
 
     void  *hwaccel_ctx;
 
     /* video only */
     AVRational frame_rate;
+    int is_cfr;
     int force_fps;
     int top_field_first;
     int rotate_overridden;

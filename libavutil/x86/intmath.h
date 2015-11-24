@@ -22,13 +22,17 @@
 #define AVUTIL_X86_INTMATH_H
 
 #include <stdint.h>
-#if HAVE_FAST_CLZ && (defined(__INTEL_COMPILER) || defined(_MSC_VER))
+#if HAVE_FAST_CLZ
+#if defined(_MSC_VER)
+#include <intrin.h>
+#elif defined(__INTEL_COMPILER)
 #include <immintrin.h>
+#endif
 #endif
 #include "config.h"
 
 #if HAVE_FAST_CLZ
-#if defined(__INTEL_COMPILER) || defined(_MSC_VER)
+#if (defined(__INTEL_COMPILER) && (__INTEL_COMPILER>=1216)) || defined(_MSC_VER)
 #   if defined(__INTEL_COMPILER)
 #       define ff_log2(x) (_bit_scan_reverse((x)|1))
 #   else
