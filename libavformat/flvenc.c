@@ -83,12 +83,6 @@ typedef struct FLVStreamContext {
     int64_t last_ts;    ///< last timestamp for each stream
 } FLVStreamContext;
 
-static const AVOption flvenc_options[] = {
-    { "videodatarate", "Setup the videodatarate metadata explictly", offsetof(FLVContext, videodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
-    { "audiodatarate", "Setup the audiodatarate metadata explictly", offsetof(FLVContext, audiodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
-    { NULL },
-};
-
 static int get_audio_flags(AVFormatContext *s, AVCodecContext *enc)
 {
     int flags = (enc->bits_per_coded_sample == 16) ? FLV_SAMPLESSIZE_16BIT
@@ -707,6 +701,8 @@ static int flv_write_packet(AVFormatContext *s, AVPacket *pkt)
 }
 
 static const AVOption options[] = {
+    { "videodatarate", "Setup the videodatarate metadata explictly", offsetof(FLVContext, videodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
+    { "audiodatarate", "Setup the audiodatarate metadata explictly", offsetof(FLVContext, audiodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
     { "flvflags", "FLV muxer flags", offsetof(FLVContext, flags), AV_OPT_TYPE_FLAGS, {.i64 = 0}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "flvflags" },
     { "aac_seq_header_detect", "Put AAC sequence header based on stream data", 0, AV_OPT_TYPE_CONST, {.i64 = 1}, INT_MIN, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM, "flvflags" },
     { NULL },
