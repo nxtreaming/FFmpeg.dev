@@ -7,6 +7,7 @@ HEADERS = avcodec.h                                                     \
           avfft.h                                                       \
           dv_profile.h                                                  \
           d3d11va.h                                                     \
+          dirac.h                                                       \
           dxva2.h                                                       \
           qsv.h                                                         \
           vaapi.h                                                       \
@@ -26,6 +27,7 @@ OBJS = allcodecs.o                                                      \
        bitstream_filter.o                                               \
        codec_desc.o                                                     \
        d3d11va.o                                                        \
+       dirac.o                                                          \
        dv_profile.o                                                     \
        imgconvert.o                                                     \
        mathtables.o                                                     \
@@ -276,9 +278,10 @@ OBJS-$(CONFIG_FOURXM_DECODER)          += 4xm.o
 OBJS-$(CONFIG_FRAPS_DECODER)           += fraps.o
 OBJS-$(CONFIG_FRWU_DECODER)            += frwu.o
 OBJS-$(CONFIG_G2M_DECODER)             += g2meet.o elsdec.o
-OBJS-$(CONFIG_G723_1_DECODER)          += g723_1.o acelp_vectors.o \
-                                          celp_filters.o celp_math.o
-OBJS-$(CONFIG_G723_1_ENCODER)          += g723_1.o acelp_vectors.o celp_math.o
+OBJS-$(CONFIG_G723_1_DECODER)          += g723_1dec.o g723_1.o \
+                                          acelp_vectors.o celp_filters.o celp_math.o
+OBJS-$(CONFIG_G723_1_ENCODER)          += g723_1enc.o g723_1.o \
+                                          acelp_vectors.o celp_filters.o celp_math.o
 OBJS-$(CONFIG_G729_DECODER)            += g729dec.o lsp.o celp_math.o acelp_filters.o acelp_pitch_delay.o acelp_vectors.o g729postfilter.o
 OBJS-$(CONFIG_GIF_DECODER)             += gifdec.o lzw.o
 OBJS-$(CONFIG_GIF_ENCODER)             += gif.o lzwenc.o
@@ -496,6 +499,7 @@ OBJS-$(CONFIG_SVQ1_ENCODER)            += svq1enc.o svq1.o    \
                                           h263.o ituh263enc.o
 OBJS-$(CONFIG_SVQ3_DECODER)            += svq3.o svq13.o mpegutils.o
 OBJS-$(CONFIG_TEXT_DECODER)            += textdec.o ass.o
+OBJS-$(CONFIG_TEXT_ENCODER)            += srtenc.o ass_split.o
 OBJS-$(CONFIG_TAK_DECODER)             += takdec.o tak.o takdsp.o
 OBJS-$(CONFIG_TARGA_DECODER)           += targa.o
 OBJS-$(CONFIG_TARGA_ENCODER)           += targaenc.o rle.o
@@ -745,6 +749,9 @@ OBJS-$(CONFIG_VC1_D3D11VA_HWACCEL)        += dxva2_vc1.o
 OBJS-$(CONFIG_VC1_DXVA2_HWACCEL)          += dxva2_vc1.o
 OBJS-$(CONFIG_VC1_VAAPI_HWACCEL)          += vaapi_vc1.o
 OBJS-$(CONFIG_VC1_VDPAU_HWACCEL)          += vdpau_vc1.o
+OBJS-$(CONFIG_VP9_D3D11VA_HWACCEL)        += dxva2_vp9.o
+OBJS-$(CONFIG_VP9_DXVA2_HWACCEL)          += dxva2_vp9.o
+OBJS-$(CONFIG_VP9_VAAPI_HWACCEL)          += vaapi_vp9.o
 
 # libavformat dependencies
 OBJS-$(CONFIG_ADTS_MUXER)              += mpeg4audio.o
@@ -920,7 +927,6 @@ SLIBOBJS-$(HAVE_GNU_WINDRES)           += avcodecres.o
 
 SKIPHEADERS                            += %_tablegen.h                  \
                                           %_tables.h                    \
-                                          aac_tablegen_decl.h           \
                                           fft-internal.h                \
                                           tableprint.h                  \
                                           tableprint_vlc.h              \
@@ -964,11 +970,8 @@ TESTOBJS = dctref.o
 
 TOOLS = fourcc2pixfmt
 
-HOSTPROGS = aac_tablegen                                                \
-            aacps_tablegen                                              \
+HOSTPROGS = aacps_tablegen                                              \
             aacps_fixed_tablegen                                        \
-            aacsbr_tablegen                                             \
-            aacsbr_fixed_tablegen                                       \
             cbrt_tablegen                                               \
             cbrt_fixed_tablegen                                         \
             cos_tablegen                                                \
@@ -998,8 +1001,8 @@ else
 $(SUBDIR)%_tablegen$(HOSTEXESUF): HOSTCFLAGS += -DCONFIG_SMALL=0
 endif
 
-GEN_HEADERS = cbrt_tables.h cbrt_fixed_tables.h aacps_tables.h aacps_fixed_tables.h aacsbr_tables.h \
-              aacsbr_fixed_tables.h aac_tables.h dsd_tables.h dv_tables.h     \
+GEN_HEADERS = cbrt_tables.h cbrt_fixed_tables.h aacps_tables.h aacps_fixed_tables.h \
+              dsd_tables.h dv_tables.h     \
               sinewin_tables.h sinewin_fixed_tables.h mpegaudio_tables.h motionpixels_tables.h \
               pcm_tables.h qdm2_tables.h
 GEN_HEADERS := $(addprefix $(SUBDIR), $(GEN_HEADERS))
@@ -1012,9 +1015,6 @@ $(SUBDIR)aacdec.o: $(SUBDIR)cbrt_tables.h
 $(SUBDIR)aacdec_fixed.o: $(SUBDIR)cbrt_fixed_tables.h
 $(SUBDIR)aacps_float.o: $(SUBDIR)aacps_tables.h
 $(SUBDIR)aacps_fixed.o: $(SUBDIR)aacps_fixed_tables.h
-$(SUBDIR)aacsbr.o: $(SUBDIR)aacsbr_tables.h
-$(SUBDIR)aacsbr_fixed.o: $(SUBDIR)aacsbr_fixed_tables.h
-$(SUBDIR)aactab.o: $(SUBDIR)aac_tables.h
 $(SUBDIR)aactab_fixed.o: $(SUBDIR)aac_fixed_tables.h
 $(SUBDIR)dsddec.o: $(SUBDIR)dsd_tables.h
 $(SUBDIR)dvenc.o: $(SUBDIR)dv_tables.h

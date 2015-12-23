@@ -155,6 +155,10 @@ static void find_best_state(uint8_t best_state[256][256],
             double occ[256] = { 0 };
             double len      = 0;
             occ[j] = 1.0;
+
+            if (!one_state[j])
+                continue;
+
             for (k = 0; k < 256; k++) {
                 double newocc[256] = { 0 };
                 for (m = 1; m < 256; m++)
@@ -700,7 +704,17 @@ static av_cold int encode_init(AVCodecContext *avctx)
         return AVERROR_INVALIDDATA;
     }
 
-    s->ac = avctx->coder_type > 0 ? AC_RANGE_CUSTOM_TAB : AC_GOLOMB_RICE;
+#if FF_API_CODER_TYPE
+FF_DISABLE_DEPRECATION_WARNINGS
+    if (avctx->coder_type != -1)
+        s->ac = avctx->coder_type > 0 ? AC_RANGE_CUSTOM_TAB : AC_GOLOMB_RICE;
+    else
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+    if (s->ac == 1) // Compatbility with common command line usage
+        s->ac = AC_RANGE_CUSTOM_TAB;
+    else if (s->ac == AC_RANGE_DEFAULT_TAB_FORCE)
+        s->ac = AC_RANGE_DEFAULT_TAB;
 
     s->plane_count = 3;
     switch(avctx->pix_fmt) {
@@ -811,9 +825,15 @@ static av_cold int encode_init(AVCodecContext *avctx)
         return AVERROR(EINVAL);
     }
 
-    if (s->ac == AC_RANGE_CUSTOM_TAB)
+    if (s->ac == AC_RANGE_CUSTOM_TAB) {
         for (i = 1; i < 256; i++)
             s->state_transition[i] = ver2_state[i];
+    } else {
+        RangeCoder c;
+        ff_build_rac_states(&c, 0.05 * (1LL << 32), 256 - 8);
+        for (i = 1; i < 256; i++)
+            s->state_transition[i] = c.one_state[i];
+    }
 
     for (i = 0; i < 256; i++) {
         s->quant_table_count = 2;
@@ -924,7 +944,8 @@ FF_ENABLE_DEPRECATION_WARNINGS
             if (p[0] == 0)
                 break;
         }
-        sort_stt(s, s->state_transition);
+        if (s->ac == AC_RANGE_CUSTOM_TAB)
+            sort_stt(s, s->state_transition);
 
         find_best_state(best_state, s->state_transition);
 
@@ -1345,7 +1366,18 @@ static av_cold int encode_close(AVCodecContext *avctx)
 #define OFFSET(x) offsetof(FFV1Context, x)
 #define VE AV_OPT_FLAG_VIDEO_PARAM | AV_OPT_FLAG_ENCODING_PARAM
 static const AVOption options[] = {
-    { "slicecrc", "Protect slices with CRCs", OFFSET(ec), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 1, VE },
+    { "slicecrc", "Protect slices with CRCs", OFFSET(ec), AV_OPT_TYPE_BOOL, { .i64 = -1 }, -1, 1, VE },
+    { "coder", "Coder type", OFFSET(ac), AV_OPT_TYPE_INT,
+            { .i64 = 0 }, -2, 2, VE, "coder" },
+        { "rice", "Golomb rice", 0, AV_OPT_TYPE_CONST,
+            { .i64 = AC_GOLOMB_RICE }, INT_MIN, INT_MAX, VE, "coder" },
+        { "range_def", "Range with default table", 0, AV_OPT_TYPE_CONST,
+            { .i64 = AC_RANGE_DEFAULT_TAB_FORCE }, INT_MIN, INT_MAX, VE, "coder" },
+        { "range_tab", "Range with custom table", 0, AV_OPT_TYPE_CONST,
+            { .i64 = AC_RANGE_CUSTOM_TAB }, INT_MIN, INT_MAX, VE, "coder" },
+        { "ac", "Range with custom table (the ac option exists for compatibility and is deprecated)", 0, AV_OPT_TYPE_CONST,
+            { .i64 = 1 }, INT_MIN, INT_MAX, VE, "coder" },
+
     { NULL }
 };
 
@@ -1356,10 +1388,12 @@ static const AVClass ffv1_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
+#if FF_API_CODER_TYPE
 static const AVCodecDefault ffv1_defaults[] = {
     { "coder", "-1" },
     { NULL },
 };
+#endif
 
 AVCodec ff_ffv1_encoder = {
     .name           = "ffv1",
@@ -1385,6 +1419,8 @@ AVCodec ff_ffv1_encoder = {
         AV_PIX_FMT_NONE
 
     },
+#if FF_API_CODER_TYPE
     .defaults       = ffv1_defaults,
+#endif
     .priv_class     = &ffv1_class,
 };

@@ -156,8 +156,6 @@ char *ff_data_to_hex(char *buf, const uint8_t *src, int size, int lowercase);
  */
 int ff_hex_to_data(uint8_t *data, const char *p);
 
-void ff_program_add_stream_index(AVFormatContext *ac, int progid, unsigned int idx);
-
 /**
  * Add packet to AVFormatContext->packet_buffer list, determining its
  * interleaved position using compare() function argument.
@@ -515,5 +513,11 @@ int ff_copy_whitelists(AVFormatContext *dst, AVFormatContext *src);
 
 int ffio_open2_wrapper(struct AVFormatContext *s, AVIOContext **pb, const char *url, int flags,
                        const AVIOInterruptCB *int_cb, AVDictionary **options);
+
+/**
+ * Returned by demuxers to indicate that data was consumed but discarded
+ * (ignored streams or junk data). The framework will re-call the demuxer.
+ */
+#define FFERROR_REDO FFERRTAG('R','E','D','O')
 
 #endif /* AVFORMAT_INTERNAL_H */

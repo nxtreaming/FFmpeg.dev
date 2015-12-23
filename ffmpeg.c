@@ -1553,10 +1553,12 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     AVCodecContext *enc;
     int frame_number, vid, i;
     double bitrate;
+    double speed;
     int64_t pts = INT64_MIN + 1;
     static int64_t last_time = -1;
     static int qp_histogram[52];
     int hours, mins, secs, us;
+    float t;
 
     if (!print_stats && !is_last_report && !progress_avio)
         return;
@@ -1570,6 +1572,8 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
             return;
         last_time = cur_time;
     }
+
+    t = (cur_time-timer_start) / 1000000.0;
 
 
     oc = output_files[0]->ctx;
@@ -1594,7 +1598,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
                        ost->file_index, ost->index, q);
         }
         if (!vid && enc->codec_type == AVMEDIA_TYPE_VIDEO) {
-            float fps, t = (cur_time-timer_start) / 1000000.0;
+            float fps;
 
             frame_number = ost->frame_number;
             fps = t > 1 ? frame_number / t : 0;
@@ -1662,6 +1666,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     mins %= 60;
 
     bitrate = pts && total_size >= 0 ? total_size * 8 / (pts / 1000.0) : -1;
+    speed = t != 0.0 ? (double)pts / AV_TIME_BASE / t : -1;
 
     if (total_size < 0) snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf),
                                  "size=N/A time=");
@@ -1692,6 +1697,14 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
                 nb_frames_dup, nb_frames_drop);
     av_bprintf(&buf_script, "dup_frames=%d\n", nb_frames_dup);
     av_bprintf(&buf_script, "drop_frames=%d\n", nb_frames_drop);
+
+    if (speed < 0) {
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf)," speed=N/A");
+        av_bprintf(&buf_script, "speed=N/A\n");
+    } else {
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf)," speed=%4.3gx", speed);
+        av_bprintf(&buf_script, "speed=%4.3gx\n", speed);
+    }
 
     if (print_stats || is_last_report) {
         const char end = is_last_report ? '\n' : '\r';
@@ -1851,7 +1864,7 @@ static void do_streamcopy(InputStream *ist, OutputStream *ost, const AVPacket *p
 
     if (f->recording_time != INT64_MAX) {
         start_time = f->ctx->start_time;
-        if (f->start_time != AV_NOPTS_VALUE)
+        if (f->start_time != AV_NOPTS_VALUE && copy_ts)
             start_time += f->start_time;
         if (ist->pts >= f->recording_time + start_time) {
             close_output_stream(ost);
@@ -2663,6 +2676,28 @@ static int init_output_stream(OutputStream *ost, char *error, int error_len)
             exit_program(1);
         }
 
+        if (ost->enc_ctx->nb_coded_side_data) {
+            int i;
+
+            ost->st->side_data = av_realloc_array(NULL, ost->enc_ctx->nb_coded_side_data,
+                                                  sizeof(*ost->st->side_data));
+            if (!ost->st->side_data)
+                return AVERROR(ENOMEM);
+
+            for (i = 0; i < ost->enc_ctx->nb_coded_side_data; i++) {
+                const AVPacketSideData *sd_src = &ost->enc_ctx->coded_side_data[i];
+                AVPacketSideData *sd_dst = &ost->st->side_data[i];
+
+                sd_dst->data = av_malloc(sd_src->size);
+                if (!sd_dst->data)
+                    return AVERROR(ENOMEM);
+                memcpy(sd_dst->data, sd_src->data, sd_src->size);
+                sd_dst->size = sd_src->size;
+                sd_dst->type = sd_src->type;
+                ost->st->nb_side_data++;
+            }
+        }
+
         // copy timebase while removing common factors
         ost->st->time_base = av_add_q(ost->enc_ctx->time_base, (AVRational){0, 1});
         ost->st->codec->codec= ost->enc_ctx->codec;
@@ -3415,6 +3450,18 @@ static OutputStream *choose_output(void)
     return ost_min;
 }
 
+static void set_tty_echo(int on)
+{
+#if HAVE_TERMIOS_H
+    struct termios tty;
+    if (tcgetattr(0, &tty) == 0) {
+        if (on) tty.c_lflag |= ECHO;
+        else    tty.c_lflag &= ~ECHO;
+        tcsetattr(0, TCSANOW, &tty);
+    }
+#endif
+}
+
 static int check_keyboard_interaction(int64_t cur_time)
 {
     int i, ret, key;
@@ -3447,10 +3494,13 @@ static int check_keyboard_interaction(int64_t cur_time)
         int k, n = 0;
         fprintf(stderr, "\nEnter command: <target>|all <time>|-1 <command>[ <argument>]\n");
         i = 0;
+        set_tty_echo(1);
         while ((k = read_key()) != '\n' && k != '\r' && i < sizeof(buf)-1)
             if (k > 0)
                 buf[i++] = k;
         buf[i] = 0;
+        set_tty_echo(0);
+        fprintf(stderr, "\n");
         if (k > 0 &&
             (n = sscanf(buf, "%63[^ ] %lf %255[^ ] %255[^\n]", target, &time, command, arg)) >= 3) {
             av_log(NULL, AV_LOG_DEBUG, "Processing command target:%s time:%f command:%s arg:%s",
@@ -3489,10 +3539,13 @@ static int check_keyboard_interaction(int64_t cur_time)
             char buf[32];
             int k = 0;
             i = 0;
+            set_tty_echo(1);
             while ((k = read_key()) != '\n' && k != '\r' && i < sizeof(buf)-1)
                 if (k > 0)
                     buf[i++] = k;
             buf[i] = 0;
+            set_tty_echo(0);
+            fprintf(stderr, "\n");
             if (k <= 0 || sscanf(buf, "%d", &debug)!=1)
                 fprintf(stderr,"error parsing debug value\n");
         }
@@ -3753,6 +3806,7 @@ static int process_input(int file_index)
     AVPacket pkt;
     int ret, i, j;
     int64_t duration;
+    int64_t pkt_dts;
 
     is  = ifile->ctx;
     ret = get_input_packet(ifile, &pkt);
@@ -3800,7 +3854,7 @@ static int process_input(int file_index)
     reset_eagain();
 
     if (do_pkt_dump) {
-        av_pkt_dump_log2(NULL, AV_LOG_DEBUG, &pkt, do_hex_dump,
+        av_pkt_dump_log2(NULL, AV_LOG_INFO, &pkt, do_hex_dump,
                          is->streams[pkt.stream_index]);
     }
     /* the following test is needed in case new streams appear
@@ -3901,11 +3955,11 @@ static int process_input(int file_index)
     if (pkt.dts != AV_NOPTS_VALUE)
         pkt.dts *= ist->ts_scale;
 
+    pkt_dts = av_rescale_q_rnd(pkt.dts, ist->st->time_base, AV_TIME_BASE_Q, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
     if ((ist->dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO ||
          ist->dec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) &&
-        pkt.dts != AV_NOPTS_VALUE && ist->next_dts == AV_NOPTS_VALUE && !copy_ts
+        pkt_dts != AV_NOPTS_VALUE && ist->next_dts == AV_NOPTS_VALUE && !copy_ts
         && (is->iformat->flags & AVFMT_TS_DISCONT) && ifile->last_ts != AV_NOPTS_VALUE) {
-        int64_t pkt_dts = av_rescale_q(pkt.dts, ist->st->time_base, AV_TIME_BASE_Q);
         int64_t delta   = pkt_dts - ifile->last_ts;
         if (delta < -1LL*dts_delta_threshold*AV_TIME_BASE ||
             delta >  1LL*dts_delta_threshold*AV_TIME_BASE){
@@ -3929,11 +3983,11 @@ static int process_input(int file_index)
     if (pkt.dts != AV_NOPTS_VALUE)
         pkt.dts += duration;
 
+    pkt_dts = av_rescale_q_rnd(pkt.dts, ist->st->time_base, AV_TIME_BASE_Q, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
     if ((ist->dec_ctx->codec_type == AVMEDIA_TYPE_VIDEO ||
          ist->dec_ctx->codec_type == AVMEDIA_TYPE_AUDIO) &&
-         pkt.dts != AV_NOPTS_VALUE && ist->next_dts != AV_NOPTS_VALUE &&
+         pkt_dts != AV_NOPTS_VALUE && ist->next_dts != AV_NOPTS_VALUE &&
         !copy_ts) {
-        int64_t pkt_dts = av_rescale_q(pkt.dts, ist->st->time_base, AV_TIME_BASE_Q);
         int64_t delta   = pkt_dts - ist->next_dts;
         if (is->iformat->flags & AVFMT_TS_DISCONT) {
             if (delta < -1LL*dts_delta_threshold*AV_TIME_BASE ||
