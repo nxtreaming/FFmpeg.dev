@@ -992,6 +992,100 @@ stream ends. The default value is 2 seconds.
 
 @end table
 
+@section anequalizer
+
+High-order parametric multiband equalizer for each channel.
+
+It accepts the following parameters:
+@table @option
+@item params
+
+This option string is in format:
+"c@var{chn} f=@var{cf} w=@var{w} g=@var{g} t=@var{f} | ..."
+Each equalizer band is separated by '|'.
+
+@table @option
+@item chn
+Set channel number to which equalization will be applied.
+If input doesn't have that channel the entry is ignored.
+
+@item cf
+Set central frequency for band.
+If input doesn't have that frequency the entry is ignored.
+
+@item w
+Set band width in hertz.
+
+@item g
+Set band gain in dB.
+
+@item f
+Set filter type for band, optional, can be:
+
+@table @samp
+@item 0
+Butterworth, this is default.
+
+@item 1
+Chebyshev type 1.
+
+@item 2
+Chebyshev type 2.
+@end table
+@end table
+
+@item curves
+With this option activated frequency response of anequalizer is displayed
+in video stream.
+
+@item size
+Set video stream size. Only useful if curves option is activated.
+
+@item mgain
+Set max gain that will be displayed. Only useful if curves option is activated.
+Setting this to reasonable value allows to display gain which is derived from
+neighbour bands which are too close to each other and thus produce higher gain
+when both are activated.
+
+@item fscale
+Set frequency scale used to draw frequency response in video output.
+Can be linear or logarithmic. Default is logarithmic.
+
+@item colors
+Set color for each channel curve which is going to be displayed in video stream.
+This is list of color names separated by space or by '|'.
+Unrecognised or missing colors will be replaced by white color.
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Lower gain by 10 of central frequency 200Hz and width 100 Hz
+for first 2 channels using Chebyshev type 1 filter:
+@example
+anequalizer=c0 f=200 w=100 g=-10 t=1|c1 f=200 w=100 g=-10 t=1
+@end example
+@end itemize
+
+@subsection Commands
+
+This filter supports the following commands:
+@table @option
+@item change
+Alter existing filter parameters.
+Syntax for the commands is : "@var{fN}|f=@var{freq}|w=@var{width}|g=@var{gain}"
+
+@var{fN} is existing filter number, starting from 0, if no such filter is available
+error is returned.
+@var{freq} set new frequency parameter.
+@var{width} set new width parameter in herz.
+@var{gain} set new gain parameter in dB.
+
+Full filter invocation with asendcmd may look like this:
+asendcmd=c='4.0 anequalizer change 0|f=200|w=50|g=1',anequalizer=...
+@end table
+
 @section anull
 
 Pass the audio source unchanged to the output.
@@ -2875,6 +2969,14 @@ at the beginning of each period of silence.
 For example, if you want to remove long pauses between words but do not want
 to remove the pauses completely. Default value is @code{0}.
 
+@item detection
+Set how is silence detected. Can be @code{rms} or @code{peak}. Second is faster
+and works better with digital silence which is exactly 0.
+Default value is @code{rms}.
+
+@item window
+Set ratio used to calculate size of window for detecting silence.
+Default value is @code{0.02}. Allowed range is from @code{0} to @code{10}.
 @end table
 
 @subsection Examples
@@ -2887,6 +2989,13 @@ pressing the record button and the start of the performance:
 @example
 silenceremove=1:5:0.02
 @end example
+
+@item
+Trim all silence encountered from begining to end where there is more than 1
+second of silence in audio:
+@example
+silenceremove=0:0:0:-1:1:-90dB
+@end example
 @end itemize
 
 @section sofalizer
@@ -2894,9 +3003,12 @@ silenceremove=1:5:0.02
 SOFAlizer uses head-related transfer functions (HRTFs) to create virtual
 loudspeakers around the user for binaural listening via headphones (audio
 formats up to 9 channels supported).
-The HRTFs are stored in SOFA files (see www.sofacoustics.org for a database).
+The HRTFs are stored in SOFA files (see @url{http://www.sofacoustics.org/} for a database).
 SOFAlizer is developed at the Acoustics Research Institute (ARI) of the
 Austrian Academy of Sciences.
+
+To enable compilation of this filter you need to configure FFmpeg with
+@code{--enable-netcdf}.
 
 The filter accepts the following options:
 
@@ -14473,6 +14585,8 @@ It accepts the following values:
 the samples start again on the left when they reach the right
 @item scroll
 the samples scroll from right to left
+@item rscroll
+the samples scroll from left to right
 @item fullframe
 frames are only produced when the samples reach the right
 @end table
@@ -14500,7 +14614,13 @@ It accepts the following values:
 @item channel
 each channel is displayed in a separate color
 @item intensity
-each channel is is displayed using the same color scheme
+each channel is displayed using the same color scheme
+@item rainbow
+each channel is displayed using the rainbow color scheme
+@item moreland
+each channel is displayed using the moreland color scheme
+@item nebulae
+each channel is displayed using the nebulae color scheme
 @end table
 
 Default value is @samp{channel}.
@@ -14533,17 +14653,28 @@ Set window function.
 
 It accepts the following values:
 @table @samp
-@item none
-No samples pre-processing (do not expect this to be faster)
+@item rect
+@item bartlett
 @item hann
-Hann window
+@item hanning
 @item hamming
-Hamming window
 @item blackman
-Blackman window
+@item welch
+@item flattop
+@item bharris
+@item bnuttall
+@item bhann
+@item sine
+@item nuttall
+@item lanczos
+@item gauss
 @end table
 
 Default value is @code{hann}.
+
+@item orientation
+Set orientation of time vs frequency axis. Can be @code{vertical} or
+@code{horizontal}. Default is @code{vertical}.
 @end table
 
 The usage is very similar to the showwaves filter; see the examples in that

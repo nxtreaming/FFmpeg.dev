@@ -1259,7 +1259,11 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
             bsfc_prev->next = bsfc;
         else
             ost->bitstream_filters = bsfc;
-        av_dict_set(&ost->bsf_args, bsfc->filter->name, arg, 0);
+        if (arg)
+            if (!(bsfc->args = av_strdup(arg))) {
+                av_log(NULL, AV_LOG_FATAL, "Bitstream filter memory allocation failed\n");
+                exit_program(1);
+            }
 
         bsfc_prev = bsfc;
         bsf       = next;
