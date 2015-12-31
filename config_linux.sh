@@ -25,6 +25,9 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/data/usr/local/ssl/lib/pkgconfig:/data/
 --disable-decoders                   \
 --disable-vda                        \
 --disable-parser=hevc                \
+--enable-parser=mpegaudio            \
+--enable-decoder=mp3                 \
+--enable-decoder=mp3float            \
 --enable-libx264                     \
 --enable-encoder=libx264             \
 --enable-decoder=aac                 \
