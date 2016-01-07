@@ -41,7 +41,7 @@
 
 enum DisplayMode  { COMBINED, SEPARATE, NB_MODES };
 enum DisplayScale { LINEAR, SQRT, CBRT, LOG, FOURTHRT, FIFTHRT, NB_SCALES };
-enum ColorMode    { CHANNEL, INTENSITY, RAINBOW, MORELAND, NEBULAE, FIRE, FIERY, NB_CLMODES };
+enum ColorMode    { CHANNEL, INTENSITY, RAINBOW, MORELAND, NEBULAE, FIRE, FIERY, FRUIT, NB_CLMODES };
 enum SlideMode    { REPLACE, SCROLL, FULLFRAME, RSCROLL, NB_SLIDES };
 enum Orientation  { VERTICAL, HORIZONTAL, NB_ORIENTATIONS };
 
@@ -68,6 +68,7 @@ typedef struct {
     int win_size;
     double win_scale;
     float overlap;
+    float gain;
     int skip_samples;
     float *combine_buffer;      ///< color combining buffer (3 * h items)
     AVAudioFifo *fifo;
@@ -97,6 +98,7 @@ static const AVOption showspectrum_options[] = {
         { "nebulae",   "nebulae based coloring",          0, AV_OPT_TYPE_CONST, {.i64=NEBULAE},   0, 0, FLAGS, "color" },
         { "fire",      "fire based coloring",             0, AV_OPT_TYPE_CONST, {.i64=FIRE},      0, 0, FLAGS, "color" },
         { "fiery",     "fiery based coloring",            0, AV_OPT_TYPE_CONST, {.i64=FIERY},     0, 0, FLAGS, "color" },
+        { "fruit",     "fruit based coloring",            0, AV_OPT_TYPE_CONST, {.i64=FRUIT},     0, 0, FLAGS, "color" },
     { "scale", "set display scale", OFFSET(scale), AV_OPT_TYPE_INT, {.i64=SQRT}, LINEAR, NB_SCALES-1, FLAGS, "scale" },
         { "sqrt", "square root", 0, AV_OPT_TYPE_CONST, {.i64=SQRT},   0, 0, FLAGS, "scale" },
         { "cbrt", "cubic root",  0, AV_OPT_TYPE_CONST, {.i64=CBRT},   0, 0, FLAGS, "scale" },
@@ -121,10 +123,12 @@ static const AVOption showspectrum_options[] = {
         { "nuttall",  "Nuttall",          0, AV_OPT_TYPE_CONST, {.i64=WFUNC_NUTTALL},  0, 0, FLAGS, "win_func" },
         { "lanczos",  "Lanczos",          0, AV_OPT_TYPE_CONST, {.i64=WFUNC_LANCZOS},  0, 0, FLAGS, "win_func" },
         { "gauss",    "Gauss",            0, AV_OPT_TYPE_CONST, {.i64=WFUNC_GAUSS},    0, 0, FLAGS, "win_func" },
+        { "tukey",    "Tukey",            0, AV_OPT_TYPE_CONST, {.i64=WFUNC_TUKEY},    0, 0, FLAGS, "win_func" },
     { "orientation", "set orientation", OFFSET(orientation), AV_OPT_TYPE_INT, {.i64=VERTICAL}, 0, NB_ORIENTATIONS-1, FLAGS, "orientation" },
         { "vertical",   NULL, 0, AV_OPT_TYPE_CONST, {.i64=VERTICAL},   0, 0, FLAGS, "orientation" },
         { "horizontal", NULL, 0, AV_OPT_TYPE_CONST, {.i64=HORIZONTAL}, 0, 0, FLAGS, "orientation" },
     { "overlap", "set window overlap", OFFSET(overlap), AV_OPT_TYPE_FLOAT, {.dbl = 0}, 0, 1, FLAGS },
+    { "gain", "set scale gain", OFFSET(gain), AV_OPT_TYPE_FLOAT, {.dbl = 1}, 0, 128, FLAGS },
     { NULL }
 };
 
@@ -187,6 +191,15 @@ static const struct ColorTable {
     { 0.77,           193/256.,      (40-128)/256.,      (155-128)/256. },
     { 0.87,           221/256.,     (101-128)/256.,      (134-128)/256. },
     {    1,                  1,                  0,                   0 }},
+    [FRUIT] = {
+    {    0,                  0,                  0,                   0 },
+    { 0.20,            29/256.,     (136-128)/256.,      (119-128)/256. },
+    { 0.30,            60/256.,     (119-128)/256.,       (90-128)/256. },
+    { 0.40,            85/256.,      (91-128)/256.,       (85-128)/256. },
+    { 0.50,           116/256.,      (70-128)/256.,      (105-128)/256. },
+    { 0.60,           151/256.,      (50-128)/256.,      (146-128)/256. },
+    { 0.70,           191/256.,      (63-128)/256.,      (178-128)/256. },
+    {    1,            98/256.,      (80-128)/256.,      (221-128)/256. }},
 };
 
 static av_cold void uninit(AVFilterContext *ctx)
@@ -497,6 +510,7 @@ static int plot_spectrum_column(AVFilterLink *inlink, AVFrame *insamples)
     ShowSpectrumContext *s = ctx->priv;
     AVFrame *outpicref = s->outpicref;
     const double w = s->win_scale;
+    const float g = s->gain;
     int h = s->orientation == VERTICAL ? s->channel_height : s->channel_width;
 
     int ch, plane, x, y;
@@ -520,6 +534,7 @@ static int plot_spectrum_column(AVFilterLink *inlink, AVFrame *insamples)
             case NEBULAE:
             case FIRE:
             case FIERY:
+            case FRUIT:
             case INTENSITY:
                 uf = yf;
                 vf = yf;
@@ -562,7 +577,7 @@ static int plot_spectrum_column(AVFilterLink *inlink, AVFrame *insamples)
             float *out = &s->combine_buffer[3 * row];
 
             /* get magnitude */
-            float a = w * magnitudes[y];
+            float a = g * w * magnitudes[y];
 
             /* apply scale */
             switch (s->scale) {
@@ -581,7 +596,7 @@ static int plot_spectrum_column(AVFilterLink *inlink, AVFrame *insamples)
                 a = pow(a, 0.20);
                 break;
             case LOG:
-                a = 1 + log10(FFMAX(FFMIN(1, a * w), 1e-6)) / 6; // zero = -120dBFS
+                a = 1 + log10(av_clipd(a * w, 1e-6, 1)) / 6; // zero = -120dBFS
                 break;
             default:
                 av_assert0(0);
@@ -618,7 +633,7 @@ static int plot_spectrum_column(AVFilterLink *inlink, AVFrame *insamples)
                          (outlink->h - 1) * outpicref->linesize[plane] +
                          s->xpos;
             for (y = 0; y < outlink->h; y++) {
-                *p = lrint(FFMAX(0, FFMIN(s->combine_buffer[3 * y + plane], 255)));
+                *p = lrintf(av_clipf(s->combine_buffer[3 * y + plane], 0, 255));
                 p -= outpicref->linesize[plane];
             }
         }
@@ -646,7 +661,7 @@ static int plot_spectrum_column(AVFilterLink *inlink, AVFrame *insamples)
             uint8_t *p = outpicref->data[plane] +
                          s->xpos * outpicref->linesize[plane];
             for (x = 0; x < outlink->w; x++) {
-                *p = lrint(FFMAX(0, FFMIN(s->combine_buffer[3 * x + plane], 255)));
+                *p = lrintf(av_clipf(s->combine_buffer[3 * x + plane], 0, 255));
                 p++;
             }
         }
@@ -787,6 +802,7 @@ static const AVOption showspectrumpic_options[] = {
         { "nebulae",   "nebulae based coloring",          0, AV_OPT_TYPE_CONST, {.i64=NEBULAE},   0, 0, FLAGS, "color" },
         { "fire",      "fire based coloring",             0, AV_OPT_TYPE_CONST, {.i64=FIRE},      0, 0, FLAGS, "color" },
         { "fiery",     "fiery based coloring",            0, AV_OPT_TYPE_CONST, {.i64=FIERY},     0, 0, FLAGS, "color" },
+        { "fruit",     "fruit based coloring",            0, AV_OPT_TYPE_CONST, {.i64=FRUIT},     0, 0, FLAGS, "color" },
     { "scale", "set display scale", OFFSET(scale), AV_OPT_TYPE_INT, {.i64=LOG}, 0, NB_SCALES-1, FLAGS, "scale" },
         { "sqrt", "square root", 0, AV_OPT_TYPE_CONST, {.i64=SQRT},   0, 0, FLAGS, "scale" },
         { "cbrt", "cubic root",  0, AV_OPT_TYPE_CONST, {.i64=CBRT},   0, 0, FLAGS, "scale" },
@@ -811,9 +827,11 @@ static const AVOption showspectrumpic_options[] = {
         { "nuttall",  "Nuttall",          0, AV_OPT_TYPE_CONST, {.i64=WFUNC_NUTTALL},  0, 0, FLAGS, "win_func" },
         { "lanczos",  "Lanczos",          0, AV_OPT_TYPE_CONST, {.i64=WFUNC_LANCZOS},  0, 0, FLAGS, "win_func" },
         { "gauss",    "Gauss",            0, AV_OPT_TYPE_CONST, {.i64=WFUNC_GAUSS},    0, 0, FLAGS, "win_func" },
+        { "tukey",    "Tukey",            0, AV_OPT_TYPE_CONST, {.i64=WFUNC_TUKEY},    0, 0, FLAGS, "win_func" },
     { "orientation", "set orientation", OFFSET(orientation), AV_OPT_TYPE_INT, {.i64=VERTICAL}, 0, NB_ORIENTATIONS-1, FLAGS, "orientation" },
         { "vertical",   NULL, 0, AV_OPT_TYPE_CONST, {.i64=VERTICAL},   0, 0, FLAGS, "orientation" },
         { "horizontal", NULL, 0, AV_OPT_TYPE_CONST, {.i64=HORIZONTAL}, 0, 0, FLAGS, "orientation" },
+    { "gain", "set scale gain", OFFSET(gain), AV_OPT_TYPE_FLOAT, {.dbl = 1}, 0, 128, FLAGS },
     { NULL }
 };
 

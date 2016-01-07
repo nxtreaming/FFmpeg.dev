@@ -1521,6 +1521,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
     static int64_t last_time = -1;
     static int qp_histogram[52];
     int hours, mins, secs, us;
+    int ret;
     float t;
 
     if (!print_stats && !is_last_report && !progress_avio)
@@ -1579,7 +1580,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
                 if (qp >= 0 && qp < FF_ARRAY_ELEMS(qp_histogram))
                     qp_histogram[qp]++;
                 for (j = 0; j < 32; j++)
-                    snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%X", (int)lrintf(log2(qp_histogram[j] + 1)));
+                    snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%X", av_log2(qp_histogram[j] + 1));
             }
 
             if ((enc->flags & AV_CODEC_FLAG_PSNR) && (ost->pict_type != AV_PICTURE_TYPE_NONE || is_last_report)) {
@@ -1687,7 +1688,9 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         avio_flush(progress_avio);
         av_bprint_finalize(&buf_script, NULL);
         if (is_last_report) {
-            avio_closep(&progress_avio);
+            if ((ret = avio_closep(&progress_avio)) < 0)
+                av_log(NULL, AV_LOG_ERROR,
+                       "Error closing progress log, loss of information possible: %s\n", av_err2str(ret));
         }
     }
 

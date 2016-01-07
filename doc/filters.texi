@@ -13372,6 +13372,20 @@ Allowed range is @code{[0, 255]}.
 
 @item zoom
 Set the zoom factor. Default value is @code{1}. Allowed range is @code{[1, 10]}.
+
+@item draw
+Set the vectorscope drawing mode.
+
+Available values are:
+@table @samp
+@item dot
+Draw dot for each sample.
+
+@item line
+Draw line between previous and current sample.
+@end table
+
+Default value is @samp{dot}.
 @end table
 
 @subsection Examples
@@ -14535,6 +14549,7 @@ It accepts the following values:
 @item nuttall
 @item lanczos
 @item gauss
+@item tukey
 @end table
 Default is @code{hanning}.
 
@@ -14625,6 +14640,8 @@ each channel is displayed using the nebulae color scheme
 each channel is displayed using the fire color scheme
 @item fiery
 each channel is displayed using the fiery color scheme
+@item fruit
+each channel is displayed using the fruit color scheme
 @end table
 
 Default value is @samp{channel}.
@@ -14676,6 +14693,7 @@ It accepts the following values:
 @item nuttall
 @item lanczos
 @item gauss
+@item tukey
 @end table
 
 Default value is @code{hann}.
@@ -14688,6 +14706,10 @@ Set orientation of time vs frequency axis. Can be @code{vertical} or
 Set ratio of overlap window. Default value is @code{0}.
 When value is @code{1} overlap is set to recommended size for specific
 window function currently used.
+
+@item gain
+Set scale gain for calculating intensity color values.
+Default value is @code{1}.
 @end table
 
 The usage is very similar to the showwaves filter; see the examples in that
@@ -14754,6 +14776,8 @@ each channel is displayed using the nebulae color scheme
 each channel is displayed using the fire color scheme
 @item fiery
 each channel is displayed using the fiery color scheme
+@item fruit
+each channel is displayed using the fruit color scheme
 @end table
 Default value is @samp{intensity}.
 
@@ -14809,6 +14833,10 @@ Default value is @code{hann}.
 @item orientation
 Set orientation of time vs frequency axis. Can be @code{vertical} or
 @code{horizontal}. Default is @code{vertical}.
+
+@item gain
+Set scale gain for calculating intensity color values.
+Default value is @code{1}.
 @end table
 
 @subsection Examples
