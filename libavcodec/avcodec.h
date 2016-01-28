@@ -1823,7 +1823,11 @@ typedef struct AVCodecContext {
 #define FF_RC_STRATEGY_XVID 1
 #endif
 
+#if FF_API_PRIVATE_OPT
+    /** @deprecated use encoder private options instead */
+    attribute_deprecated
     int b_frame_strategy;
+#endif
 
     /**
      * qscale offset between IP and B-frames
@@ -2185,12 +2189,11 @@ typedef struct AVCodecContext {
      */
     int bidir_refine;
 
-    /**
-     *
-     * - encoding: Set by user.
-     * - decoding: unused
-     */
+#if FF_API_PRIVATE_OPT
+    /** @deprecated use encoder private options instead */
+    attribute_deprecated
     int brd_scale;
+#endif
 
     /**
      * minimum GOP size
@@ -2230,12 +2233,11 @@ typedef struct AVCodecContext {
      */
     int mv0_threshold;
 
-    /**
-     * Adjust sensitivity of b_frame_strategy 1.
-     * - encoding: Set by user.
-     * - decoding: unused
-     */
+#if FF_API_PRIVATE_OPT
+    /** @deprecated use encoder private options instead */
+    attribute_deprecated
     int b_sensitivity;
+#endif
 
     /**
      * Chromaticity coordinates of the source primaries.
@@ -2601,33 +2603,23 @@ typedef struct AVCodecContext {
     int lmax;
 #endif
 
-    /**
-     * frame skip threshold
-     * - encoding: Set by user.
-     * - decoding: unused
-     */
+#if FF_API_PRIVATE_OPT
+    /** @deprecated use encoder private options instead */
+    attribute_deprecated
     int frame_skip_threshold;
 
-    /**
-     * frame skip factor
-     * - encoding: Set by user.
-     * - decoding: unused
-     */
+    /** @deprecated use encoder private options instead */
+    attribute_deprecated
     int frame_skip_factor;
 
-    /**
-     * frame skip exponent
-     * - encoding: Set by user.
-     * - decoding: unused
-     */
+    /** @deprecated use encoder private options instead */
+    attribute_deprecated
     int frame_skip_exp;
 
-    /**
-     * frame skip comparison function
-     * - encoding: Set by user.
-     * - decoding: unused
-     */
+    /** @deprecated use encoder private options instead */
+    attribute_deprecated
     int frame_skip_cmp;
+#endif /* FF_API_PRIVATE_OPT */
 
     /**
      * trellis RD quantization

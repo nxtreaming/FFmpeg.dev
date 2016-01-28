@@ -160,6 +160,7 @@ void avcodec_register_all(void)
     REGISTER_ENCDEC (DNXHD,             dnxhd);
     REGISTER_ENCDEC (DPX,               dpx);
     REGISTER_DECODER(DSICINVIDEO,       dsicinvideo);
+    REGISTER_DECODER(DVAUDIO,           dvaudio);
     REGISTER_ENCDEC (DVVIDEO,           dvvideo);
     REGISTER_DECODER(DXA,               dxa);
     REGISTER_DECODER(DXTORY,            dxtory);
@@ -620,6 +621,7 @@ void avcodec_register_all(void)
     REGISTER_PARSER(DIRAC,              dirac);
     REGISTER_PARSER(DNXHD,              dnxhd);
     REGISTER_PARSER(DPX,                dpx);
+    REGISTER_PARSER(DVAUDIO,            dvaudio);
     REGISTER_PARSER(DVBSUB,             dvbsub);
     REGISTER_PARSER(DVDSUB,             dvdsub);
     REGISTER_PARSER(DVD_NAV,            dvd_nav);

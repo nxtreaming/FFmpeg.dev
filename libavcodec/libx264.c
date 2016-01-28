@@ -86,6 +86,7 @@ typedef struct X264Context {
     int forced_idr;
     int coder;
     int a53_cc;
+    int b_frame_strategy;
 
     char *x264_params;
 } X264Context;
@@ -554,7 +555,7 @@ static av_cold int X264_init(AVCodecContext *avctx)
         x4->params.i_frame_reference    = avctx->refs;
     else if (x4->level) {
         int i;
-        int mbn = FF_CEIL_RSHIFT(avctx->width, 4) * FF_CEIL_RSHIFT(avctx->height, 4);
+        int mbn = AV_CEIL_RSHIFT(avctx->width, 4) * AV_CEIL_RSHIFT(avctx->height, 4);
         int level_id = -1;
         char *tail;
         int scale = X264_BUILD < 129 ? 384 : 1;
@@ -582,8 +583,12 @@ static av_cold int X264_init(AVCodecContext *avctx)
         x4->params.analyse.i_noise_reduction = avctx->noise_reduction;
     if (avctx->me_subpel_quality >= 0)
         x4->params.analyse.i_subpel_refine   = avctx->me_subpel_quality;
+#if FF_API_PRIVATE_OPT
+FF_DISABLE_DEPRECATION_WARNINGS
     if (avctx->b_frame_strategy >= 0)
-        x4->params.i_bframe_adaptive = avctx->b_frame_strategy;
+        x4->b_frame_strategy = avctx->b_frame_strategy;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
     if (avctx->keyint_min >= 0)
         x4->params.i_keyint_min = avctx->keyint_min;
 #if FF_API_CODER_TYPE
@@ -711,6 +716,9 @@ FF_ENABLE_DEPRECATION_WARNINGS
 
     if (x4->coder >= 0)
         x4->params.b_cabac = x4->coder;
+
+    if (x4->b_frame_strategy >= 0)
+        x4->params.i_bframe_adaptive = x4->b_frame_strategy;
 
     if (x4->profile)
         if (x264_param_apply_profile(&x4->params, x4->profile) < 0) {
@@ -955,6 +963,9 @@ static const AVOption options[] = {
     { "default",          NULL, 0, AV_OPT_TYPE_CONST, { .i64 = -1 }, INT_MIN, INT_MAX, VE, "coder" },
     { "cavlc",            NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 0 },  INT_MIN, INT_MAX, VE, "coder" },
     { "cabac",            NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 1 },  INT_MIN, INT_MAX, VE, "coder" },
+    { "vlc",              NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 0 },  INT_MIN, INT_MAX, VE, "coder" },
+    { "ac",               NULL, 0, AV_OPT_TYPE_CONST, { .i64 = 1 },  INT_MIN, INT_MAX, VE, "coder" },
+    { "b_strategy",   "Strategy to choose between I/P/B-frames",          OFFSET(b_frame_strategy), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 2, VE },
 
     { "x264-params",  "Override the x264 configuration using a :-separated list of key=value parameters", OFFSET(x264_params), AV_OPT_TYPE_STRING, { 0 }, 0, 0, VE },
     { NULL },
@@ -982,7 +993,9 @@ static const AVCodecDefault x264_defaults[] = {
     { "me_method",        "-1" },
 #endif
     { "subq",             "-1" },
+#if FF_API_PRIVATE_OPT
     { "b_strategy",       "-1" },
+#endif
     { "keyint_min",       "-1" },
 #if FF_API_CODER_TYPE
     { "coder",            "-1" },
