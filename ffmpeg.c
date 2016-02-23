@@ -1731,11 +1731,11 @@ static void flush_encoders(void)
             switch (enc->codec_type) {
             case AVMEDIA_TYPE_AUDIO:
                 encode = avcodec_encode_audio2;
-                desc   = "Audio";
+                desc   = "audio";
                 break;
             case AVMEDIA_TYPE_VIDEO:
                 encode = avcodec_encode_video2;
-                desc   = "Video";
+                desc   = "video";
                 break;
             default:
                 stop_encoding = 1;
@@ -1751,7 +1751,7 @@ static void flush_encoders(void)
 
                 update_benchmark(NULL);
                 ret = encode(enc, &pkt, NULL, &got_packet);
-                update_benchmark("flush %s %d.%d", desc, ost->file_index, ost->index);
+                update_benchmark("flush_%s %d.%d", desc, ost->file_index, ost->index);
                 if (ret < 0) {
                     av_log(NULL, AV_LOG_FATAL, "%s encoding failed: %s\n",
                            desc,
@@ -2143,8 +2143,12 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output)
     ist->hwaccel_retrieved_pix_fmt = decoded_frame->format;
 
     best_effort_timestamp= av_frame_get_best_effort_timestamp(decoded_frame);
-    if(best_effort_timestamp != AV_NOPTS_VALUE)
-        ist->next_pts = ist->pts = av_rescale_q(decoded_frame->pts = best_effort_timestamp, ist->st->time_base, AV_TIME_BASE_Q);
+    if(best_effort_timestamp != AV_NOPTS_VALUE) {
+        int64_t ts = av_rescale_q(decoded_frame->pts = best_effort_timestamp, ist->st->time_base, AV_TIME_BASE_Q);
+
+        if (ts != AV_NOPTS_VALUE)
+            ist->next_pts = ist->pts = ts;
+    }
 
     if (debug_ts) {
         av_log(NULL, AV_LOG_INFO, "decoder -> ist_index:%d type:video "
@@ -3214,13 +3218,6 @@ static int transcode_init(void)
         }
     }
 
-    /* open each encoder */
-    for (i = 0; i < nb_output_streams; i++) {
-        ret = init_output_stream(output_streams[i], error, sizeof(error));
-        if (ret < 0)
-            goto dump_format;
-    }
-
     /* init input streams */
     for (i = 0; i < nb_input_streams; i++)
         if ((ret = init_input_stream(i, error, sizeof(error))) < 0) {
@@ -3230,6 +3227,13 @@ static int transcode_init(void)
             }
             goto dump_format;
         }
+
+    /* open each encoder */
+    for (i = 0; i < nb_output_streams; i++) {
+        ret = init_output_stream(output_streams[i], error, sizeof(error));
+        if (ret < 0)
+            goto dump_format;
+    }
 
     /* discard unused programs */
     for (i = 0; i < nb_input_files; i++) {

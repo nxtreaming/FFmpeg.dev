@@ -1,7 +1,7 @@
 # libavcodec tests
 AVCODECOBJS-$(CONFIG_ALAC_DECODER) += alacdsp.o
 AVCODECOBJS-$(CONFIG_BSWAPDSP) += bswapdsp.o
-AVCODECOBJS-$(CONFIG_DCA_DECODER) += dcadsp.o synth_filter.o
+AVCODECOBJS-$(CONFIG_DCA_DECODER) += synth_filter.o
 AVCODECOBJS-$(CONFIG_FLACDSP)  += flacdsp.o
 AVCODECOBJS-$(CONFIG_FMTCONVERT)   += fmtconvert.o
 AVCODECOBJS-$(CONFIG_H264PRED) += h264pred.o
@@ -13,6 +13,11 @@ AVCODECOBJS-$(CONFIG_VP9_DECODER) += vp9dsp.o
 AVCODECOBJS-$(CONFIG_VIDEODSP) += videodsp.o
 
 CHECKASMOBJS-$(CONFIG_AVCODEC) += $(AVCODECOBJS-yes)
+
+# libavfilter tests
+AVFILTEROBJS-$(CONFIG_BLEND_FILTER) += vf_blend.o
+
+CHECKASMOBJS-$(CONFIG_AVFILTER) += $(AVFILTEROBJS-yes)
 
 
 -include $(SRC_PATH)/tests/checkasm/$(ARCH)/Makefile

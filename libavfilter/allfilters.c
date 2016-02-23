@@ -58,7 +58,9 @@ void avfilter_register_all(void)
     REGISTER_FILTER(AINTERLEAVE,    ainterleave,    af);
     REGISTER_FILTER(ALIMITER,       alimiter,       af);
     REGISTER_FILTER(ALLPASS,        allpass,        af);
+    REGISTER_FILTER(ALOOP,          aloop,          af);
     REGISTER_FILTER(AMERGE,         amerge,         af);
+    REGISTER_FILTER(AMETADATA,      ametadata,      af);
     REGISTER_FILTER(AMIX,           amix,           af);
     REGISTER_FILTER(ANEQUALIZER,    anequalizer,    af);
     REGISTER_FILTER(ANULL,          anull,          af);
@@ -78,6 +80,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(ASHOWINFO,      ashowinfo,      af);
     REGISTER_FILTER(ASPLIT,         asplit,         af);
     REGISTER_FILTER(ASTATS,         astats,         af);
+    REGISTER_FILTER(ASTREAMSELECT,  astreamselect,  af);
     REGISTER_FILTER(ASYNCTS,        asyncts,        af);
     REGISTER_FILTER(ATEMPO,         atempo,         af);
     REGISTER_FILTER(ATRIM,          atrim,          af);
@@ -98,6 +101,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(EBUR128,        ebur128,        af);
     REGISTER_FILTER(EQUALIZER,      equalizer,      af);
     REGISTER_FILTER(EXTRASTEREO,    extrastereo,    af);
+    REGISTER_FILTER(FIREQUALIZER,   firequalizer,   af);
     REGISTER_FILTER(FLANGER,        flanger,        af);
     REGISTER_FILTER(HIGHPASS,       highpass,       af);
     REGISTER_FILTER(JOIN,           join,           af);
@@ -137,6 +141,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(BLACKFRAME,     blackframe,     vf);
     REGISTER_FILTER(BLEND,          blend,          vf);
     REGISTER_FILTER(BOXBLUR,        boxblur,        vf);
+    REGISTER_FILTER(BWDIF,          bwdif,          vf);
     REGISTER_FILTER(CHROMAKEY,      chromakey,      vf);
     REGISTER_FILTER(CODECVIEW,      codecview,      vf);
     REGISTER_FILTER(COLORBALANCE,   colorbalance,   vf);
@@ -172,6 +177,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(FADE,           fade,           vf);
     REGISTER_FILTER(FFTFILT,        fftfilt,        vf);
     REGISTER_FILTER(FIELD,          field,          vf);
+    REGISTER_FILTER(FIELDHINT,      fieldhint,      vf);
     REGISTER_FILTER(FIELDMATCH,     fieldmatch,     vf);
     REGISTER_FILTER(FIELDORDER,     fieldorder,     vf);
     REGISTER_FILTER(FIND_RECT,      find_rect,      vf);
@@ -199,6 +205,7 @@ void avfilter_register_all(void)
     REGISTER_FILTER(INTERLEAVE,     interleave,     vf);
     REGISTER_FILTER(KERNDEINT,      kerndeint,      vf);
     REGISTER_FILTER(LENSCORRECTION, lenscorrection, vf);
+    REGISTER_FILTER(LOOP,           loop,           vf);
     REGISTER_FILTER(LUT3D,          lut3d,          vf);
     REGISTER_FILTER(LUT,            lut,            vf);
     REGISTER_FILTER(LUTRGB,         lutrgb,         vf);
@@ -206,8 +213,10 @@ void avfilter_register_all(void)
     REGISTER_FILTER(MASKEDMERGE,    maskedmerge,    vf);
     REGISTER_FILTER(MCDEINT,        mcdeint,        vf);
     REGISTER_FILTER(MERGEPLANES,    mergeplanes,    vf);
+    REGISTER_FILTER(METADATA,       metadata,       vf);
     REGISTER_FILTER(MPDECIMATE,     mpdecimate,     vf);
     REGISTER_FILTER(NEGATE,         negate,         vf);
+    REGISTER_FILTER(NNEDI,          nnedi,          vf);
     REGISTER_FILTER(NOFORMAT,       noformat,       vf);
     REGISTER_FILTER(NOISE,          noise,          vf);
     REGISTER_FILTER(NULL,           null,           vf);
@@ -256,8 +265,10 @@ void avfilter_register_all(void)
     REGISTER_FILTER(SPP,            spp,            vf);
     REGISTER_FILTER(SSIM,           ssim,           vf);
     REGISTER_FILTER(STEREO3D,       stereo3d,       vf);
+    REGISTER_FILTER(STREAMSELECT,   streamselect,   vf);
     REGISTER_FILTER(SUBTITLES,      subtitles,      vf);
     REGISTER_FILTER(SUPER2XSAI,     super2xsai,     vf);
+    REGISTER_FILTER(SWAPRECT,       swaprect,       vf);
     REGISTER_FILTER(SWAPUV,         swapuv,         vf);
     REGISTER_FILTER(TBLEND,         tblend,         vf);
     REGISTER_FILTER(TELECINE,       telecine,       vf);

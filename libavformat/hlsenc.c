@@ -35,6 +35,7 @@
 #include "libavutil/time_internal.h"
 
 #include "avformat.h"
+#include "avio_internal.h"
 #include "internal.h"
 #include "os_support.h"
 
@@ -81,6 +82,7 @@ typedef struct HLSContext {
     char *segment_filename;
 
     int use_localtime;      ///< flag to expand filename with localtime
+    int use_localtime_mkdir;///< flag to mkdir dirname in timebased filename
     int allowcache;
     int64_t recording_time;
     int has_video;
@@ -209,8 +211,7 @@ static int hls_encryption_start(AVFormatContext *s)
     AVIOContext *pb;
     uint8_t key[KEYSIZE];
 
-    if ((ret = avio_open2(&pb, hls->key_info_file, AVIO_FLAG_READ,
-                           &s->interrupt_callback, NULL)) < 0) {
+    if ((ret = s->io_open(s, &pb, hls->key_info_file, AVIO_FLAG_READ, NULL)) < 0) {
         av_log(hls, AV_LOG_ERROR,
                 "error opening key info file %s\n", hls->key_info_file);
         return ret;
@@ -225,7 +226,7 @@ static int hls_encryption_start(AVFormatContext *s)
     ff_get_line(pb, hls->iv_string, sizeof(hls->iv_string));
     hls->iv_string[strcspn(hls->iv_string, "\r\n")] = '\0';
 
-    avio_close(pb);
+    ff_format_io_close(s, &pb);
 
     if (!*hls->key_uri) {
         av_log(hls, AV_LOG_ERROR, "no key URI specified in key info file\n");
@@ -237,14 +238,13 @@ static int hls_encryption_start(AVFormatContext *s)
         return AVERROR(EINVAL);
     }
 
-    if ((ret = avio_open2(&pb, hls->key_file, AVIO_FLAG_READ,
-                           &s->interrupt_callback, NULL)) < 0) {
+    if ((ret = s->io_open(s, &pb, hls->key_file, AVIO_FLAG_READ, NULL)) < 0) {
         av_log(hls, AV_LOG_ERROR, "error opening key file %s\n", hls->key_file);
         return ret;
     }
 
     ret = avio_read(pb, key, sizeof(key));
-    avio_close(pb);
+    ff_format_io_close(s, &pb);
     if (ret != sizeof(key)) {
         av_log(hls, AV_LOG_ERROR, "error reading key file %s\n", hls->key_file);
         if (ret >= 0 || ret == AVERROR_EOF)
@@ -271,6 +271,9 @@ static int hls_mux_init(AVFormatContext *s)
     oc->oformat            = hls->oformat;
     oc->interrupt_callback = s->interrupt_callback;
     oc->max_delay          = s->max_delay;
+    oc->opaque             = s->opaque;
+    oc->io_open            = s->io_open;
+    oc->io_close           = s->io_close;
     av_dict_copy(&oc->metadata, s->metadata, 0);
 
     if(hls->vtt_oformat) {
@@ -302,16 +305,35 @@ static int hls_mux_init(AVFormatContext *s)
 }
 
 /* Create a new segment and append it to the segment list */
-static int hls_append_segment(HLSContext *hls, double duration, int64_t pos,
-                              int64_t size)
+static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls, double duration,
+                              int64_t pos, int64_t size)
 {
     HLSSegment *en = av_malloc(sizeof(*en));
+    char *tmp, *p;
+    const char *pl_dir, *filename;
     int ret;
 
     if (!en)
         return AVERROR(ENOMEM);
 
-    av_strlcpy(en->filename, av_basename(hls->avf->filename), sizeof(en->filename));
+    filename = av_basename(hls->avf->filename);
+
+    if (hls->use_localtime_mkdir) {
+        /* Possibly prefix with mkdir'ed subdir, if playlist share same
+         * base path. */
+        tmp = av_strdup(s->filename);
+        if (!tmp) {
+            av_free(en);
+            return AVERROR(ENOMEM);
+        }
+
+        pl_dir = av_dirname(tmp);
+        p = hls->avf->filename;
+        if (strstr(p, pl_dir) == p)
+            filename = hls->avf->filename + strlen(pl_dir) + 1;
+        av_free(tmp);
+    }
+    av_strlcpy(en->filename, filename, sizeof(en->filename));
 
     if(hls->has_subtitle)
         av_strlcpy(en->sub_filename, av_basename(hls->vtt_avf->filename), sizeof(en->sub_filename));
@@ -394,8 +416,7 @@ static int hls_window(AVFormatContext *s, int last)
 
     set_http_options(&options, hls);
     snprintf(temp_filename, sizeof(temp_filename), use_rename ? "%s.tmp" : "%s", s->filename);
-    if ((ret = avio_open2(&out, temp_filename, AVIO_FLAG_WRITE,
-                          &s->interrupt_callback, &options)) < 0)
+    if ((ret = s->io_open(s, &out, temp_filename, AVIO_FLAG_WRITE, NULL)) < 0)
         goto fail;
 
     for (en = hls->segments; en; en = en->next) {
@@ -445,8 +466,7 @@ static int hls_window(AVFormatContext *s, int last)
         avio_printf(out, "#EXT-X-ENDLIST\n");
 
     if( hls->vtt_m3u8_name ) {
-        if ((ret = avio_open2(&sub_out, hls->vtt_m3u8_name, AVIO_FLAG_WRITE,
-                          &s->interrupt_callback, &options)) < 0)
+        if ((ret = s->io_open(s, &sub_out, hls->vtt_m3u8_name, AVIO_FLAG_WRITE, &options)) < 0)
             goto fail;
         avio_printf(sub_out, "#EXTM3U\n");
         avio_printf(sub_out, "#EXT-X-VERSION:%d\n", version);
@@ -476,8 +496,8 @@ static int hls_window(AVFormatContext *s, int last)
 
 fail:
     av_dict_free(&options);
-    avio_closep(&out);
-    avio_closep(&sub_out);
+    ff_format_io_close(s, &out);
+    ff_format_io_close(s, &sub_out);
     if (ret >= 0 && use_rename)
         ff_rename(temp_filename, s->filename, s);
     return ret;
@@ -508,7 +528,22 @@ static int hls_start(AVFormatContext *s)
                 av_log(oc, AV_LOG_ERROR, "Could not get segment filename with use_localtime\n");
                 return AVERROR(EINVAL);
             }
-       } else if (av_get_frame_filename(oc->filename, sizeof(oc->filename),
+
+            if (c->use_localtime_mkdir) {
+                const char *dir;
+                char *fn_copy = av_strdup(oc->filename);
+                if (!fn_copy) {
+                    return AVERROR(ENOMEM);
+                }
+                dir = av_dirname(fn_copy);
+                if (mkdir(dir, 0777) == -1 && errno != EEXIST) {
+                    av_log(oc, AV_LOG_ERROR, "Could not create directory %s with use_localtime_mkdir\n", dir);
+                    av_free(fn_copy);
+                    return AVERROR(errno);
+                }
+                av_free(fn_copy);
+            }
+        } else if (av_get_frame_filename(oc->filename, sizeof(oc->filename),
                                   c->basename, c->wrap ? c->sequence % c->wrap : c->sequence) < 0) {
             av_log(oc, AV_LOG_ERROR, "Invalid segment filename template '%s' you can try use -use_localtime 1 with it\n", c->basename);
             return AVERROR(EINVAL);
@@ -542,20 +577,17 @@ static int hls_start(AVFormatContext *s)
             err = AVERROR(ENOMEM);
             goto fail;
         }
-        err = avio_open2(&oc->pb, filename, AVIO_FLAG_WRITE,
-                         &s->interrupt_callback, &options);
+        err = s->io_open(s, &oc->pb, filename, AVIO_FLAG_WRITE, &options);
         av_free(filename);
         av_dict_free(&options);
         if (err < 0)
             return err;
     } else
-        if ((err = avio_open2(&oc->pb, oc->filename, AVIO_FLAG_WRITE,
-                          &s->interrupt_callback, &options)) < 0)
+        if ((err = s->io_open(s, &oc->pb, oc->filename, AVIO_FLAG_WRITE, &options)) < 0)
             goto fail;
     if (c->vtt_basename) {
         set_http_options(&options, c);
-        if ((err = avio_open2(&vtt_oc->pb, vtt_oc->filename, AVIO_FLAG_WRITE,
-                         &s->interrupt_callback, &options)) < 0)
+        if ((err = s->io_open(s, &vtt_oc->pb, vtt_oc->filename, AVIO_FLAG_WRITE, &options)) < 0)
             goto fail;
     }
     av_dict_free(&options);
@@ -781,7 +813,7 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
 
         new_start_pos = avio_tell(hls->avf->pb);
         hls->size = new_start_pos - hls->start_pos;
-        ret = hls_append_segment(hls, hls->duration, hls->start_pos, hls->size);
+        ret = hls_append_segment(s, hls, hls->duration, hls->start_pos, hls->size);
         hls->start_pos = new_start_pos;
         if (ret < 0)
             return ret;
@@ -794,9 +826,9 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
                 av_opt_set(hls->avf->priv_data, "mpegts_flags", "resend_headers", 0);
             hls->number++;
         } else {
-            avio_closep(&oc->pb);
+            ff_format_io_close(s, &oc->pb);
             if (hls->vtt_avf)
-                avio_close(hls->vtt_avf->pb);
+                ff_format_io_close(s, &hls->vtt_avf->pb);
 
             ret = hls_start(s);
         }
@@ -827,15 +859,15 @@ static int hls_write_trailer(struct AVFormatContext *s)
     av_write_trailer(oc);
     if (oc->pb) {
         hls->size = avio_tell(hls->avf->pb) - hls->start_pos;
-        avio_closep(&oc->pb);
-        hls_append_segment(hls, hls->duration, hls->start_pos, hls->size);
+        ff_format_io_close(s, &oc->pb);
+        hls_append_segment(s, hls, hls->duration, hls->start_pos, hls->size);
     }
 
     if (vtt_oc) {
         if (vtt_oc->pb)
             av_write_trailer(vtt_oc);
         hls->size = avio_tell(hls->vtt_avf->pb) - hls->start_pos;
-        avio_closep(&vtt_oc->pb);
+        ff_format_io_close(s, &vtt_oc->pb);
     }
     av_freep(&hls->basename);
     avformat_free_context(oc);
@@ -874,7 +906,8 @@ static const AVOption options[] = {
     {"round_durations", "round durations in m3u8 to whole numbers", 0, AV_OPT_TYPE_CONST, {.i64 = HLS_ROUND_DURATIONS }, 0, UINT_MAX,   E, "flags"},
     {"discont_start", "start the playlist with a discontinuity tag", 0, AV_OPT_TYPE_CONST, {.i64 = HLS_DISCONT_START }, 0, UINT_MAX,   E, "flags"},
     {"omit_endlist", "Do not append an endlist when ending stream", 0, AV_OPT_TYPE_CONST, {.i64 = HLS_OMIT_ENDLIST }, 0, UINT_MAX,   E, "flags"},
-    { "use_localtime", "set filename expansion with strftime at segment creation", OFFSET(use_localtime), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
+    {"use_localtime", "set filename expansion with strftime at segment creation", OFFSET(use_localtime), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
+    {"use_localtime_mkdir", "create last directory component in strftime-generated filename", OFFSET(use_localtime_mkdir), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
     {"method", "set the HTTP method", OFFSET(method), AV_OPT_TYPE_STRING, {.str = NULL},  0, 0,    E},
 
     { NULL },

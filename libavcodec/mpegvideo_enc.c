@@ -348,6 +348,18 @@ av_cold int ff_mpv_encode_init(AVCodecContext *avctx)
     }
 
     avctx->bits_per_raw_sample = av_clip(avctx->bits_per_raw_sample, 0, 8);
+
+#if FF_API_PRIVATE_OPT
+FF_DISABLE_DEPRECATION_WARNINGS
+    if (avctx->rtp_payload_size)
+        s->rtp_payload_size = avctx->rtp_payload_size;
+    if (avctx->me_penalty_compensation)
+        s->me_penalty_compensation = avctx->me_penalty_compensation;
+    if (avctx->pre_me)
+        s->me_pre = avctx->pre_me;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+
     s->bit_rate = avctx->bit_rate;
     s->width    = avctx->width;
     s->height   = avctx->height;
@@ -369,8 +381,7 @@ av_cold int ff_mpv_encode_init(AVCodecContext *avctx)
     s->codec_id     = avctx->codec->id;
     s->strict_std_compliance = avctx->strict_std_compliance;
     s->quarter_sample     = (avctx->flags & AV_CODEC_FLAG_QPEL) != 0;
-    s->mpeg_quant         = avctx->mpeg_quant;
-    s->rtp_mode           = !!avctx->rtp_payload_size;
+    s->rtp_mode           = !!s->rtp_payload_size;
     s->intra_dc_precision = avctx->intra_dc_precision;
 
     // workaround some differences between how applications specify dc precision
@@ -604,6 +615,13 @@ FF_ENABLE_DEPRECATION_WARNINGS
         return -1;
     }
 
+#if FF_API_PRIVATE_OPT
+    FF_DISABLE_DEPRECATION_WARNINGS
+    if (avctx->mpeg_quant)
+        s->mpeg_quant = avctx->mpeg_quant;
+    FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+
     // FIXME mpeg2 uses that too
     if (s->mpeg_quant && (   s->codec_id != AV_CODEC_ID_MPEG4
                           && s->codec_id != AV_CODEC_ID_MPEG2VIDEO)) {
@@ -623,7 +641,14 @@ FF_ENABLE_DEPRECATION_WARNINGS
         return -1;
     }
 
-    if (s->avctx->scenechange_threshold < 1000000000 &&
+#if FF_API_PRIVATE_OPT
+FF_DISABLE_DEPRECATION_WARNINGS
+    if (avctx->scenechange_threshold)
+        s->scenechange_threshold = avctx->scenechange_threshold;
+FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+
+    if (s->scenechange_threshold < 1000000000 &&
         (s->avctx->flags & AV_CODEC_FLAG_CLOSED_GOP)) {
         av_log(avctx, AV_LOG_ERROR,
                "closed gop with scene change detection are not supported yet, "
@@ -877,6 +902,13 @@ FF_ENABLE_DEPRECATION_WARNINGS
         return -1;
     }
 
+#if FF_API_PRIVATE_OPT
+    FF_DISABLE_DEPRECATION_WARNINGS
+    if (avctx->noise_reduction)
+        s->noise_reduction = avctx->noise_reduction;
+    FF_ENABLE_DEPRECATION_WARNINGS
+#endif
+
     avctx->has_b_frames = !s->low_delay;
 
     s->encoding = 1;
@@ -915,7 +947,8 @@ FF_ENABLE_DEPRECATION_WARNINGS
     FF_ALLOCZ_OR_GOTO(s->avctx, s->reordered_input_picture,
                       MAX_PICTURE_COUNT * sizeof(Picture *), fail);
 
-    if (s->avctx->noise_reduction) {
+
+    if (s->noise_reduction) {
         FF_ALLOCZ_OR_GOTO(s->avctx, s->dct_offset,
                           2 * 64 * sizeof(uint16_t), fail);
     }
@@ -1048,6 +1081,9 @@ FF_ENABLE_DEPRECATION_WARNINGS
     FF_DISABLE_DEPRECATION_WARNINGS
     if (avctx->brd_scale)
         s->brd_scale = avctx->brd_scale;
+
+    if (avctx->prediction_method)
+        s->pred = avctx->prediction_method + 1;
     FF_ENABLE_DEPRECATION_WARNINGS
 #endif
 
@@ -1724,7 +1760,7 @@ static void update_noise_reduction(MpegEncContext *s)
         }
 
         for (i = 0; i < 64; i++) {
-            s->dct_offset[intra][i] = (s->avctx->noise_reduction *
+            s->dct_offset[intra][i] = (s->noise_reduction *
                                        s->dct_count[intra] +
                                        s->dct_error_sum[intra][i] / 2) /
                                       (s->dct_error_sum[intra][i] + 1);
@@ -1797,7 +1833,7 @@ static int frame_start(MpegEncContext *s)
     }
 
     if (s->dct_error_sum) {
-        av_assert2(s->avctx->noise_reduction && s->encoding);
+        av_assert2(s->noise_reduction && s->encoding);
         update_noise_reduction(s);
     }
 
@@ -3002,7 +3038,9 @@ static int encode_thread(AVCodecContext *c, void *arg){
 
                 current_packet_size= ((put_bits_count(&s->pb)+7)>>3) - (s->ptr_lastgob - s->pb.buf);
 
-                is_gob_start= s->avctx->rtp_payload_size && current_packet_size >= s->avctx->rtp_payload_size && mb_y + mb_x>0;
+                is_gob_start = s->rtp_payload_size &&
+                               current_packet_size >= s->rtp_payload_size &&
+                               mb_y + mb_x > 0;
 
                 if(s->start_mb_y == mb_y && mb_y > 0 && mb_x==0) is_gob_start=1;
 
@@ -3569,7 +3607,7 @@ static void merge_context_after_encode(MpegEncContext *dst, MpegEncContext *src)
     MERGE(current_picture.encoding_error[1]);
     MERGE(current_picture.encoding_error[2]);
 
-    if(dst->avctx->noise_reduction){
+    if (dst->noise_reduction){
         for(i=0; i<64; i++){
             MERGE(dct_error_sum[0][i]);
             MERGE(dct_error_sum[1][i]);
@@ -3695,10 +3733,11 @@ static int encode_picture(MpegEncContext *s, int picture_number)
 
     /* Estimate motion for every MB */
     if(s->pict_type != AV_PICTURE_TYPE_I){
-        s->lambda = (s->lambda * s->avctx->me_penalty_compensation + 128)>>8;
-        s->lambda2= (s->lambda2* (int64_t)s->avctx->me_penalty_compensation + 128)>>8;
+        s->lambda  = (s->lambda  * s->me_penalty_compensation + 128) >> 8;
+        s->lambda2 = (s->lambda2 * (int64_t) s->me_penalty_compensation + 128) >> 8;
         if (s->pict_type != AV_PICTURE_TYPE_B) {
-            if((s->avctx->pre_me && s->last_non_b_pict_type==AV_PICTURE_TYPE_I) || s->avctx->pre_me==2){
+            if ((s->me_pre && s->last_non_b_pict_type == AV_PICTURE_TYPE_I) ||
+                s->me_pre == 2) {
                 s->avctx->execute(s->avctx, pre_estimate_motion_thread, &s->thread_context[0], NULL, context_count, sizeof(void*));
             }
         }
@@ -3721,7 +3760,8 @@ static int encode_picture(MpegEncContext *s, int picture_number)
     s->current_picture.   mb_var_sum= s->current_picture_ptr->   mb_var_sum= s->me.   mb_var_sum_temp;
     emms_c();
 
-    if(s->me.scene_change_score > s->avctx->scenechange_threshold && s->pict_type == AV_PICTURE_TYPE_P){
+    if (s->me.scene_change_score > s->scenechange_threshold &&
+        s->pict_type == AV_PICTURE_TYPE_P) {
         s->pict_type= AV_PICTURE_TYPE_I;
         for(i=0; i<s->mb_stride*s->mb_height; i++)
             s->mb_type[i]= CANDIDATE_MB_TYPE_INTRA;
@@ -3856,7 +3896,7 @@ static int encode_picture(MpegEncContext *s, int picture_number)
     case FMT_MJPEG:
         if (CONFIG_MJPEG_ENCODER)
             ff_mjpeg_encode_picture_header(s->avctx, &s->pb, &s->intra_scantable,
-                                           s->intra_matrix, s->chroma_intra_matrix);
+                                           s->pred, s->intra_matrix, s->chroma_intra_matrix);
         break;
     case FMT_H261:
         if (CONFIG_H261_ENCODER)

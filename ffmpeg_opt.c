@@ -2370,18 +2370,25 @@ loop_end:
 
         while(*p) {
             const char *p2 = av_get_token(&p, ":");
+            const char *to_dealloc = p2;
             char *key;
             if (!p2)
                 break;
+
             if(*p) p++;
 
             key = av_get_token(&p2, "=");
-            if (!key || !*p2)
+            if (!key || !*p2) {
+                av_freep(&to_dealloc);
+                av_freep(&key);
                 break;
+            }
             p2++;
 
             if (!strcmp(key, "program_num"))
                 progid = strtol(p2, NULL, 0);
+            av_freep(&to_dealloc);
+            av_freep(&key);
         }
 
         program = av_new_program(oc, progid);
@@ -2389,6 +2396,7 @@ loop_end:
         p = o->program[i].u.str;
         while(*p) {
             const char *p2 = av_get_token(&p, ":");
+            const char *to_dealloc = p2;
             char *key;
             if (!p2)
                 break;
@@ -2415,6 +2423,8 @@ loop_end:
                 av_log(NULL, AV_LOG_FATAL, "Unknown program key %s.\n", key);
                 exit_program(1);
             }
+            av_freep(&to_dealloc);
+            av_freep(&key);
         }
     }
 
@@ -3355,9 +3365,6 @@ const OptionDef options[] = {
     { "hwaccel_device",   OPT_VIDEO | OPT_STRING | HAS_ARG | OPT_EXPERT |
                           OPT_SPEC | OPT_INPUT,                                  { .off = OFFSET(hwaccel_devices) },
         "select a device for HW acceleration", "devicename" },
-#if HAVE_VDPAU_X11
-    { "vdpau_api_ver", HAS_ARG | OPT_INT | OPT_EXPERT, { &vdpau_api_ver }, "" },
-#endif
 #if CONFIG_VDA || CONFIG_VIDEOTOOLBOX
     { "videotoolbox_pixfmt", HAS_ARG | OPT_STRING | OPT_EXPERT, { &videotoolbox_pixfmt}, "" },
 #endif

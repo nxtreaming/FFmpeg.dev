@@ -2061,7 +2061,6 @@ static const char *chroma_location_names[AVCHROMA_LOC_NB] = {
     "top", "bottomleft", "bottom",
 };
 
-FF_DISABLE_DEPRECATION_WARNINGS
 static enum AVPixelFormat get_pix_fmt_internal(const char *name)
 {
     enum AVPixelFormat pix_fmt;
@@ -2249,7 +2248,6 @@ void ff_check_pixfmt_descriptors(void){
         }
     }
 }
-FF_ENABLE_DEPRECATION_WARNINGS
 
 
 enum AVPixelFormat av_pix_fmt_swap_endianness(enum AVPixelFormat pix_fmt)
@@ -2275,6 +2273,7 @@ enum AVPixelFormat av_pix_fmt_swap_endianness(enum AVPixelFormat pix_fmt)
 #define FF_COLOR_GRAY     1 /**< gray color space */
 #define FF_COLOR_YUV      2 /**< YUV color space. 16 <= Y <= 235, 16 <= U, V <= 240 */
 #define FF_COLOR_YUV_JPEG 3 /**< YUV color space. 0 <= Y <= 255, 0 <= U, V <= 255 */
+#define FF_COLOR_XYZ      4
 
 #define pixdesc_has_alpha(pixdesc) \
     ((pixdesc)->nb_components == 2 || (pixdesc)->nb_components == 4 || (pixdesc)->flags & AV_PIX_FMT_FLAG_PAL)
@@ -2289,6 +2288,9 @@ static int get_color_type(const AVPixFmtDescriptor *desc) {
 
     if(desc->name && !strncmp(desc->name, "yuvj", 4))
         return FF_COLOR_YUV_JPEG;
+
+    if(desc->name && !strncmp(desc->name, "xyz", 3))
+        return FF_COLOR_XYZ;
 
     if(desc->flags & AV_PIX_FMT_FLAG_RGB)
         return  FF_COLOR_RGB;

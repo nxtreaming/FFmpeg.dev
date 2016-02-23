@@ -72,7 +72,6 @@ static const struct {
         { "bswapdsp", checkasm_check_bswapdsp },
     #endif
     #if CONFIG_DCA_DECODER
-        { "dcadsp", checkasm_check_dcadsp },
         { "synth_filter", checkasm_check_synth_filter },
     #endif
     #if CONFIG_FLACDSP
@@ -101,6 +100,11 @@ static const struct {
     #endif
     #if CONFIG_VIDEODSP
         { "videodsp", checkasm_check_videodsp },
+    #endif
+#endif
+#if CONFIG_AVFILTER
+    #if CONFIG_BLEND_FILTER
+        { "vf_blend", checkasm_check_blend },
     #endif
 #endif
     { NULL }
