@@ -33,6 +33,7 @@
 #include "libavutil/parseutils.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/time.h"
+#include "libavutil/time_internal.h"
 #include "libavutil/timestamp.h"
 
 #include "libavcodec/bytestream.h"
@@ -293,6 +294,7 @@ static int set_codec_from_probe_data(AVFormatContext *s, AVStream *st,
         { "m4v",       AV_CODEC_ID_MPEG4,      AVMEDIA_TYPE_VIDEO },
         { "mp3",       AV_CODEC_ID_MP3,        AVMEDIA_TYPE_AUDIO },
         { "mpegvideo", AV_CODEC_ID_MPEG2VIDEO, AVMEDIA_TYPE_VIDEO },
+        { "truehd",    AV_CODEC_ID_TRUEHD,     AVMEDIA_TYPE_AUDIO },
         { 0 }
     };
     int score;
@@ -3095,7 +3097,8 @@ void ff_rfps_calculate(AVFormatContext *ic)
             for (j= 0; j<MAX_STD_TIMEBASES; j++) {
                 int k;
 
-                if (st->info->codec_info_duration && st->info->codec_info_duration*av_q2d(st->time_base) < (1001*12.0)/get_std_framerate(j))
+                if (st->info->codec_info_duration &&
+                    st->info->codec_info_duration*av_q2d(st->time_base) < (1001*11.5)/get_std_framerate(j))
                     continue;
                 if (!st->info->codec_info_duration && get_std_framerate(j) < 1001*12)
                     continue;
@@ -4755,5 +4758,51 @@ int ff_parse_creation_time_metadata(AVFormatContext *s, int64_t *timestamp, int 
             return ret;
         }
     }
+    return 0;
+}
+
+int ff_standardize_creation_time(AVFormatContext *s)
+{
+    int64_t timestamp;
+    int ret = ff_parse_creation_time_metadata(s, &timestamp, 0);
+    if (ret == 1) {
+        time_t seconds = timestamp / 1000000;
+        struct tm *ptm, tmbuf;
+        ptm = gmtime_r(&seconds, &tmbuf);
+        if (ptm) {
+            char buf[32];
+            if (!strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", ptm))
+                return AVERROR_EXTERNAL;
+            av_strlcatf(buf, sizeof(buf), ".%06dZ", (int)(timestamp % 1000000));
+            av_dict_set(&s->metadata, "creation_time", buf, 0);
+        } else {
+            return AVERROR_EXTERNAL;
+        }
+    }
+    return ret;
+}
+
+int ff_get_packet_palette(AVFormatContext *s, AVPacket *pkt, int ret, uint32_t *palette)
+{
+    uint8_t *side_data;
+    int size;
+
+    side_data = av_packet_get_side_data(pkt, AV_PKT_DATA_PALETTE, &size);
+    if (side_data) {
+        if (size != AVPALETTE_SIZE) {
+            av_log(s, AV_LOG_ERROR, "Invalid palette side data\n");
+            return AVERROR_INVALIDDATA;
+        }
+        memcpy(palette, side_data, AVPALETTE_SIZE);
+        return 1;
+    }
+
+    if (ret == CONTAINS_PAL) {
+        int i;
+        for (i = 0; i < AVPALETTE_COUNT; i++)
+            palette[i] = AV_RL32(pkt->data + pkt->size - AVPALETTE_SIZE + i*4);
+        return 1;
+    }
+
     return 0;
 }

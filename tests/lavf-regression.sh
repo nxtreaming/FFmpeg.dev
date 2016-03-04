@@ -122,6 +122,7 @@ if [ -n "$do_mov" ] ; then
 mov_common_opt="-acodec pcm_alaw -vcodec mpeg4 -threads 1"
 do_lavf mov "" "-movflags +rtphint $mov_common_opt"
 do_lavf_timecode mov "-movflags +faststart $mov_common_opt"
+do_lavf_timecode mp4 "-vcodec mpeg4 -an -threads 1"
 fi
 
 if [ -n "$do_ismv" ] ; then
@@ -163,6 +164,12 @@ if [ -n "$do_ogg_vp3" ] ; then
 DEC_OPTS="$DEC_OPTS -idct auto"
 do_lavf_fate ogg "vp3/coeff_level64.mkv"
 fi
+
+if [ -n "$do_mov_qtrle_mace6" ] ; then
+DEC_OPTS="$DEC_OPTS -idct auto"
+do_lavf_fate mov "qtrle/Animation-16Greys.mov"
+fi
+
 
 if [ -n "$do_wtv" ] ; then
 do_lavf wtv "" "-acodec mp2 -threads 1"

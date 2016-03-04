@@ -4240,10 +4240,12 @@ Available values for component modes are:
 @item difference128
 @item divide
 @item dodge
+@item freeze
 @item exclusion
 @item glow
 @item hardlight
 @item hardmix
+@item heat
 @item lighten
 @item linearlight
 @item multiply
@@ -4550,6 +4552,61 @@ Overlay a greenscreen-video on top of a static black background.
 ffmpeg -f lavfi -i color=c=black:s=1280x720 -i video.mp4 -shortest -filter_complex "[1:v]chromakey=0x70de77:0.1:0.2[ckout];[0:v][ckout]overlay[out]" -map "[out]" output.mkv
 @end example
 @end itemize
+
+@section ciescope
+
+Display CIE color diagram with pixels overlaid onto it.
+
+The filter acccepts the following options:
+
+@table @option
+@item system
+Set color system.
+
+@table @samp
+@item ntsc, 470m
+@item ebu, 470bg
+@item smpte
+@item 240m
+@item apple
+@item widergb
+@item cie1931
+@item rec709, hdtv
+@item uhdtv, rec2020
+@end table
+
+@item cie
+Set CIE system.
+
+@table @samp
+@item xyy
+@item ucs
+@item luv
+@end table
+
+@item gamuts
+Set what gamuts to draw.
+
+See @code{system} option for avaiable values.
+
+@item size, s
+Set ciescope size, by default set to 512.
+
+@item intensity, i
+Set intensity used to map input pixel values to CIE diagram.
+
+@item contrast
+Set contrast used to draw tongue colors that are out of active color system gamut.
+
+@item corrgamma
+Correct gamma displayed on scope, by default enabled.
+
+@item showwhite
+Show white point on CIE diagram, by default disabled.
+
+@item gamma
+Set input gamma. Used only with XYZ input color space.
+@end table
 
 @section codecview
 
@@ -5237,6 +5294,43 @@ Use a Photoshop preset and redefine the points of the green component:
 curves=psfile='MyCurvesPresets/purple.acv':green='0.45/0.53'
 @end example
 @end itemize
+
+@section datascope
+
+Video data analysis filter.
+
+This filter shows hexadecimal pixel values of part of video.
+
+The filter accepts the following options:
+
+@table @option
+@item size, s
+Set output video size.
+
+@item x
+Set x offset from where to pick pixels.
+
+@item y
+Set y offset from where to pick pixels.
+
+@item mode
+Set scope mode, can be one of the following:
+@table @samp
+@item mono
+Draw hexadecimal pixel values with white color on black background.
+
+@item color
+Draw hexadecimal pixel values with input video pixel color on black
+background.
+
+@item color2
+Draw hexadecimal pixel values on color background picked from input video,
+the text color is picked in such way so its always visible.
+@end table
+
+@item axis
+Draw rows and columns numbers on left and top of video.
+@end table
 
 @section dctdnoiz
 
@@ -7940,6 +8034,18 @@ A floating point number which specifies chroma temporal strength. It defaults to
 @var{luma_tmp}*@var{chroma_spatial}/@var{luma_spatial}.
 @end table
 
+@anchor{hwupload_cuda}
+@section hwupload_cuda
+
+Upload system memory frames to a CUDA device.
+
+It accepts the following optional parameters:
+
+@table @option
+@item device
+The number of the CUDA device to use
+@end table
+
 @section hqx
 
 Apply a high-quality magnification filter designed for pixel art. This filter
@@ -8149,7 +8255,7 @@ The filter accepts the following options:
 Set interlacing threshold.
 @item prog_thres
 Set progressive threshold.
-@item repeat_thres
+@item rep_thres
 Threshold for repeated field detection.
 @item half_life
 Number of frames after which a given frame's contribution to the
@@ -10823,6 +10929,7 @@ Scale a subtitle stream to match the main video in size before overlaying
 @end example
 @end itemize
 
+@anchor{selectivecolor}
 @section selectivecolor
 
 Adjust cyan, magenta, yellow and black (CMYK) to certain ranges of colors (such
@@ -12462,7 +12569,7 @@ same component color value on location in graph. This is the default mode.
 @item color
 Gray values are displayed on graph. Surrounding pixels values which are not
 present in video frame are drawn in gradient of 2 color components which are
-set by option @code{x} and @code{y}.
+set by option @code{x} and @code{y}. The 3rd color component is static.
 
 @item color2
 Actual color components values present in video frame are displayed on graph.
@@ -12476,6 +12583,10 @@ default values of @code{x} and @code{y}.
 Actual colors present in video frame are displayed on graph. If two different
 colors map to same position on graph then color with higher value of component
 not present in graph is picked.
+
+@item color5
+Gray values are displayed on graph. Similar to @code{color} but with 3rd color
+component picked from radial gradient.
 @end table
 
 @item x
@@ -12485,7 +12596,7 @@ Set which color component will be represented on X-axis. Default is @code{1}.
 Set which color component will be represented on Y-axis. Default is @code{2}.
 
 @item intensity, i
-Set intensity, used by modes: gray, color and color3 for increasing brightness
+Set intensity, used by modes: gray, color, color3 and color5 for increasing brightness
 of color component which represents frequency of (X, Y) location in graph.
 
 @item envelope, e
@@ -12503,6 +12614,45 @@ can still spot out of range values without constantly looking at vectorscope.
 @item peak+instant
 Peak and instant envelope combined together.
 @end table
+
+@item graticule, g
+Set what kind of graticule to draw.
+@table @samp
+@item none
+@item green
+@item color
+@end table
+
+@item opacity, o
+Set graticule opacity.
+
+@item flags, f
+Set graticule flags.
+
+@table @samp
+@item white
+Draw graticule for white point.
+
+@item black
+Draw graticule for black point.
+@end table
+
+@item bgopacity, b
+Set background opacity.
+
+@item lthreshold, l
+Set low threshold for color component not represented on X or Y axis.
+Values lower than this value will be ignored. Default is 0.
+Note this value is multiplied with actual max possible value one pixel component
+can have. So for 8-bit input and low threshold value of 0.1 actual threshold
+is 0.1 * 255 = 25.
+
+@item hthreshold, h
+Set high threshold for color component not represented on X or Y axis.
+Values higher than this value will be ignored. Default is 1.
+Note this value is multiplied with actual max possible value one pixel component
+can have. So for 8-bit input and high threshold value of 0.9 actual threshold
+is 0.9 * 255 = 230.
 @end table
 
 @anchor{vidstabdetect}
@@ -13457,6 +13607,10 @@ The sample (pixel) aspect ratio of the input video.
 Specify the optional parameters to be used for the scale filter which
 is automatically inserted when an input change is detected in the
 input size or format.
+
+@item hw_frames_ctx
+When using a hardware pixel format, this should be a reference to an
+AVHWFramesContext describing input frames.
 @end table
 
 For example:
@@ -14227,6 +14381,40 @@ Complete example using @command{ffplay}:
 @example
 ffplay -f lavfi 'amovie=input.mp3, asplit [a][out1];
              [a] avectorscope=zoom=1.3:rc=2:gc=200:bc=10:rf=1:gf=8:bf=7 [out0]'
+@end example
+@end itemize
+
+@section bench, abench
+
+Benchmark part of a filtergraph.
+
+The filter accepts the following options:
+
+@table @option
+@item action
+Start or stop a timer.
+
+Available values are:
+@table @samp
+@item start
+Get the current time, set it as frame metadata (using the key
+@code{lavfi.bench.start_time}), and forward the frame to the next filter.
+
+@item stop
+Get the current time and fetch the @code{lavfi.bench.start_time} metadata from
+the input frame metadata to get the time difference. Time difference, average,
+maximum and minimum time (respectively @code{t}, @code{avg}, @code{max} and
+@code{min}) are then printed. The timestamps are expressed in seconds.
+@end table
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Benchmark @ref{selectivecolor} filter:
+@example
+bench=start,selectivecolor=reds=-.2 .12 -.49,bench=stop
 @end example
 @end itemize
 
@@ -15707,10 +15895,10 @@ Set video rate.
 Set border width, allowed range is [0, 5]. Default is 1.
 
 @item w
-Set channel width, allowed range is [80, 1080]. Default is 400.
+Set channel width, allowed range is [80, 8192]. Default is 400.
 
 @item h
-Set channel height, allowed range is [1, 100]. Default is 20.
+Set channel height, allowed range is [1, 900]. Default is 20.
 
 @item f
 Set fade, allowed range is [0.001, 1]. Default is 0.95.
@@ -15733,6 +15921,14 @@ If set, displays channel names. Default is enabled.
 
 @item v
 If set, displays volume values. Default is enabled.
+
+@item o
+Set orientation, can be @code{horizontal} or @code{vertical},
+default is @code{horizontal}.
+
+@item s
+Set step size, allowed range s [0, 5]. Default is 0, which means
+step is disabled.
 @end table
 
 @section showwaves

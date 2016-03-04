@@ -1,5 +1,4 @@
 /*
- *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -24,6 +23,11 @@
 #include "url.h"
 
 #include "libavutil/log.h"
+
+typedef struct AVIOInternal {
+    URLContext *h;
+    void *hlsopts;
+} AVIOInternal;
 
 extern const AVClass ff_avio_class;
 
