@@ -868,6 +868,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
     char *subtitle_codec_name = NULL;
     char *    data_codec_name = NULL;
     int scan_all_pmts_set = 0;
+    int64_t find_stream_time;
 
     if (o->format) {
         if (!(file_iformat = av_find_input_format(o->format))) {
@@ -951,6 +952,7 @@ static int open_input_file(OptionsContext *o, const char *filename)
     open_stream_time = av_gettime_relative();
     /* open the input file with generic avformat function */
     err = avformat_open_input(&ic, filename, file_iformat, &o->g->format_opts);
+    av_log(NULL, AV_LOG_DEBUG, "avformat_open_input() uses %dms\n", (int)((av_gettime_relative() - open_stream_time) + 500)/1000);
     open_stream_time = AV_NOPTS_VALUE;
     if (err < 0) {
         print_error(filename, err);
@@ -971,7 +973,9 @@ static int open_input_file(OptionsContext *o, const char *filename)
 
     /* If not enough info to get the stream parameters, we decode the
        first frames to get it. (used in mpeg case for example) */
+    find_stream_time = av_gettime_relative();
     ret = avformat_find_stream_info(ic, opts);
+    av_log(NULL, AV_LOG_DEBUG, "avformat_find_stream_info() uses %dms\n", (int)((av_gettime_relative() - find_stream_time) + 500)/1000);
     if (ret < 0) {
         av_log(NULL, AV_LOG_FATAL, "%s: could not find codec parameters\n", filename);
         if (ic->nb_streams == 0) {
