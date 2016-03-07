@@ -490,8 +490,15 @@ static int compensate_volume(AVFilterContext *ctx)
         av_log(ctx, AV_LOG_DEBUG, "Compensate-factor: %f\n", compensate);
         ir = sofa->data_ir;
         /* apply volume compensation to IRs */
-        s->fdsp->vector_fmul_scalar(ir, ir, compensate, sofa->n_samples * sofa->m_dim * 2);
-        emms_c();
+        if (sofa->n_samples & 31) {
+            int i;
+            for (i = 0; i < sofa->n_samples * sofa->m_dim * 2; i++) {
+                ir[i] = ir[i] * compensate;
+            }
+        } else {
+            s->fdsp->vector_fmul_scalar(ir, ir, compensate, sofa->n_samples * sofa->m_dim * 2);
+            emms_c();
+        }
     }
 
     return 0;
@@ -929,6 +936,11 @@ static av_cold int init(AVFilterContext *ctx)
 {
     SOFAlizerContext *s = ctx->priv;
     int ret;
+
+    if (!s->filename) {
+        av_log(ctx, AV_LOG_ERROR, "Valid SOFA filename must be set.\n");
+        return AVERROR(EINVAL);
+    }
 
     /* load SOFA file, */
     /* initialize file IDs to 0 before attempting to load SOFA files,
