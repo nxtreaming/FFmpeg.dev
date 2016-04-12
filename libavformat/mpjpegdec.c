@@ -151,8 +151,8 @@ static int mpjpeg_read_header(AVFormatContext *s)
     if (!st)
         return AVERROR(ENOMEM);
 
-    st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
-    st->codec->codec_id   = AV_CODEC_ID_MJPEG;
+    st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+    st->codecpar->codec_id   = AV_CODEC_ID_MJPEG;
 
     avpriv_set_pts_info(st, 60, 1, 25);
 
@@ -201,7 +201,7 @@ static int parse_multipart_header(AVIOContext *pb,
         if (log_ctx)
         av_log(log_ctx,
             AV_LOG_ERROR,
-            "Expected boundary '%s' not found, instead found a line of %zu bytes\n",
+            "Expected boundary '%s' not found, instead found a line of %"SIZE_SPECIFIER" bytes\n",
             expected_boundary,
             strlen(line));
 

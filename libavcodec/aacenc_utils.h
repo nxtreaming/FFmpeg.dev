@@ -28,6 +28,7 @@
 #ifndef AVCODEC_AACENC_UTILS_H
 #define AVCODEC_AACENC_UTILS_H
 
+#include "libavutil/ffmath.h"
 #include "aac.h"
 #include "aacenctab.h"
 #include "aactab.h"
@@ -68,10 +69,11 @@ static inline void quantize_bands(int *out, const float *in, const float *scaled
     int i;
     for (i = 0; i < size; i++) {
         float qc = scaled[i] * Q34;
-        out[i] = (int)FFMIN(qc + rounding, (float)maxval);
+        int tmp = (int)FFMIN(qc + rounding, (float)maxval);
         if (is_signed && in[i] < 0.0f) {
-            out[i] = -out[i];
+            tmp = -tmp;
         }
+        out[i] = tmp;
     }
 }
 
@@ -121,7 +123,10 @@ static inline float find_form_factor(int group_len, int swb_size, float thresh,
             if (s >= ethresh) {
                 nzl += 1.0f;
             } else {
-                nzl += powf(s / ethresh, nzslope);
+                if (nzslope == 2.f)
+                    nzl += (s / ethresh) * (s / ethresh);
+                else
+                    nzl += ff_fast_powf(s / ethresh, nzslope);
             }
         }
         if (e2 > thresh) {

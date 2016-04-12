@@ -181,11 +181,13 @@ TESTPROGS = adler32                                                     \
             crc                                                         \
             des                                                         \
             dict                                                        \
+            display                                                     \
             error                                                       \
             eval                                                        \
             file                                                        \
             fifo                                                        \
             float_dsp                                                   \
+            hash                                                        \
             hmac                                                        \
             lfg                                                         \
             lls                                                         \

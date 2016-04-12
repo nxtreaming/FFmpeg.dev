@@ -370,7 +370,7 @@ static int http_write_reply(URLContext* h, int status_code)
         message_len = snprintf(message, sizeof(message),
                  "HTTP/1.1 %03d %s\r\n"
                  "Content-Type: %s\r\n"
-                 "Content-Length: %zu\r\n"
+                 "Content-Length: %"SIZE_SPECIFIER"\r\n"
                  "\r\n"
                  "%03d %s\r\n",
                  reply_code,
@@ -1522,7 +1522,7 @@ const URLProtocol ff_http_protocol = {
     .priv_data_size      = sizeof(HTTPContext),
     .priv_data_class     = &http_context_class,
     .flags               = URL_PROTOCOL_FLAG_NETWORK,
-    .default_whitelist   = "http,https,tls,rtp,tcp,udp,crypto"
+    .default_whitelist   = "http,https,tls,rtp,tcp,udp,crypto,httpproxy"
 };
 #endif /* CONFIG_HTTP_PROTOCOL */
 
@@ -1541,7 +1541,7 @@ const URLProtocol ff_https_protocol = {
     .priv_data_size      = sizeof(HTTPContext),
     .priv_data_class     = &https_context_class,
     .flags               = URL_PROTOCOL_FLAG_NETWORK,
-    .default_whitelist   = "http,https,tls,rtp,tcp,udp,crypto"
+    .default_whitelist   = "http,https,tls,rtp,tcp,udp,crypto,httpproxy"
 };
 #endif /* CONFIG_HTTPS_PROTOCOL */
 

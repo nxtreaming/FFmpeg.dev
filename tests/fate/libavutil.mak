@@ -75,6 +75,10 @@ fate-float-dsp: CMD = run libavutil/float_dsp-test $(CPUFLAGS:%=-c%)
 fate-float-dsp: CMP = null
 fate-float-dsp: REF = /dev/null
 
+FATE_LIBAVUTIL += fate-hash
+fate-hash: libavutil/hash-test$(EXESUF)
+fate-hash: CMD = run libavutil/hash-test
+
 FATE_LIBAVUTIL += fate-hmac
 fate-hmac: libavutil/hmac-test$(EXESUF)
 fate-hmac: CMD = run libavutil/hmac-test
@@ -94,6 +98,10 @@ fate-parseutils: CMD = run libavutil/parseutils-test
 FATE_LIBAVUTIL-$(CONFIG_PIXELUTILS) += fate-pixelutils
 fate-pixelutils: libavutil/pixelutils-test$(EXESUF)
 fate-pixelutils: CMD = run libavutil/pixelutils-test
+
+FATE_LIBAVUTIL += fate-display
+fate-display: libavutil/display-test$(EXESUF)
+fate-display: CMD = run libavutil/display-test
 
 FATE_LIBAVUTIL += fate-random_seed
 fate-random_seed: libavutil/random_seed-test$(EXESUF)
