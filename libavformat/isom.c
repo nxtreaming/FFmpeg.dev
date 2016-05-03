@@ -296,6 +296,7 @@ const AVCodecTag ff_codec_movaudio_tags[] = {
     { AV_CODEC_ID_MP3,             MKTAG('.', 'm', 'p', '3') },
     { AV_CODEC_ID_MP3,             0x6D730055                },
     { AV_CODEC_ID_NELLYMOSER,      MKTAG('n', 'm', 'o', 's') }, /* Flash Media Server */
+    { AV_CODEC_ID_NELLYMOSER,      MKTAG('N', 'E', 'L', 'L') }, /* Perian */
     { AV_CODEC_ID_PCM_ALAW,        MKTAG('a', 'l', 'a', 'w') },
     { AV_CODEC_ID_PCM_F32BE,       MKTAG('f', 'l', '3', '2') },
     { AV_CODEC_ID_PCM_F32LE,       MKTAG('f', 'l', '3', '2') },
@@ -482,7 +483,7 @@ int ff_mp4_read_dec_config_descr(AVFormatContext *fc, AVStream *st, AVIOContext 
         if (!len || (uint64_t)len > (1<<30))
             return -1;
         av_free(st->codecpar->extradata);
-        if ((ret = ff_get_extradata(st->codecpar, pb, len)) < 0)
+        if ((ret = ff_get_extradata(fc, st->codecpar, pb, len)) < 0)
             return ret;
         if (st->codecpar->codec_id == AV_CODEC_ID_AAC) {
             MPEG4AudioConfig cfg = {0};

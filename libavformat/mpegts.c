@@ -1362,6 +1362,8 @@ static int parse_MP4ODescrTag(MP4DescrParseContext *d, int64_t off, int len)
 static int parse_MP4ESDescrTag(MP4DescrParseContext *d, int64_t off, int len)
 {
     int es_id = 0;
+    int ret   = 0;
+
     if (d->descr_count >= d->max_descr_count)
         return AVERROR_INVALIDDATA;
     ff_mp4_parse_es_descr(&d->pb, &es_id);
@@ -1369,12 +1371,13 @@ static int parse_MP4ESDescrTag(MP4DescrParseContext *d, int64_t off, int len)
 
     d->active_descr->es_id = es_id;
     update_offsets(&d->pb, &off, &len);
-    parse_mp4_descr(d, off, len, MP4DecConfigDescrTag);
+    if ((ret = parse_mp4_descr(d, off, len, MP4DecConfigDescrTag)) < 0)
+        return ret;
     update_offsets(&d->pb, &off, &len);
     if (len > 0)
-        parse_mp4_descr(d, off, len, MP4SLDescrTag);
+        ret = parse_mp4_descr(d, off, len, MP4SLDescrTag);
     d->active_descr = NULL;
-    return 0;
+    return ret;
 }
 
 static int parse_MP4DecConfigDescrTag(MP4DescrParseContext *d, int64_t off,
@@ -1435,6 +1438,8 @@ static int parse_mp4_descr(MP4DescrParseContext *d, int64_t off, int len,
 {
     int tag;
     int len1 = ff_mp4_read_descr(d->s, &d->pb, &tag);
+    int ret = 0;
+
     update_offsets(&d->pb, &off, &len);
     if (len < 0 || len1 > len || len1 <= 0) {
         av_log(d->s, AV_LOG_ERROR,
@@ -1445,30 +1450,32 @@ static int parse_mp4_descr(MP4DescrParseContext *d, int64_t off, int len,
 
     if (d->level++ >= MAX_LEVEL) {
         av_log(d->s, AV_LOG_ERROR, "Maximum MP4 descriptor level exceeded\n");
+        ret = AVERROR_INVALIDDATA;
         goto done;
     }
 
     if (target_tag && tag != target_tag) {
         av_log(d->s, AV_LOG_ERROR, "Found tag %x expected %x\n", tag,
                target_tag);
+        ret = AVERROR_INVALIDDATA;
         goto done;
     }
 
     switch (tag) {
     case MP4IODescrTag:
-        parse_MP4IODescrTag(d, off, len1);
+        ret = parse_MP4IODescrTag(d, off, len1);
         break;
     case MP4ODescrTag:
-        parse_MP4ODescrTag(d, off, len1);
+        ret = parse_MP4ODescrTag(d, off, len1);
         break;
     case MP4ESDescrTag:
-        parse_MP4ESDescrTag(d, off, len1);
+        ret = parse_MP4ESDescrTag(d, off, len1);
         break;
     case MP4DecConfigDescrTag:
-        parse_MP4DecConfigDescrTag(d, off, len1);
+        ret = parse_MP4DecConfigDescrTag(d, off, len1);
         break;
     case MP4SLDescrTag:
-        parse_MP4SLDescrTag(d, off, len1);
+        ret = parse_MP4SLDescrTag(d, off, len1);
         break;
     }
 
@@ -1476,7 +1483,7 @@ static int parse_mp4_descr(MP4DescrParseContext *d, int64_t off, int len,
 done:
     d->level--;
     avio_seek(&d->pb, off + len1, SEEK_SET);
-    return 0;
+    return ret;
 }
 
 static int mp4_read_iods(AVFormatContext *s, const uint8_t *buf, unsigned size,
@@ -2347,11 +2354,20 @@ static void reanalyze(MpegTSContext *ts) {
 
 /* XXX: try to find a better synchro over several packets (use
  * get_packet_size() ?) */
-static int mpegts_resync(AVFormatContext *s)
+static int mpegts_resync(AVFormatContext *s, int seekback, const uint8_t *current_packet)
 {
     MpegTSContext *ts = s->priv_data;
     AVIOContext *pb = s->pb;
     int c, i;
+    uint64_t pos = avio_tell(pb);
+
+    avio_seek(pb, -FFMIN(seekback, pos), SEEK_CUR);
+
+    //Special case for files like 01c56b0dc1.ts
+    if (current_packet[0] == 0x80 && current_packet[12] == 0x47) {
+        avio_seek(pb, 12, SEEK_CUR);
+        return 0;
+    }
 
     for (i = 0; i < ts->resync_size; i++) {
         c = avio_r8(pb);
@@ -2383,10 +2399,8 @@ static int read_packet(AVFormatContext *s, uint8_t *buf, int raw_packet_size,
         /* check packet sync byte */
         if ((*data)[0] != 0x47) {
             /* find a new packet start */
-            uint64_t pos = avio_tell(pb);
-            avio_seek(pb, -FFMIN(raw_packet_size, pos), SEEK_CUR);
 
-            if (mpegts_resync(s) < 0)
+            if (mpegts_resync(s, raw_packet_size, *data) < 0)
                 return AVERROR(EAGAIN);
             else
                 continue;
@@ -2468,7 +2482,7 @@ static int mpegts_probe(AVProbeData *p)
 #define CHECK_COUNT 10
 #define CHECK_BLOCK 100
 
-    if (check_count < CHECK_COUNT)
+    if (!check_count)
         return 0;
 
     for (i = 0; i<check_count; i+=CHECK_BLOCK) {
@@ -2486,10 +2500,15 @@ static int mpegts_probe(AVProbeData *p)
 
     ff_dlog(0, "TS score: %d %d\n", sumscore, maxscore);
 
-    if      (sumscore > 6) return AVPROBE_SCORE_MAX   + sumscore - CHECK_COUNT;
-    else if (maxscore > 6) return AVPROBE_SCORE_MAX/2 + sumscore - CHECK_COUNT;
-    else
+    if        (check_count >= CHECK_COUNT && sumscore > 6) {
+        return AVPROBE_SCORE_MAX   + sumscore - CHECK_COUNT;
+    } else if (check_count >= CHECK_COUNT && maxscore > 6) {
+        return AVPROBE_SCORE_MAX/2 + sumscore - CHECK_COUNT;
+    } else if (sumscore > 6) {
+        return 2;
+    } else {
         return 0;
+    }
 }
 
 /* return the 90kHz PCR and the extension for the 27MHz PCR. return
@@ -2741,8 +2760,7 @@ static av_unused int64_t mpegts_get_pcr(AVFormatContext *s, int stream_index,
         if (avio_read(s->pb, buf, TS_PACKET_SIZE) != TS_PACKET_SIZE)
             return AV_NOPTS_VALUE;
         if (buf[0] != 0x47) {
-            avio_seek(s->pb, -TS_PACKET_SIZE, SEEK_CUR);
-            if (mpegts_resync(s) < 0)
+            if (mpegts_resync(s, TS_PACKET_SIZE, buf) < 0)
                 return AV_NOPTS_VALUE;
             pos = avio_tell(s->pb);
             continue;

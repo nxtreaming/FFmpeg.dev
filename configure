@@ -234,6 +234,7 @@ External library support:
   --enable-libmp3lame      enable MP3 encoding via libmp3lame [no]
   --enable-libnut          enable NUT (de)muxing via libnut,
                            native (de)muxer exists [no]
+  --enable-libnpp          enable NVIDIA Performance Primitives-based code [no]
   --enable-libopencore-amrnb enable AMR-NB de/encoding via libopencore-amrnb [no]
   --enable-libopencore-amrwb enable AMR-WB decoding via libopencore-amrwb [no]
   --enable-libopencv       enable video filtering via libopencv [no]
@@ -313,6 +314,7 @@ Toolchain options:
   --nm=NM                  use nm tool NM [$nm_default]
   --ar=AR                  use archive tool AR [$ar_default]
   --as=AS                  use assembler AS [$as_default]
+  --ln_s=LN_S              use symbolic link tool LN_S [$ln_s_default]
   --strip=STRIP            use strip tool STRIP [$strip_default]
   --windres=WINDRES        use windows resource compiler WINDRES [$windres_default]
   --yasmexe=EXE            use yasm-compatible assembler EXE [$yasmexe_default]
@@ -1482,6 +1484,7 @@ EXTERNAL_LIBRARY_LIST="
     libmodplug
     libmp3lame
     libnut
+    libnpp
     libopencore_amrnb
     libopencore_amrwb
     libopencv
@@ -2066,6 +2069,7 @@ CONFIG_EXTRA="
     rv34dsp
     sinewin
     snappy
+    srtp
     startcode
     texturedsp
     texturedspenc
@@ -2134,6 +2138,7 @@ CMDLINE_SET="
     host_os
     install
     ld
+    ln_s
     logfile
     malloc_prefix
     nm
@@ -2258,7 +2263,7 @@ faandct_deps="faan fdctdsp"
 faanidct_deps="faan idctdsp"
 h264dsp_select="startcode"
 frame_thread_encoder_deps="encoders threads"
-intrax8_select="error_resilience"
+intrax8_select="blockdsp idctdsp"
 mdct_select="fft"
 me_cmp_select="fdctdsp idctdsp pixblockdsp"
 mpeg_er_select="error_resilience"
@@ -2494,7 +2499,7 @@ wmav2_encoder_select="mdct sinewin wma_freqs"
 wmavoice_decoder_select="lsp rdft dct mdct sinewin"
 wmv1_decoder_select="h263_decoder"
 wmv1_encoder_select="h263_encoder"
-wmv2_decoder_select="blockdsp h263_decoder idctdsp intrax8 videodsp wmv2dsp"
+wmv2_decoder_select="blockdsp error_resilience h263_decoder idctdsp intrax8 videodsp wmv2dsp"
 wmv2_encoder_select="h263_encoder wmv2dsp"
 wmv3_decoder_select="vc1_decoder"
 wmv3image_decoder_select="wmv3_decoder"
@@ -2647,10 +2652,12 @@ mjpeg2jpeg_bsf_select="jpegtables"
 # external libraries
 aac_at_decoder_deps="audiotoolbox"
 ac3_at_decoder_deps="audiotoolbox"
+ac3_at_decoder_select="ac3_parser"
 adpcm_ima_qt_at_decoder_deps="audiotoolbox"
 alac_at_decoder_deps="audiotoolbox"
 amr_nb_at_decoder_deps="audiotoolbox"
 eac3_at_decoder_deps="audiotoolbox"
+eac3_at_decoder_select="ac3_parser"
 gsm_ms_at_decoder_deps="audiotoolbox"
 ilbc_at_decoder_deps="audiotoolbox"
 mp1_at_decoder_deps="audiotoolbox"
@@ -2788,7 +2795,7 @@ ogg_demuxer_select="dirac_parse"
 opus_muxer_select="ogg_muxer"
 psp_muxer_select="mov_muxer"
 rtp_demuxer_select="sdp_demuxer"
-rtpdec_select="asf_demuxer jpegtables mov_demuxer mpegts_demuxer rm_demuxer rtp_protocol"
+rtpdec_select="asf_demuxer jpegtables mov_demuxer mpegts_demuxer rm_demuxer rtp_protocol srtp"
 rtsp_demuxer_select="http_protocol rtpdec"
 rtsp_muxer_select="rtp_muxer http_protocol rtp_protocol rtpenc_chain"
 sap_demuxer_select="sdp_demuxer"
@@ -2895,7 +2902,7 @@ rtmpts_protocol_select="ffrtmphttp_protocol https_protocol"
 rtp_protocol_select="udp_protocol"
 sctp_protocol_deps="struct_sctp_event_subscribe struct_msghdr_msg_flags"
 sctp_protocol_select="network"
-srtp_protocol_select="rtp_protocol"
+srtp_protocol_select="rtp_protocol srtp"
 tcp_protocol_select="network"
 tls_gnutls_protocol_deps="gnutls !tls_schannel_protocol !tls_securetransport_protocol"
 tls_gnutls_protocol_select="tcp_protocol"
@@ -2938,6 +2945,7 @@ find_rect_filter_deps="avcodec avformat gpl"
 firequalizer_filter_deps="avcodec"
 firequalizer_filter_select="rdft"
 flite_filter_deps="libflite"
+framerate_filter_select="pixelutils"
 frei0r_filter_deps="frei0r dlopen"
 frei0r_src_filter_deps="frei0r dlopen"
 fspp_filter_deps="gpl"
@@ -3000,6 +3008,8 @@ vidstabtransform_filter_deps="libvidstab"
 zmq_filter_deps="libzmq"
 zoompan_filter_deps="swscale"
 zscale_filter_deps="libzimg"
+scale_npp_filter_deps="cuda libnpp"
+scale_vaapi_filter_deps="vaapi VAProcPipelineParameterBuffer"
 
 # examples
 avcodec_example_deps="avcodec avutil"
@@ -3071,7 +3081,7 @@ host_cc_default="gcc"
 cp_f="cp -f"
 doxygen_default="doxygen"
 install="install"
-ln_s="ln -s -f"
+ln_s_default="ln -s -f"
 nm_default="nm -g"
 objformat="elf"
 pkg_config_default=pkg-config
@@ -3202,7 +3212,6 @@ ENCODER_LIST=$(find_things  encoder  ENC      libavcodec/allcodecs.c)
 DECODER_LIST=$(find_things  decoder  DEC      libavcodec/allcodecs.c)
 HWACCEL_LIST=$(find_things  hwaccel  HWACCEL  libavcodec/allcodecs.c)
 PARSER_LIST=$(find_things   parser   PARSER   libavcodec/allcodecs.c)
-BSF_LIST=$(find_things      bsf      BSF      libavcodec/allcodecs.c)
 MUXER_LIST=$(find_things    muxer    _MUX     libavformat/allformats.c)
 DEMUXER_LIST=$(find_things  demuxer  DEMUX    libavformat/allformats.c)
 OUTDEV_LIST=$(find_things   outdev   OUTDEV   libavdevice/alldevices.c)
@@ -3216,6 +3225,7 @@ find_things_extern(){
     sed -n "s/^[^#]*extern.*$pattern *ff_\([^ ]*\)_$thing;/\1_$thing/p" "$file"
 }
 
+BSF_LIST=$(find_things_extern bsf AVBitStreamFilter libavcodec/bitstream_filters.c)
 PROTOCOL_LIST=$(find_things_extern protocol URLProtocol libavformat/protocols.c)
 
 ALL_COMPONENTS="
@@ -3393,6 +3403,11 @@ case "$toolchain" in
         add_cflags  -fsanitize=address
         add_ldflags -fsanitize=address
     ;;
+    *-msan)
+        cc_default="${toolchain%-msan}"
+        add_cflags  -fsanitize=memory -fsanitize-memory-track-origins
+        add_ldflags -fsanitize=memory
+    ;;
     *-tsan)
         cc_default="${toolchain%-tsan}"
         add_cflags  -fsanitize=thread -pie
@@ -3459,6 +3474,10 @@ case "$toolchain" in
     gcov)
         add_cflags  -fprofile-arcs -ftest-coverage
         add_ldflags -fprofile-arcs -ftest-coverage
+    ;;
+    llvm-cov)
+        add_cflags -fprofile-arcs -ftest-coverage
+        add_ldflags --coverage
     ;;
     hardened)
         add_cppflags -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
@@ -3985,7 +4004,7 @@ test -n "$cc_type" && enable $cc_type ||
 : ${dep_cc_default:=$cc}
 : ${ld_default:=$cc}
 : ${host_ld_default:=$host_cc}
-set_default ar as objcc dep_cc ld host_ld windres
+set_default ar as objcc dep_cc ld ln_s host_ld windres
 
 probe_cc as "$as"
 asflags_filter=$_flags_filter
@@ -4700,7 +4719,6 @@ case $target_os in
         ;;
     os/2*)
         strip="lxlite -CS"
-        ln_s="cp -f"
         objformat="aout"
         add_cppflags -D_GNU_SOURCE
         add_ldflags -Zomf -Zbin-files -Zargs-wild -Zmap
@@ -4708,16 +4726,18 @@ case $target_os in
         LIBSUF="_s.a"
         SLIBPREF=""
         SLIBSUF=".dll"
-        SLIBNAME_WITH_VERSION='$(SLIBPREF)$(NAME)-$(LIBVERSION)$(SLIBSUF)'
-        SLIBNAME_WITH_MAJOR='$(SLIBPREF)$(shell echo $(NAME) | cut -c1-6)$(LIBMAJOR)$(SLIBSUF)'
-        SLIB_CREATE_DEF_CMD='echo LIBRARY $(SLIBNAME_WITH_MAJOR) INITINSTANCE TERMINSTANCE > $(SUBDIR)$(NAME).def; \
-            echo CODE PRELOAD MOVEABLE DISCARDABLE >> $(SUBDIR)$(NAME).def; \
-            echo DATA PRELOAD MOVEABLE MULTIPLE NONSHARED >> $(SUBDIR)$(NAME).def; \
-            echo EXPORTS >> $(SUBDIR)$(NAME).def; \
-            emxexp $(OBJS) >> $(SUBDIR)$(NAME).def'
-        SLIB_EXTRA_CMD='emximp -o $(SUBDIR)$(LIBPREF)$(NAME)_dll.a $(SUBDIR)$(NAME).def; \
-            emximp -o $(SUBDIR)$(LIBPREF)$(NAME)_dll.lib $(SUBDIR)$(NAME).def;'
-        SLIB_INSTALL_EXTRA_LIB='$(LIBPREF)$(NAME)_dll.a $(LIBPREF)$(NAME)_dll.lib'
+        SLIBNAME_WITH_VERSION='$(SLIBPREF)$(FULLNAME)-$(LIBVERSION)$(SLIBSUF)'
+        SLIBNAME_WITH_MAJOR='$(SLIBPREF)$(shell echo $(FULLNAME) | cut -c1-6)$(LIBMAJOR)$(SLIBSUF)'
+        SLIB_CREATE_DEF_CMD='echo LIBRARY $(SLIBNAME_WITH_MAJOR:$(SLIBSUF)=) INITINSTANCE TERMINSTANCE > $(SUBDIR)$(FULLNAME).def; \
+            echo CODE PRELOAD MOVEABLE DISCARDABLE >> $(SUBDIR)$(FULLNAME).def; \
+            echo DATA PRELOAD MOVEABLE MULTIPLE NONSHARED >> $(SUBDIR)$(FULLNAME).def; \
+            echo EXPORTS >> $(SUBDIR)$(FULLNAME).def; \
+            emxexp $(OBJS) >> $(SUBDIR)$(FULLNAME).def'
+        SLIB_EXTRA_CMD='emximp -o $(SUBDIR)$(LIBPREF)$(FULLNAME)_dll.a $(SUBDIR)$(FULLNAME).def; \
+            emximp -o $(SUBDIR)$(LIBPREF)$(FULLNAME)_dll.lib $(SUBDIR)$(FULLNAME).def;'
+        SLIB_INSTALL_NAME='$(SLIBNAME_WITH_MAJOR)'
+        SLIB_INSTALL_LINKS=
+        SLIB_INSTALL_EXTRA_LIB='$(LIBPREF)$(FULLNAME)_dll.a $(LIBPREF)$(FULLNAME)_dll.lib'
         enable dos_paths
         enable_weak os2threads
         ;;
@@ -4947,7 +4967,7 @@ die_license_disabled gpl x11grab
 
 die_license_disabled nonfree cuda
 die_license_disabled nonfree libfaac
-die_license_disabled nonfree nvenc
+die_license_disabled nonfree libnpp
 enabled gpl && die_license_disabled_gpl nonfree libfdk_aac
 enabled gpl && die_license_disabled_gpl nonfree openssl
 
@@ -5444,6 +5464,7 @@ check_type "d3d9.h dxva2api.h" DXVA2_ConfigPictureDecode -D_WIN32_WINNT=0x0602
 
 check_type "va/va.h" "VAPictureParameterBufferHEVC"
 check_type "va/va.h" "VADecPictureParameterBufferVP9"
+check_type "va/va.h va/va_vpp.h" "VAProcPipelineParameterBuffer"
 
 check_type "vdpau/vdpau.h" "VdpPictureInfoHEVC"
 
@@ -5554,6 +5575,7 @@ enabled libmfx            && require_pkg_config libmfx "mfx/mfxvideo.h" MFXInit
 enabled libmodplug        && require_pkg_config libmodplug libmodplug/modplug.h ModPlug_Load
 enabled libmp3lame        && require "libmp3lame >= 3.98.3" lame/lame.h lame_set_VBR_quality -lmp3lame
 enabled libnut            && require libnut libnut.h nut_demuxer_init -lnut
+enabled libnpp            && require libnpp npp.h nppGetLibVersion -lnppi -lnppc
 enabled libopencore_amrnb && require libopencore_amrnb opencore-amrnb/interf_dec.h Decoder_Interface_init -lopencore-amrnb
 enabled libopencore_amrwb && require libopencore_amrwb opencore-amrwb/dec_if.h D_IF_init -lopencore-amrwb
 enabled libopencv         && { check_header opencv2/core/core_c.h &&
@@ -5839,6 +5861,10 @@ EOF
 
 enabled vaapi &&
     check_lib va/va.h vaInitialize -lva ||
+    disable vaapi
+
+enabled vaapi &&
+    check_code cc "va/va.h" "vaCreateSurfaces(0, 0, 0, 0, 0, 0, 0, 0)" ||
     disable vaapi
 
 enabled vaapi && enabled xlib &&

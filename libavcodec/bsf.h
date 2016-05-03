@@ -16,12 +16,18 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef AVCODEC_SVQ3_H
-#define AVCODEC_SVQ3_H
+#ifndef AVCODEC_BSF_H
+#define AVCODEC_BSF_H
 
-#include <stdint.h>
+#include "avcodec.h"
 
-void ff_svq3_luma_dc_dequant_idct_c(int16_t *output, int16_t *input, int qp);
-void ff_svq3_add_idct_c(uint8_t *dst, int16_t *block, int stride, int qp, int dc);
+/**
+ * Called by the biststream filters to get the next packet for filtering.
+ * The filter is responsible for either freeing the packet or passing it to the
+ * caller.
+ */
+int ff_bsf_get_packet(AVBSFContext *ctx, AVPacket **pkt);
 
-#endif /* AVCODEC_SVQ3_H */
+const AVClass *ff_bsf_child_class_next(const AVClass *prev);
+
+#endif /* AVCODEC_BSF_H */
