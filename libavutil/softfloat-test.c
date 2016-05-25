@@ -23,7 +23,6 @@
 #include "common.h"
 #include "log.h"
 
-#ifdef TEST
 #include <stdio.h>
 
 static const SoftFloat FLOAT_0_017776489257 = {0x1234, 12};
@@ -155,4 +154,3 @@ int main(void){
     return 0;
 
 }
-#endif
