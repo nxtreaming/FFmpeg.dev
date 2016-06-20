@@ -684,10 +684,6 @@ typedef struct H264Context {
     int cur_bit_depth_luma;
     int16_t slice_row[MAX_SLICES]; ///< to detect when MAX_SLICES is too low
 
-    uint8_t parse_history[6];
-    int parse_history_count;
-    int parse_last_mb;
-
     int enable_er;
 
     H264SEIContext sei;
@@ -710,11 +706,6 @@ extern const uint16_t ff_h264_mb_sizes[4];
  */
 int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
                                      H264ParamSets *ps, int ignore_truncation);
-
-/**
- * compute profile from sps
- */
-int ff_h264_get_profile(const SPS *sps);
 
 /**
  * Decode PPS
@@ -740,7 +731,7 @@ int ff_h264_get_slice_type(const H264SliceContext *sl);
 int ff_h264_alloc_tables(H264Context *h);
 
 int ff_h264_decode_ref_pic_list_reordering(H264Context *h, H264SliceContext *sl);
-void ff_h264_fill_mbaff_ref_list(H264Context *h, H264SliceContext *sl);
+void ff_h264_fill_mbaff_ref_list(H264SliceContext *sl);
 void ff_h264_remove_all_refs(H264Context *h);
 
 /**
@@ -754,7 +745,6 @@ int ff_h264_decode_ref_pic_marking(H264Context *h, GetBitContext *gb,
 int ff_generate_sliding_window_mmcos(H264Context *h, int first_slice);
 
 void ff_h264_hl_decode_mb(const H264Context *h, H264SliceContext *sl);
-int ff_h264_decode_extradata(H264Context *h, const uint8_t *buf, int size);
 int ff_h264_decode_init(AVCodecContext *avctx);
 void ff_h264_decode_init_vlc(void);
 
@@ -998,26 +988,6 @@ static inline int find_start_code(const uint8_t *buf, int buf_size,
     buf_index = avpriv_find_start_code(buf + buf_index, buf + next_avc + 1, &state) - buf - 1;
 
     return FFMIN(buf_index, buf_size);
-}
-
-static inline int get_avc_nalsize(H264Context *h, const uint8_t *buf,
-                           int buf_size, int *buf_index)
-{
-    int i, nalsize = 0;
-
-    if (*buf_index >= buf_size - h->nal_length_size) {
-        // the end of the buffer is reached, refill it.
-        return AVERROR(EAGAIN);
-    }
-
-    for (i = 0; i < h->nal_length_size; i++)
-        nalsize = ((unsigned)nalsize << 8) | buf[(*buf_index)++];
-    if (nalsize <= 0 || nalsize > buf_size - *buf_index) {
-        av_log(h->avctx, AV_LOG_ERROR,
-               "AVC: nal size %d\n", nalsize);
-        return AVERROR_INVALIDDATA;
-    }
-    return nalsize;
 }
 
 int ff_h264_field_end(H264Context *h, H264SliceContext *sl, int in_setup);
