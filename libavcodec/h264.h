@@ -21,7 +21,7 @@
 
 /**
  * @file
- * H.264 / AVC / MPEG4 part10 codec.
+ * H.264 / AVC / MPEG-4 part10 codec.
  * @author Michael Niedermayer <michaelni@gmx.at>
  */
 
@@ -49,7 +49,6 @@
 #include "videodsp.h"
 
 #define H264_MAX_PICTURE_COUNT 36
-#define H264_MAX_THREADS       32
 
 #define MAX_SPS_COUNT          32
 #define MAX_PPS_COUNT         256
@@ -407,7 +406,6 @@ typedef struct H264SliceContext {
     H264Ref ref_list[2][48];        /**< 0..15: frame refs, 16..47: mbaff field refs.
                                          *   Reordered version of default_ref_list
                                          *   according to picture reordering in slice header */
-    int ref2frm[MAX_SLICES][2][64];     ///< reference to frame number lists, used in the loop filter, the first 2 are for -2,-1
 
     const uint8_t *intra_pcm_ptr;
     int16_t *dc_val_base;
@@ -435,7 +433,7 @@ typedef struct H264SliceContext {
 
     DECLARE_ALIGNED(8, uint16_t, sub_mb_type)[4];
 
-    ///< as a dct coefficient is int32_t in high depth, we need to reserve twice the space.
+    ///< as a DCT coefficient is int32_t in high depth, we need to reserve twice the space.
     DECLARE_ALIGNED(16, int16_t, mb)[16 * 48 * 2];
     DECLARE_ALIGNED(16, int16_t, mb_luma_dc)[3][16 * 2];
     ///< as mb is addressed by scantable[i] and scantable is uint8_t we can either
@@ -450,10 +448,6 @@ typedef struct H264SliceContext {
     CABACContext cabac;
     uint8_t cabac_state[1024];
     int cabac_init_idc;
-
-    // rbsp buffer used for this slice
-    uint8_t *rbsp_buffer;
-    unsigned int rbsp_buffer_size;
 } H264SliceContext;
 
 /**
@@ -478,7 +472,7 @@ typedef struct H264Context {
 
     H2645Packet pkt;
 
-    int pixel_shift;    ///< 0 for 8-bit H264, 1 for high-bit-depth H264
+    int pixel_shift;    ///< 0 for 8-bit H.264, 1 for high-bit-depth H.264
 
     /* coded dimensions -- 16 * mb w/h */
     int width, height;
@@ -494,11 +488,15 @@ typedef struct H264Context {
 
     int droppable;
     int coded_picture_number;
-    int low_delay;
 
     int context_initialized;
     int flags;
     int workaround_bugs;
+    /* Set when slice threading is used and at least one slice uses deblocking
+     * mode 1 (i.e. across slice boundaries). Then we disable the loop filter
+     * during normal MB decoding and execute it serially at the end.
+     */
+    int postpone_filter;
 
     int8_t(*intra4x4_pred_mode);
     H264PredContext hpc;
@@ -565,7 +563,7 @@ typedef struct H264Context {
     int nal_unit_type;
 
     /**
-     * Used to parse AVC variant of h264
+     * Used to parse AVC variant of H.264
      */
     int is_avc;           ///< this flag is != 0 if codec is avc1
     int nal_length_size;  ///< Number of bytes used for nal length (1, 2 or 4)
@@ -624,15 +622,11 @@ typedef struct H264Context {
      */
     int max_contexts;
 
-    int slice_context_count;
-
     /**
      *  1 if the single thread fallback warning has already been
      *  displayed, 0 otherwise.
      */
     int single_decode_warning;
-
-    enum AVPictureType pict_type;
 
     /** @} */
 
@@ -692,14 +686,16 @@ typedef struct H264Context {
     AVBufferPool *mb_type_pool;
     AVBufferPool *motion_val_pool;
     AVBufferPool *ref_index_pool;
-
-    /* Motion Estimation */
-    qpel_mc_func (*qpel_put)[16];
-    qpel_mc_func (*qpel_avg)[16];
-
+    int ref2frm[MAX_SLICES][2][64];     ///< reference to frame number lists, used in the loop filter, the first 2 are for -2,-1
 } H264Context;
 
 extern const uint16_t ff_h264_mb_sizes[4];
+
+/**
+ * Uninit H264 param sets structure.
+ */
+
+void ff_h264_ps_uninit(H264ParamSets *ps);
 
 /**
  * Decode SPS
@@ -712,12 +708,6 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
  */
 int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
                                          H264ParamSets *ps, int bit_length);
-
-/**
- * Free any data that may have been allocated in the H264 context
- * like SPS, PPS etc.
- */
-void ff_h264_free_context(H264Context *h);
 
 /**
  * Reconstruct bitstream slice_type.

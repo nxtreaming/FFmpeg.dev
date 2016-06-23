@@ -21,7 +21,7 @@
 
 /**
  * @file
- * H.264 / AVC / MPEG4 part10 parameter set decoding.
+ * H.264 / AVC / MPEG-4 part10 parameter set decoding.
  * @author Michael Niedermayer <michaelni@gmx.at>
  */
 
@@ -296,6 +296,23 @@ static void decode_scaling_matrices(GetBitContext *gb, SPS *sps,
             }
         }
     }
+}
+
+void ff_h264_ps_uninit(H264ParamSets *ps)
+{
+    int i;
+
+    for (i = 0; i < MAX_SPS_COUNT; i++)
+        av_buffer_unref(&ps->sps_list[i]);
+
+    for (i = 0; i < MAX_PPS_COUNT; i++)
+        av_buffer_unref(&ps->pps_list[i]);
+
+    av_buffer_unref(&ps->sps_ref);
+    av_buffer_unref(&ps->pps_ref);
+
+    ps->pps = NULL;
+    ps->sps = NULL;
 }
 
 int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,

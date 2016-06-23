@@ -33,6 +33,7 @@
 #include "libavutil/log.h"
 #include "libavutil/avassert.h"
 #include "mathops.h"
+#include "vlc.h"
 
 /*
  * Safe bitstream reading:
@@ -58,20 +59,6 @@ typedef struct GetBitContext {
     int size_in_bits_plus8;
 } GetBitContext;
 
-#define VLC_TYPE int16_t
-
-typedef struct VLC {
-    int bits;
-    VLC_TYPE (*table)[2]; ///< code, bits
-    int table_size, table_allocated;
-} VLC;
-
-typedef struct RL_VLC_ELEM {
-    int16_t level;
-    int8_t len;
-    uint8_t run;
-} RL_VLC_ELEM;
-
 /* Bitstream reader API docs:
  * name
  *   arbitrary name which is used as prefix for the internal variables
@@ -91,7 +78,7 @@ typedef struct RL_VLC_ELEM {
  *
  * GET_CACHE(name, gb)
  *   Will output the contents of the internal cache,
- *   next bit is MSB of 32 or 64 bit (FIXME 64bit).
+ *   next bit is MSB of 32 or 64 bits (FIXME 64 bits).
  *
  * SHOW_UBITS(name, gb, num)
  *   Will return the next num bits.
@@ -224,7 +211,7 @@ static inline void skip_bits_long(GetBitContext *s, int n)
 }
 
 /**
- * read mpeg1 dc style vlc (sign bit + mantissa with no MSB).
+ * Read MPEG-1 dc-style VLC (sign bit + mantissa with no MSB).
  * if MSB not set it is negative
  * @param n length in bits
  */
@@ -398,11 +385,12 @@ static inline unsigned int show_bits_long(GetBitContext *s, int n)
     }
 }
 
-static inline int check_marker(GetBitContext *s, const char *msg)
+static inline int check_marker(void *logctx, GetBitContext *s, const char *msg)
 {
     int bit = get_bits1(s);
     if (!bit)
-        av_log(NULL, AV_LOG_INFO, "Marker bit missing at %d of %d %s\n", get_bits_count(s) - 1, s->size_in_bits, msg);
+        av_log(logctx, AV_LOG_INFO, "Marker bit missing at %d of %d %s\n",
+               get_bits_count(s) - 1, s->size_in_bits, msg);
 
     return bit;
 }
@@ -461,33 +449,6 @@ static inline const uint8_t *align_get_bits(GetBitContext *s)
         skip_bits(s, n);
     return s->buffer + (s->index >> 3);
 }
-
-#define init_vlc(vlc, nb_bits, nb_codes,                \
-                 bits, bits_wrap, bits_size,            \
-                 codes, codes_wrap, codes_size,         \
-                 flags)                                 \
-    ff_init_vlc_sparse(vlc, nb_bits, nb_codes,          \
-                       bits, bits_wrap, bits_size,      \
-                       codes, codes_wrap, codes_size,   \
-                       NULL, 0, 0, flags)
-
-int ff_init_vlc_sparse(VLC *vlc, int nb_bits, int nb_codes,
-                       const void *bits, int bits_wrap, int bits_size,
-                       const void *codes, int codes_wrap, int codes_size,
-                       const void *symbols, int symbols_wrap, int symbols_size,
-                       int flags);
-void ff_free_vlc(VLC *vlc);
-
-#define INIT_VLC_LE             2
-#define INIT_VLC_USE_NEW_STATIC 4
-
-#define INIT_VLC_STATIC(vlc, bits, a, b, c, d, e, f, g, static_size)       \
-    do {                                                                   \
-        static VLC_TYPE table[static_size][2];                             \
-        (vlc)->table           = table;                                    \
-        (vlc)->table_allocated = static_size;                              \
-        init_vlc(vlc, bits, a, b, c, d, e, f, g, INIT_VLC_USE_NEW_STATIC); \
-    } while (0)
 
 /**
  * If the vlc code is invalid and max_depth=1, then no bits will be removed.
