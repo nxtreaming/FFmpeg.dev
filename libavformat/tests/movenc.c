@@ -69,6 +69,9 @@ enum AVPictureType last_picture;
 int skip_write;
 int skip_write_audio;
 int clear_duration;
+int force_iobuf_size;
+int do_interleave;
+int fake_pkt_duration;
 
 int num_warnings;
 
@@ -99,6 +102,35 @@ static int io_write(void *opaque, uint8_t *buf, int size)
     if (out)
         fwrite(buf, 1, size, out);
     return size;
+}
+
+static int io_write_data_type(void *opaque, uint8_t *buf, int size,
+                              enum AVIODataMarkerType type, int64_t time)
+{
+    char timebuf[30], content[5] = { 0 };
+    const char *str;
+    switch (type) {
+    case AVIO_DATA_MARKER_HEADER:         str = "header";   break;
+    case AVIO_DATA_MARKER_SYNC_POINT:     str = "sync";     break;
+    case AVIO_DATA_MARKER_BOUNDARY_POINT: str = "boundary"; break;
+    case AVIO_DATA_MARKER_UNKNOWN:        str = "unknown";  break;
+    case AVIO_DATA_MARKER_TRAILER:        str = "trailer";  break;
+    }
+    if (time == AV_NOPTS_VALUE)
+        snprintf(timebuf, sizeof(timebuf), "nopts");
+    else
+        snprintf(timebuf, sizeof(timebuf), "%"PRId64, time);
+    // There can be multiple header/trailer callbacks, only log the box type
+    // for header at out_size == 0
+    if (type != AVIO_DATA_MARKER_UNKNOWN &&
+        type != AVIO_DATA_MARKER_TRAILER &&
+        (type != AVIO_DATA_MARKER_HEADER || out_size == 0) &&
+        size >= 8)
+        memcpy(content, &buf[4], 4);
+    else
+        snprintf(content, sizeof(content), "-");
+    printf("write_data len %d, time %s, type %s atom %s\n", size, timebuf, str, content);
+    return io_write(opaque, buf, size);
 }
 
 static void init_out(const char *name)
@@ -145,15 +177,17 @@ static void check_func(int value, int line, const char *msg, ...)
 static void init_fps(int bf, int audio_preroll, int fps)
 {
     AVStream *st;
+    int iobuf_size = force_iobuf_size ? force_iobuf_size : sizeof(iobuf);
     ctx = avformat_alloc_context();
     if (!ctx)
         exit(1);
     ctx->oformat = av_guess_format(format, NULL, NULL);
     if (!ctx->oformat)
         exit(1);
-    ctx->pb = avio_alloc_context(iobuf, sizeof(iobuf), AVIO_FLAG_WRITE, NULL, NULL, io_write, NULL);
+    ctx->pb = avio_alloc_context(iobuf, iobuf_size, AVIO_FLAG_WRITE, NULL, NULL, io_write, NULL);
     if (!ctx->pb)
         exit(1);
+    ctx->pb->write_data_type = io_write_data_type;
     ctx->flags |= AVFMT_FLAG_BITEXACT;
 
     st = avformat_new_stream(ctx, NULL);
@@ -251,6 +285,8 @@ static void mux_frames(int n)
             }
             if (!bframes)
                 pkt.pts = pkt.dts;
+            if (fake_pkt_duration)
+                pkt.duration = fake_pkt_duration;
             frames++;
         }
 
@@ -263,7 +299,10 @@ static void mux_frames(int n)
             continue;
         if (skip_write_audio && pkt.stream_index == 1)
             continue;
-        av_write_frame(ctx, &pkt);
+        if (do_interleave)
+            av_interleaved_write_frame(ctx, &pkt);
+        else
+            av_write_frame(ctx, &pkt);
     }
 }
 
@@ -669,6 +708,43 @@ int main(int argc, char **argv)
     clear_duration = 0;
     reset_count_warnings();
     check(num_warnings > 0, "No warnings printed for filled in durations");
+
+    // Test with an IO buffer size that is too small to hold a full fragment;
+    // this will cause write_data_type to be called with the type unknown.
+    force_iobuf_size = 1500;
+    init_out("large_frag");
+    av_dict_set(&opts, "movflags", "frag_keyframe+delay_moov", 0);
+    init_fps(1, 1, 3);
+    mux_gops(2);
+    finish();
+    close_out();
+    force_iobuf_size = 0;
+
+    // Test VFR content with bframes with interleaving.
+    // Here, using av_interleaved_write_frame allows the muxer to get the
+    // fragment end durations right. We always set the packet duration to
+    // the expected, but we simulate dropped frames at one point.
+    do_interleave = 1;
+    init_out("vfr-noduration-interleave");
+    av_dict_set(&opts, "movflags", "frag_keyframe+delay_moov", 0);
+    av_dict_set(&opts, "frag_duration", "650000", 0);
+    init_fps(1, 1, 30);
+    mux_frames(gop_size/2);
+    // Pretend that the packet duration is the normal, even if
+    // we actually skip a bunch of frames. (I.e., simulate that
+    // we don't know of the framedrop in advance.)
+    fake_pkt_duration = duration;
+    duration *= 10;
+    mux_frames(1);
+    fake_pkt_duration = 0;
+    duration /= 10;
+    mux_frames(gop_size/2 - 1);
+    mux_gops(1);
+    finish();
+    close_out();
+    clear_duration = 0;
+    do_interleave = 0;
+
 
     av_free(md5);
 
