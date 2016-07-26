@@ -560,7 +560,8 @@ int ff_h264_decode_seq_parameter_set(GetBitContext *gb, AVCodecContext *avctx,
 
     /* if the maximum delay is not stored in the SPS, derive it based on the
      * level */
-    if (!sps->bitstream_restriction_flag) {
+    if (!sps->bitstream_restriction_flag &&
+        (sps->ref_frame_count || avctx->strict_std_compliance >= FF_COMPLIANCE_STRICT)) {
         sps->num_reorder_frames = MAX_DELAYED_PIC_COUNT - 1;
         for (i = 0; i < FF_ARRAY_ELEMS(level_max_dpb_mbs); i++) {
             if (level_max_dpb_mbs[i][0] == sps->level_idc) {
@@ -731,7 +732,9 @@ int ff_h264_decode_picture_parameter_set(GetBitContext *gb, AVCodecContext *avct
 
     pps->data_size = gb->buffer_end - gb->buffer;
     if (pps->data_size > sizeof(pps->data)) {
-        av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized PPS\n");
+        av_log(avctx, AV_LOG_WARNING, "Truncating likely oversized PPS "
+               "(%"SIZE_SPECIFIER" > %"SIZE_SPECIFIER")\n",
+               pps->data_size, sizeof(pps->data));
         pps->data_size = sizeof(pps->data);
     }
     memcpy(pps->data, gb->buffer, pps->data_size);

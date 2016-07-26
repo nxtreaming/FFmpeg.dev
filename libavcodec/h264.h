@@ -413,6 +413,8 @@ typedef struct H264SliceContext {
     } ref_modifications[2][32];
     int nb_ref_modifications[2];
 
+    unsigned int pps_id;
+
     const uint8_t *intra_pcm_ptr;
     int16_t *dc_val_base;
 
@@ -673,7 +675,7 @@ typedef struct H264Context {
 
     int missing_fields;
 
-/* for frame threading, this is set to 1
+    /* for frame threading, this is set to 1
      * after finish_setup() has been called, so we cannot modify
      * some context properties (which are supposed to stay constant between
      * slices) anymore */
@@ -992,7 +994,8 @@ int ff_h264_slice_context_init(H264Context *h, H264SliceContext *sl);
 
 void ff_h264_draw_horiz_band(const H264Context *h, H264SliceContext *sl, int y, int height);
 
-int ff_h264_decode_slice_header(H264Context *h, H264SliceContext *sl);
+int ff_h264_decode_slice_header(H264Context *h, H264SliceContext *sl,
+                                const H2645NAL *nal);
 #define SLICE_SINGLETHREAD 1
 #define SLICE_SKIPED 2
 

@@ -245,6 +245,7 @@ External library support:
   --enable-libopencv       enable video filtering via libopencv [no]
   --enable-libopenh264     enable H.264 encoding via OpenH264 [no]
   --enable-libopenjpeg     enable JPEG 2000 de/encoding via OpenJPEG [no]
+  --enable-libopenmpt      enable decoding tracked files via libopenmpt [no]
   --enable-libopus         enable Opus de/encoding via libopus [no]
   --enable-libpulse        enable Pulseaudio input via libpulse [no]
   --enable-librubberband   enable rubberband needed for rubberband filter [no]
@@ -1505,6 +1506,7 @@ EXTERNAL_LIBRARY_LIST="
     libopencv
     libopenh264
     libopenjpeg
+    libopenmpt
     libopus
     libpulse
     librtmp
@@ -2211,6 +2213,8 @@ setend_deps="arm"
 
 map 'eval ${v}_inline_deps=inline_asm' $ARCH_EXT_LIST_ARM
 
+loongson2_deps="mips"
+loongson3_deps="mips"
 mipsfpu_deps="mips"
 mipsdsp_deps="mips"
 mipsdspr2_deps="mips"
@@ -2555,6 +2559,7 @@ h264_d3d11va_hwaccel_select="h264_decoder"
 h264_dxva2_hwaccel_deps="dxva2"
 h264_dxva2_hwaccel_select="h264_decoder"
 h264_mediacodec_decoder_deps="mediacodec"
+h264_mediacodec_hwaccel_deps="mediacodec"
 h264_mediacodec_decoder_select="h264_mp4toannexb_bsf h264_parser"
 h264_mmal_decoder_deps="mmal"
 h264_mmal_decoder_select="mmal"
@@ -2769,6 +2774,7 @@ libopencore_amrwb_decoder_deps="libopencore_amrwb"
 libopenh264_encoder_deps="libopenh264"
 libopenjpeg_decoder_deps="libopenjpeg"
 libopenjpeg_encoder_deps="libopenjpeg"
+libopenmpt_demuxer_deps="libopenmpt"
 libopus_decoder_deps="libopus"
 libopus_encoder_deps="libopus"
 libopus_encoder_select="audio_frame_queue"
@@ -2854,6 +2860,7 @@ nut_muxer_select="riffenc"
 nuv_demuxer_select="riffdec"
 oga_muxer_select="ogg_muxer"
 ogg_demuxer_select="dirac_parse"
+ogv_muxer_select="ogg_muxer"
 opus_muxer_select="ogg_muxer"
 psp_muxer_select="mov_muxer"
 rtp_demuxer_select="sdp_demuxer"
@@ -3795,11 +3802,11 @@ suncc_flags(){
                     westmere)                  echo -xtarget=westmere    ;;
                     silvermont)                echo -xarch=sse4_2        ;;
                     corei7-avx|sandybridge)    echo -xtarget=sandybridge ;;
-                    core-avx*|ivybridge|haswell|broadwell)
+                    core-avx*|ivybridge|haswell|broadwell|skylake*|knl)
                                                echo -xarch=avx           ;;
                     amdfam10|barcelona)        echo -xtarget=barcelona   ;;
                     btver1)                    echo -xarch=amdsse4a      ;;
-                    btver2|bdver*)             echo -xarch=avx           ;;
+                    btver2|bdver*|znver*)      echo -xarch=avx           ;;
                     athlon-4|athlon-[mx]p)     echo -xarch=ssea          ;;
                     k8|opteron|athlon64|athlon-fx)
                                                echo -xarch=sse2a         ;;
@@ -4495,7 +4502,8 @@ elif enabled x86; then
         ;;
         # targets that do support nopl and conditional mov (cmov)
         i686|pentiumpro|pentium[23]|pentium-m|athlon|athlon-tbird|athlon-4|athlon-[mx]p|athlon64*|k8*|opteron*|athlon-fx\
-        |core*|atom|bonnell|nehalem|westmere|silvermont|sandybridge|ivybridge|haswell|broadwell|amdfam10|barcelona|b[dt]ver*)
+        |core*|atom|bonnell|nehalem|westmere|silvermont|sandybridge|ivybridge|haswell|broadwell|skylake*|knl\
+        |amdfam10|barcelona|b[dt]ver*|znver*)
             cpuflags="-march=$cpu"
             enable i686
             enable fast_cmov
@@ -5678,6 +5686,7 @@ enabled libopenjpeg       && { check_lib openjpeg-2.1/openjpeg.h opj_version -lo
                                check_lib openjpeg-1.5/openjpeg.h opj_version -lopenjpeg -DOPJ_STATIC ||
                                check_lib openjpeg.h opj_version -lopenjpeg -DOPJ_STATIC ||
                                die "ERROR: libopenjpeg not found"; }
+enabled libopenmpt        && require_pkg_config "libopenmpt >= 0.2.6557" libopenmpt/libopenmpt.h openmpt_module_create
 enabled libopus           && require_pkg_config opus opus_multistream.h opus_multistream_decoder_create
 enabled libpulse          && require_pkg_config libpulse pulse/pulseaudio.h pa_context_new
 enabled librtmp           && require_pkg_config librtmp librtmp/rtmp.h RTMP_Socket
@@ -6138,11 +6147,7 @@ elif enabled ccc; then
     add_cflags -msg_disable nonstandcast
     add_cflags -msg_disable unsupieee
 elif enabled gcc; then
-    case $gcc_basever in
-        4.9*) enabled x86 || check_optflags -fno-tree-vectorize ;;
-        4.*)                 check_optflags -fno-tree-vectorize ;;
-        *)    enabled x86 || check_optflags -fno-tree-vectorize ;;
-    esac
+    check_optflags -fno-tree-vectorize
     check_cflags -Werror=format-security
     check_cflags -Werror=implicit-function-declaration
     check_cflags -Werror=missing-prototypes
