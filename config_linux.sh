@@ -4,15 +4,15 @@
 # Note: the Native rtmp protocol will cause VLC and iPhone break on audio playback
 # Please add -ldl to: /usr/local/ssl/lib/pkgconfig/libcrypto.pc firstly
 #
-export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/data/usr/local/ssl/lib/pkgconfig:/data/usr/local/lib/pkgconfig:/usr/local/lib/pkgconfig
+export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/lib/pkgconfig
 
 ./configure                          \
---prefix=/data/usr/local             \
+--prefix=/usr/local                  \
 --disable-doc                        \
 --disable-htmlpages                  \
 --disable-manpages                   \
 --disable-podpages                   \
---disable-txtpages                  \
+--disable-txtpages                   \
 --enable-gpl                         \
 --enable-nonfree                     \
 --disable-ffplay                     \
@@ -24,8 +24,8 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/data/usr/local/ssl/lib/pkgconfig:/data/
 --disable-encoders                   \
 --disable-decoders                   \
 --disable-vda                        \
---enable-decoder=png                \
---enable-encoder=png                \
+--enable-decoder=png                 \
+--enable-encoder=png                 \
 --disable-parser=hevc                \
 --enable-parser=mpegaudio            \
 --enable-decoder=mp3                 \
@@ -39,6 +39,6 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/data/usr/local/ssl/lib/pkgconfig:/data/
 --enable-decoder=libfdk_aac          \
 --enable-decoder=h264                \
 --enable-librtmp                     \
---extra-cflags=-I/data/usr/local/include \
---extra-ldflags=-L/data/usr/local/lib \
+--extra-cflags=-I/usr/local/include  \
+--extra-ldflags=-L/usr/local/lib     \
 
