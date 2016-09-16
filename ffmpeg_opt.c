@@ -988,6 +988,8 @@ static int open_input_file(OptionsContext *o, const char *filename)
     open_stream_time = AV_NOPTS_VALUE;
     if (err < 0) {
         print_error(filename, err);
+        if (err == AVERROR_PROTOCOL_NOT_FOUND)
+            av_log(NULL, AV_LOG_ERROR, "Did you mean file:%s?\n", filename);
         exit_program(1);
     }
     if (scan_all_pmts_set)

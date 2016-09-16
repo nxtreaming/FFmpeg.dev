@@ -26,6 +26,9 @@ version <next>:
 - added threads option per filter instance
 - weave filter
 - gblur filter
+- avgblur filter
+- sobel and prewitt filter
+- MediaCodec HEVC decoding
 
 
 version 3.1:
