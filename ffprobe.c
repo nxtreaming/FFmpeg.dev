@@ -1884,8 +1884,8 @@ static void show_frame(WriterContext *w, AVFrame *frame, AVStream *stream,
     else   print_str_opt("media_type", "unknown");
     print_int("stream_index",           stream->index);
     print_int("key_frame",              frame->key_frame);
-    print_ts  ("pkt_pts",               frame->pkt_pts);
-    print_time("pkt_pts_time",          frame->pkt_pts, &stream->time_base);
+    print_ts  ("pkt_pts",               frame->pts);
+    print_time("pkt_pts_time",          frame->pts, &stream->time_base);
     print_ts  ("pkt_dts",               frame->pkt_dts);
     print_time("pkt_dts_time",          frame->pkt_dts, &stream->time_base);
     print_ts  ("best_effort_timestamp", av_frame_get_best_effort_timestamp(frame));
@@ -2611,11 +2611,8 @@ static int open_input_file(InputFile *ifile, const char *filename)
             if (err < 0)
                 exit(1);
 
-            ist->dec_ctx->pkt_timebase = stream->time_base;
-#if FF_API_LAVF_AVCTX
-            ist->dec_ctx->time_base = stream->codec->time_base;
-            ist->dec_ctx->framerate = stream->codec->framerate;
-#endif
+            av_codec_set_pkt_timebase(ist->dec_ctx, stream->time_base);
+            ist->dec_ctx->framerate = stream->avg_frame_rate;
 
             if (avcodec_open2(ist->dec_ctx, codec, &opts) < 0) {
                 av_log(NULL, AV_LOG_WARNING, "Could not open codec for input stream %d\n",

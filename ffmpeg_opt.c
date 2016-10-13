@@ -1403,6 +1403,10 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
     MATCH_PER_STREAM_OPT(disposition, str, ost->disposition, oc, st);
     ost->disposition = av_strdup(ost->disposition);
 
+    ost->max_muxing_queue_size = 128;
+    MATCH_PER_STREAM_OPT(max_muxing_queue_size, i, ost->max_muxing_queue_size, oc, st);
+    ost->max_muxing_queue_size *= sizeof(AVPacket);
+
     if (oc->oformat->flags & AVFMT_GLOBALHEADER)
         ost->enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
@@ -1421,6 +1425,10 @@ static OutputStream *new_output_stream(OptionsContext *o, AVFormatContext *oc, e
         input_streams[source_index]->st->discard = input_streams[source_index]->user_set_discard;
     }
     ost->last_mux_dts = AV_NOPTS_VALUE;
+
+    ost->muxing_queue = av_fifo_alloc(8 * sizeof(AVPacket));
+    if (!ost->muxing_queue)
+        exit_program(1);
 
     return ost;
 }
@@ -2308,6 +2316,7 @@ loop_end:
         avio_read(pb, attachment, len);
 
         ost = new_attachment_stream(o, oc, -1);
+        ost->stream_copy               = 0;
         ost->attachment_filename       = o->attachments[i];
         ost->st->codecpar->extradata      = attachment;
         ost->st->codecpar->extradata_size = len;
@@ -2317,6 +2326,7 @@ loop_end:
         avio_closep(&pb);
     }
 
+#if FF_API_LAVF_AVCTX
     for (i = nb_output_streams - oc->nb_streams; i < nb_output_streams; i++) { //for all streams of this output file
         AVDictionaryEntry *e;
         ost = output_streams[i];
@@ -2327,6 +2337,7 @@ loop_end:
             if (av_opt_set(ost->st->codec, "flags", e->value, 0) < 0)
                 exit_program(1);
     }
+#endif
 
     if (!oc->nb_streams && !(oc->oformat->flags & AVFMT_NOSTREAMS)) {
         av_dump_format(oc, nb_output_files - 1, oc->filename, 1);
@@ -3165,6 +3176,9 @@ int ffmpeg_parse_options(int argc, char **argv)
         goto fail;
     }
 
+    /* configure terminal and setup signal handlers */
+    term_init();
+
     /* open input files */
     ret = open_files(&octx.groups[GROUP_INFILE], "input", open_input_file);
     if (ret < 0) {
@@ -3567,6 +3581,10 @@ const OptionDef options[] = {
         "set the subtitle options to the indicated preset", "preset" },
     { "fpre", HAS_ARG | OPT_EXPERT| OPT_PERFILE | OPT_OUTPUT,                { .func_arg = opt_preset },
         "set options from indicated preset file", "filename" },
+
+    { "max_muxing_queue_size", HAS_ARG | OPT_INT | OPT_SPEC | OPT_EXPERT | OPT_OUTPUT, { .off = OFFSET(max_muxing_queue_size) },
+        "maximum number of packets that can be buffered while waiting for all streams to initialize", "packets" },
+
     /* data codec support */
     { "dcodec", HAS_ARG | OPT_DATA | OPT_PERFILE | OPT_EXPERT | OPT_INPUT | OPT_OUTPUT, { .func_arg = opt_data_codec },
         "force data codec ('copy' to copy stream)", "codec" },

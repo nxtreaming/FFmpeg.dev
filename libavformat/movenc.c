@@ -90,6 +90,7 @@ static const AVOption options[] = {
     { "encryption_key", "The media encryption key (hex)", offsetof(MOVMuxContext, encryption_key), AV_OPT_TYPE_BINARY, .flags = AV_OPT_FLAG_ENCODING_PARAM },
     { "encryption_kid", "The media encryption key identifier (hex)", offsetof(MOVMuxContext, encryption_kid), AV_OPT_TYPE_BINARY, .flags = AV_OPT_FLAG_ENCODING_PARAM },
     { "use_stream_ids_as_track_ids", "use stream ids as track ids", offsetof(MOVMuxContext, use_stream_ids_as_track_ids), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, AV_OPT_FLAG_ENCODING_PARAM},
+    { "write_tmcd", "force or disable writing tmcd", offsetof(MOVMuxContext, write_tmcd), AV_OPT_TYPE_BOOL, {.i64 = -1}, -1, 1, AV_OPT_FLAG_ENCODING_PARAM},
     { NULL },
 };
 
@@ -1070,6 +1071,7 @@ static int mov_write_avid_tag(AVIOContext *pb, MOVTrack *track)
     int i;
     int interlaced;
     int cid;
+    int display_width = track->par->width;
 
     if (track->vos_data && track->vos_len > 0x29) {
         if (ff_dnxhd_parse_header_prefix(track->vos_data) != 0) {
@@ -1121,7 +1123,10 @@ static int mov_write_avid_tag(AVIOContext *pb, MOVTrack *track)
     ffio_wfourcc(pb, "ARES");
     ffio_wfourcc(pb, "0001");
     avio_wb32(pb, cid); /* dnxhd cid, some id ? */
-    avio_wb32(pb, track->par->width);
+    if (   track->par->sample_aspect_ratio.num > 0
+        && track->par->sample_aspect_ratio.den > 0)
+        display_width = display_width * track->par->sample_aspect_ratio.num / track->par->sample_aspect_ratio.den;
+    avio_wb32(pb, display_width);
     /* values below are based on samples created with quicktime and avid codecs */
     if (interlaced) {
         avio_wb32(pb, track->par->height / 2);
@@ -2312,7 +2317,7 @@ static int mov_write_minf_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext
     } else if (track->tag == MKTAG('r','t','p',' ')) {
         mov_write_hmhd_tag(pb);
     } else if (track->tag == MKTAG('t','m','c','d')) {
-        if (track->mode == MODE_MP4)
+        if (track->mode != MODE_MOV)
             mov_write_nmhd_tag(pb);
         else
             mov_write_gmhd_tag(pb, track);
@@ -3580,6 +3585,9 @@ static int mov_write_isml_manifest(AVIOContext *pb, MOVMuxContext *mov, AVFormat
 {
     int64_t pos = avio_tell(pb);
     int i;
+    int64_t manifest_bit_rate = 0;
+    AVCPBProperties *props = NULL;
+
     static const uint8_t uuid[] = {
         0xa5, 0xd4, 0x0b, 0x30, 0xe8, 0x14, 0x11, 0xdd,
         0xba, 0x2f, 0x08, 0x00, 0x20, 0x0c, 0x9a, 0x66
@@ -3607,6 +3615,9 @@ static int mov_write_isml_manifest(AVIOContext *pb, MOVMuxContext *mov, AVFormat
         const char *type;
         int track_id = track->track_id;
 
+        AVStream *st = track->st;
+        AVDictionaryEntry *lang = av_dict_get(st->metadata, "language", NULL,0);
+
         if (track->par->codec_type == AVMEDIA_TYPE_VIDEO) {
             type = "video";
         } else if (track->par->codec_type == AVMEDIA_TYPE_AUDIO) {
@@ -3614,10 +3625,20 @@ static int mov_write_isml_manifest(AVIOContext *pb, MOVMuxContext *mov, AVFormat
         } else {
             continue;
         }
+
+        props = (AVCPBProperties*)av_stream_get_side_data(track->st, AV_PKT_DATA_CPB_PROPERTIES, NULL);
+
+        if (track->par->bit_rate) {
+            manifest_bit_rate = track->par->bit_rate;
+        } else if (props) {
+            manifest_bit_rate = props->max_bitrate;
+        }
+
         avio_printf(pb, "<%s systemBitrate=\"%"PRId64"\">\n", type,
-                    (int64_t)track->par->bit_rate);
-        param_write_int(pb, "systemBitrate", track->par->bit_rate);
+                    manifest_bit_rate);
+        param_write_int(pb, "systemBitrate", manifest_bit_rate);
         param_write_int(pb, "trackID", track_id);
+        param_write_string(pb, "systemLanguage", lang ? lang->value : "und");
         if (track->par->codec_type == AVMEDIA_TYPE_VIDEO) {
             if (track->par->codec_id == AV_CODEC_ID_H264) {
                 uint8_t *ptr;
@@ -4240,16 +4261,20 @@ static int mov_write_ftyp_tag(AVIOContext *pb, AVFormatContext *s)
     return update_size(pb, pos);
 }
 
-static void mov_write_uuidprof_tag(AVIOContext *pb, AVFormatContext *s)
+static int mov_write_uuidprof_tag(AVIOContext *pb, AVFormatContext *s)
 {
     AVStream       *video_st    = s->streams[0];
     AVCodecParameters *video_par = s->streams[0]->codecpar;
     AVCodecParameters *audio_par = s->streams[1]->codecpar;
     int audio_rate = audio_par->sample_rate;
-    // TODO: should be avg_frame_rate
-    int frame_rate = ((video_st->time_base.den) * (0x10000)) / (video_st->time_base.num);
+    int64_t frame_rate = (video_st->avg_frame_rate.num * 0x10000LL) / video_st->avg_frame_rate.den;
     int audio_kbitrate = audio_par->bit_rate / 1000;
     int video_kbitrate = FFMIN(video_par->bit_rate / 1000, 800 - audio_kbitrate);
+
+    if (frame_rate < 0 || frame_rate > INT32_MAX) {
+        av_log(s, AV_LOG_ERROR, "Frame rate %f outside supported range\n", frame_rate / (double)0x10000);
+        return AVERROR(EINVAL);
+    }
 
     avio_wb32(pb, 0x94); /* size */
     ffio_wfourcc(pb, "uuid");
@@ -4301,6 +4326,8 @@ static void mov_write_uuidprof_tag(AVIOContext *pb, AVFormatContext *s)
     avio_wb16(pb, video_par->width);
     avio_wb16(pb, video_par->height);
     avio_wb32(pb, 0x010001); /* ? */
+
+    return 0;
 }
 
 static int mov_write_identification(AVIOContext *pb, AVFormatContext *s)
@@ -4325,7 +4352,7 @@ static int mov_write_identification(AVIOContext *pb, AVFormatContext *s)
             av_log(s, AV_LOG_ERROR, "PSP mode need one video and one audio stream\n");
             return AVERROR(EINVAL);
         }
-        mov_write_uuidprof_tag(pb, s);
+        return mov_write_uuidprof_tag(pb, s);
     }
     return 0;
 }
@@ -5539,7 +5566,8 @@ static int mov_write_header(AVFormatContext *s)
         }
     }
 
-    if (mov->mode == MODE_MOV || mov->mode == MODE_MP4) {
+    if (   mov->write_tmcd == -1 && (mov->mode == MODE_MOV || mov->mode == MODE_MP4)
+        || mov->write_tmcd == 1) {
         tmcd_track = mov->nb_streams;
 
         /* +1 tmcd track for each video stream with a timecode */
