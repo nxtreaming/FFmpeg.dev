@@ -2549,6 +2549,8 @@ minimum 3-terms discontinuous nuttall window
 minimum 4-terms discontinuous nuttall (blackman-nuttall) window
 @item bharris
 blackman-harris window
+@item tukey
+tukey window
 @end table
 
 @item fixed
@@ -2561,6 +2563,26 @@ Enable multichannels evaluation on gain. Default is disabled.
 @item zero_phase
 Enable zero phase mode by subtracting timestamp to compensate delay.
 Default is disabled.
+
+@item scale
+Set scale used by gain. Acceptable values are:
+@table @option
+@item linlin
+linear frequency, linear gain
+@item linlog
+linear frequency, logarithmic (in dB) gain (default)
+@item loglin
+logarithmic (in octave scale where 20 Hz is 0) frequency, linear gain
+@item loglog
+logarithmic frequency, logarithmic gain
+@end table
+
+@item dumpfile
+Set file for dumping, suitable for gnuplot.
+
+@item dumpscale
+Set scale for dumpfile. Acceptable values are same with scale option.
+Default is linlog.
 @end table
 
 @subsection Examples
@@ -16855,6 +16877,10 @@ use embedded font. Note that drawing with font file or embedded font is not
 implemented with custom @var{basefreq} and @var{endfreq}, use @var{axisfile}
 option instead.
 
+@item font
+Specify fontconfig pattern. This has lower priority than @var{fontfile}.
+The : in the pattern may be replaced by | to avoid unnecessary escaping.
+
 @item fontcolor
 Specify font color expression. This is arithmetic expression that should return
 integer value 0xRRGGBB. It can contain variables:
@@ -16883,6 +16909,32 @@ Specify image file to draw the axis. This option override @var{fontfile} and
 Enable/disable drawing text to the axis. If it is set to @code{0}, drawing to
 the axis is disabled, ignoring @var{fontfile} and @var{axisfile} option.
 Default value is @code{1}.
+
+@item csp
+Set colorspace. The accepted values are:
+@table @samp
+@item unspecified
+Unspecified (default)
+
+@item bt709
+BT.709
+
+@item fcc
+FCC
+
+@item bt470bg
+BT.470BG or BT.601-6 625
+
+@item smpte170m
+SMPTE-170M or BT.601-6 525
+
+@item smpte240m
+SMPTE-240M
+
+@item bt2020ncl
+BT.2020 with non-constant luminance
+
+@end table
 
 @end table
 
@@ -16949,6 +17001,12 @@ tc=0.33:tlength='st(0,0.17); 384*tc / (384 / ld(0) + tc*f /(1-ld(0))) + 384*tc /
 Custom fontcolor and fontfile, C-note is colored green, others are colored blue:
 @example
 fontcolor='if(mod(floor(midi(f)+0.5),12), 0x0000FF, g(1))':fontfile=myfont.ttf
+@end example
+
+@item
+Custom font using fontconfig:
+@example
+font='Courier New,Monospace,mono|bold'
 @end example
 
 @item
@@ -17567,6 +17625,36 @@ in a 1024x800 picture using @command{ffmpeg}:
 ffmpeg -i audio.flac -lavfi showwavespic=split_channels=1:s=1024x800 waveform.png
 @end example
 @end itemize
+
+@section sidedata, asidedata
+
+Delete frame side data, or select frames based on it.
+
+This filter accepts the following options:
+
+@table @option
+@item mode
+Set mode of operation of the filter.
+
+Can be one of the following:
+
+@table @samp
+@item select
+Select every frame with side data of @code{type}.
+
+@item delete
+Delete side data of @code{type}. If @code{type} is not set, delete all side
+data in the frame.
+
+@end table
+
+@item type
+Set side data type used with all modes. Must be set for @code{select} mode. For
+the list of frame side data types, refer to the @code{AVFrameSideDataType} enum
+in @file{libavutil/frame.h}. For example, to choose
+@code{AV_FRAME_DATA_PANSCAN} side data, you must specify @code{PANSCAN}.
+
+@end table
 
 @section spectrumsynth
 
