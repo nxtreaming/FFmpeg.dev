@@ -537,8 +537,6 @@ static int flv_write_header(AVFormatContext *s)
 
 static int flv_write_trailer(AVFormatContext *s)
 {
-    int64_t file_size;
-
     AVIOContext *pb = s->pb;
     FLVContext *flv = s->priv_data;
     int i;
@@ -557,7 +555,7 @@ static int flv_write_trailer(AVFormatContext *s)
     }
 
     if (pb->seekable) {
-        file_size = avio_tell(pb);
+        int64_t file_size = avio_tell(pb);
 
         /* update information */
         if (avio_seek(pb, flv->duration_offset, SEEK_SET) < 0)
