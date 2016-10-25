@@ -268,6 +268,23 @@ static int mov_metadata_loci(MOVContext *c, AVIOContext *pb, unsigned len)
     return av_dict_set(&c->fc->metadata, key, buf, 0);
 }
 
+static int mov_metadata_hmmt(MOVContext *c, AVIOContext *pb, unsigned len)
+{
+    int i, n_hmmt;
+
+    if (len < 2)
+        return 0;
+    if (c->ignore_chapters)
+        return 0;
+
+    n_hmmt = avio_rb32(pb);
+    for (i = 0; i < n_hmmt && !pb->eof_reached; i++) {
+        int moment_time = avio_rb32(pb);
+        avpriv_new_chapter(c->fc, i, av_make_q(1, 1000), moment_time, AV_NOPTS_VALUE, NULL);
+    }
+    return 0;
+}
+
 static int mov_read_udta_string(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     char tmp_key[5];
@@ -303,6 +320,8 @@ static int mov_read_udta_string(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         parse = mov_metadata_gnre; break;
     case MKTAG( 'h','d','v','d'): key = "hd_video";
         parse = mov_metadata_int8_no_padding; break;
+    case MKTAG( 'H','M','M','T'):
+        return mov_metadata_hmmt(c, pb, atom.size);
     case MKTAG( 'k','e','y','w'): key = "keywords";  break;
     case MKTAG( 'l','d','e','s'): key = "synopsis";  break;
     case MKTAG( 'l','o','c','i'):
@@ -2762,7 +2781,8 @@ static int mov_read_sbgp(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 /**
  * Get ith edit list entry (media time, duration).
  */
-static int get_edit_list_entry(const MOVStreamContext *msc,
+static int get_edit_list_entry(MOVContext *mov,
+                               const MOVStreamContext *msc,
                                unsigned int edit_list_index,
                                int64_t *edit_list_media_time,
                                int64_t *edit_list_duration,
@@ -2776,7 +2796,7 @@ static int get_edit_list_entry(const MOVStreamContext *msc,
 
     /* duration is in global timescale units;convert to msc timescale */
     if (global_timescale == 0) {
-      avpriv_request_sample(msc, "Support for mvhd.timescale = 0 with editlists");
+      avpriv_request_sample(mov->fc, "Support for mvhd.timescale = 0 with editlists");
       return 0;
     }
     *edit_list_duration = av_rescale(*edit_list_duration, msc->time_scale,
@@ -2968,7 +2988,7 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
 
     start_dts = edit_list_dts_entry_end;
 
-    while (get_edit_list_entry(msc, edit_list_index, &edit_list_media_time,
+    while (get_edit_list_entry(mov, msc, edit_list_index, &edit_list_media_time,
                                &edit_list_duration, mov->time_scale)) {
         av_log(mov->fc, AV_LOG_DEBUG, "Processing st: %d, edit list %"PRId64" - media time: %"PRId64", duration: %"PRId64"\n",
                st->index, edit_list_index, edit_list_media_time, edit_list_duration);
@@ -3972,7 +3992,20 @@ static int mov_read_tfhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 
 static int mov_read_chap(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
-    c->chapter_track = avio_rb32(pb);
+    unsigned i, num;
+    void *new_tracks;
+
+    num = atom.size / 4;
+    if (!(new_tracks = av_malloc_array(num, sizeof(int))))
+        return AVERROR(ENOMEM);
+
+    av_free(c->chapter_tracks);
+    c->chapter_tracks = new_tracks;
+    c->nb_chapter_tracks = num;
+
+    for (i = 0; i < num && !pb->eof_reached; i++)
+        c->chapter_tracks[i] = avio_rb32(pb);
+
     return 0;
 }
 
@@ -5035,75 +5068,102 @@ static int mov_probe(AVProbeData *p)
 static void mov_read_chapters(AVFormatContext *s)
 {
     MOVContext *mov = s->priv_data;
-    AVStream *st = NULL;
+    AVStream *st;
     MOVStreamContext *sc;
     int64_t cur_pos;
-    int i;
+    int i, j;
+    int chapter_track;
 
-    for (i = 0; i < s->nb_streams; i++)
-        if (s->streams[i]->id == mov->chapter_track) {
-            st = s->streams[i];
-            break;
-        }
-    if (!st) {
-        av_log(s, AV_LOG_ERROR, "Referenced QT chapter track not found\n");
-        return;
-    }
-
-    st->discard = AVDISCARD_ALL;
-    sc = st->priv_data;
-    cur_pos = avio_tell(sc->pb);
-
-    for (i = 0; i < st->nb_index_entries; i++) {
-        AVIndexEntry *sample = &st->index_entries[i];
-        int64_t end = i+1 < st->nb_index_entries ? st->index_entries[i+1].timestamp : st->duration;
-        uint8_t *title;
-        uint16_t ch;
-        int len, title_len;
-
-        if (end < sample->timestamp) {
-            av_log(s, AV_LOG_WARNING, "ignoring stream duration which is shorter than chapters\n");
-            end = AV_NOPTS_VALUE;
-        }
-
-        if (avio_seek(sc->pb, sample->pos, SEEK_SET) != sample->pos) {
-            av_log(s, AV_LOG_ERROR, "Chapter %d not found in file\n", i);
-            goto finish;
-        }
-
-        // the first two bytes are the length of the title
-        len = avio_rb16(sc->pb);
-        if (len > sample->size-2)
+    for (j = 0; j < mov->nb_chapter_tracks; j++) {
+        chapter_track = mov->chapter_tracks[j];
+        st = NULL;
+        for (i = 0; i < s->nb_streams; i++)
+            if (s->streams[i]->id == chapter_track) {
+                st = s->streams[i];
+                break;
+            }
+        if (!st) {
+            av_log(s, AV_LOG_ERROR, "Referenced QT chapter track not found\n");
             continue;
-        title_len = 2*len + 1;
-        if (!(title = av_mallocz(title_len)))
-            goto finish;
+        }
 
-        // The samples could theoretically be in any encoding if there's an encd
-        // atom following, but in practice are only utf-8 or utf-16, distinguished
-        // instead by the presence of a BOM
-        if (!len) {
-            title[0] = 0;
+        sc = st->priv_data;
+        cur_pos = avio_tell(sc->pb);
+
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            st->disposition |= AV_DISPOSITION_ATTACHED_PIC | AV_DISPOSITION_TIMED_THUMBNAILS;
+            if (st->nb_index_entries) {
+                // Retrieve the first frame, if possible
+                AVPacket pkt;
+                AVIndexEntry *sample = &st->index_entries[0];
+                if (avio_seek(sc->pb, sample->pos, SEEK_SET) != sample->pos) {
+                    av_log(s, AV_LOG_ERROR, "Failed to retrieve first frame\n");
+                    goto finish;
+                }
+
+                if (av_get_packet(sc->pb, &pkt, sample->size) < 0)
+                    goto finish;
+
+                st->attached_pic              = pkt;
+                st->attached_pic.stream_index = st->index;
+                st->attached_pic.flags       |= AV_PKT_FLAG_KEY;
+            }
         } else {
-            ch = avio_rb16(sc->pb);
-            if (ch == 0xfeff)
-                avio_get_str16be(sc->pb, len, title, title_len);
-            else if (ch == 0xfffe)
-                avio_get_str16le(sc->pb, len, title, title_len);
-            else {
-                AV_WB16(title, ch);
-                if (len == 1 || len == 2)
-                    title[len] = 0;
-                else
-                    avio_get_str(sc->pb, INT_MAX, title + 2, len - 1);
+            st->codecpar->codec_type = AVMEDIA_TYPE_DATA;
+            st->codecpar->codec_id = AV_CODEC_ID_BIN_DATA;
+            st->discard = AVDISCARD_ALL;
+            for (i = 0; i < st->nb_index_entries; i++) {
+                AVIndexEntry *sample = &st->index_entries[i];
+                int64_t end = i+1 < st->nb_index_entries ? st->index_entries[i+1].timestamp : st->duration;
+                uint8_t *title;
+                uint16_t ch;
+                int len, title_len;
+
+                if (end < sample->timestamp) {
+                    av_log(s, AV_LOG_WARNING, "ignoring stream duration which is shorter than chapters\n");
+                    end = AV_NOPTS_VALUE;
+                }
+
+                if (avio_seek(sc->pb, sample->pos, SEEK_SET) != sample->pos) {
+                    av_log(s, AV_LOG_ERROR, "Chapter %d not found in file\n", i);
+                    goto finish;
+                }
+
+                // the first two bytes are the length of the title
+                len = avio_rb16(sc->pb);
+                if (len > sample->size-2)
+                    continue;
+                title_len = 2*len + 1;
+                if (!(title = av_mallocz(title_len)))
+                    goto finish;
+
+                // The samples could theoretically be in any encoding if there's an encd
+                // atom following, but in practice are only utf-8 or utf-16, distinguished
+                // instead by the presence of a BOM
+                if (!len) {
+                    title[0] = 0;
+                } else {
+                    ch = avio_rb16(sc->pb);
+                    if (ch == 0xfeff)
+                        avio_get_str16be(sc->pb, len, title, title_len);
+                    else if (ch == 0xfffe)
+                        avio_get_str16le(sc->pb, len, title, title_len);
+                    else {
+                        AV_WB16(title, ch);
+                        if (len == 1 || len == 2)
+                            title[len] = 0;
+                        else
+                            avio_get_str(sc->pb, INT_MAX, title + 2, len - 1);
+                    }
+                }
+
+                avpriv_new_chapter(s, i, st->time_base, sample->timestamp, end, title);
+                av_freep(&title);
             }
         }
-
-        avpriv_new_chapter(s, i, st->time_base, sample->timestamp, end, title);
-        av_freep(&title);
-    }
 finish:
-    avio_seek(sc->pb, cur_pos, SEEK_SET);
+        avio_seek(sc->pb, cur_pos, SEEK_SET);
+    }
 }
 
 static int parse_timecode_in_framenum_format(AVFormatContext *s, AVStream *st,
@@ -5426,7 +5486,7 @@ static int mov_read_header(AVFormatContext *s)
     av_log(mov->fc, AV_LOG_TRACE, "on_parse_exit_offset=%"PRId64"\n", avio_tell(pb));
 
     if (pb->seekable) {
-        if (mov->chapter_track > 0 && !mov->ignore_chapters)
+        if (mov->nb_chapter_tracks > 0 && !mov->ignore_chapters)
             mov_read_chapters(s);
         for (i = 0; i < s->nb_streams; i++)
             if (s->streams[i]->codecpar->codec_tag == AV_RL32("tmcd")) {

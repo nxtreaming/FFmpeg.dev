@@ -237,16 +237,18 @@ static void write_metadata(AVFormatContext *s, unsigned int ts)
     metadata_count_pos = avio_tell(pb);
     metadata_count = 4 * !!flv->video_par +
                      5 * !!flv->audio_par +
-                     1 * !!flv->data_par  +
-                     2; // +2 for duration and file size
-
+                     1 * !!flv->data_par;
+    if (pb->seekable) {
+        metadata_count += 2; // +2 for duration and file size
+    }
     avio_wb32(pb, metadata_count);
 
-    put_amf_string(pb, "duration");
-    flv->duration_offset = avio_tell(pb);
-
-    // fill in the guessed duration, it'll be corrected later if incorrect
-    put_amf_double(pb, s->duration / AV_TIME_BASE);
+    if (pb->seekable) {
+        put_amf_string(pb, "duration");
+        flv->duration_offset = avio_tell(pb);
+        // fill in the guessed duration, it'll be corrected later if incorrect
+        put_amf_double(pb, s->duration / AV_TIME_BASE);
+    }
 
     if (flv->video_par) {
         double videodatarate = flv->video_par->bit_rate / 1024.0;
@@ -330,9 +332,11 @@ static void write_metadata(AVFormatContext *s, unsigned int ts)
         metadata_count++;
     }
 
-    put_amf_string(pb, "filesize");
-    flv->filesize_offset = avio_tell(pb);
-    put_amf_double(pb, 0); // delayed write
+    if (pb->seekable) {
+        put_amf_string(pb, "filesize");
+        flv->filesize_offset = avio_tell(pb);
+        put_amf_double(pb, 0); // delayed write
+    }
 
     put_amf_string(pb, "");
     avio_w8(pb, AMF_END_OF_OBJECT);

@@ -1010,6 +1010,7 @@ int avcodec_default_execute(AVCodecContext *c, int (*func)(AVCodecContext *c2, v
         if (ret)
             ret[i] = r;
     }
+    emms_c();
     return 0;
 }
 
@@ -1022,6 +1023,7 @@ int avcodec_default_execute2(AVCodecContext *c, int (*func)(AVCodecContext *c2, 
         if (ret)
             ret[i] = r;
     }
+    emms_c();
     return 0;
 }
 
@@ -1992,6 +1994,8 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
     ret = avctx->codec->encode2(avctx, avpkt, frame, got_packet_ptr);
     av_assert0(ret <= 0);
 
+    emms_c();
+
     if (avpkt->data && avpkt->data == avctx->internal->byte_buffer) {
         needs_realloc = 0;
         if (user_pkt.data) {
@@ -2029,7 +2033,6 @@ int attribute_align_arg avcodec_encode_video2(AVCodecContext *avctx,
     if (ret < 0 || !*got_packet_ptr)
         av_packet_unref(avpkt);
 
-    emms_c();
     return ret;
 }
 
@@ -3249,6 +3252,20 @@ void avcodec_string(char *buf, int buf_size, AVCodecContext *enc, int encode)
                 } else
                     av_strlcatf(detail, sizeof(detail), "%s, ",
                                 av_get_colorspace_name(enc->colorspace));
+            }
+
+            if (enc->field_order != AV_FIELD_UNKNOWN) {
+                const char *field_order = "progressive";
+                if (enc->field_order == AV_FIELD_TT)
+                    field_order = "top first";
+                else if (enc->field_order == AV_FIELD_BB)
+                    field_order = "bottom first";
+                else if (enc->field_order == AV_FIELD_TB)
+                    field_order = "top coded first (swapped)";
+                else if (enc->field_order == AV_FIELD_BT)
+                    field_order = "bottom coded first (swapped)";
+
+                av_strlcatf(detail, sizeof(detail), "%s, ", field_order);
             }
 
             if (av_log_get_level() >= AV_LOG_VERBOSE &&
