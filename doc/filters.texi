@@ -2585,6 +2585,10 @@ Set file for dumping, suitable for gnuplot.
 @item dumpscale
 Set scale for dumpfile. Acceptable values are same with scale option.
 Default is linlog.
+
+@item fft2
+Enable 2-channel convolution using complex FFT. This improves speed significantly.
+Default is disabled.
 @end table
 
 @subsection Examples
@@ -2916,9 +2920,6 @@ If the specified value is not valid, it is ignored and prior one is kept.
 EBU R128 loudness normalization. Includes both dynamic and linear normalization modes.
 Support for both single pass (livestreams, files) and double pass (files) modes.
 This algorithm can target IL, LRA, and maximum true peak.
-
-To enable compilation of this filter you need to configure FFmpeg with
-@code{--enable-libebur128}.
 
 The filter accepts the following options:
 
@@ -9665,7 +9666,7 @@ Scene change detection method. Scene change leads motion vectors to be in random
 @item none
 Disable scene change detection.
 @item fdiff
-Frame difference. Corresponding pixel values are compared and if it statisfies @var{scd_threshold} scene change is detected.
+Frame difference. Corresponding pixel values are compared and if it satisfies @var{scd_threshold} scene change is detected.
 @end table
 Default method is @samp{fdiff}.
 
@@ -16834,6 +16835,10 @@ Acceptable range is @code{[1, 7]}.
 @item bar_g, gamma2
 Specify the bargraph gamma. Default value is @code{1}. Acceptable range is
 @code{[1, 7]}.
+
+@item bar_t
+Specify the bargraph transparency level. Lower value makes the bargraph sharper.
+Default value is @code{1}. Acceptable range is @code{[0, 1]}.
 
 @item timeclamp, tc
 Specify the transform timeclamp. At low frequency, there is trade-off between

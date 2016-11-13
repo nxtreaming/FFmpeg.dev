@@ -888,6 +888,10 @@ static int mov_read_ddts(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     st = c->fc->streams[c->fc->nb_streams-1];
 
     st->codecpar->sample_rate = get_bits_long(&gb, 32);
+    if (st->codecpar->sample_rate <= 0) {
+        av_log(c->fc, AV_LOG_ERROR, "Invalid sample rate %d\n", st->codecpar->sample_rate);
+        return AVERROR_INVALIDDATA;
+    }
     skip_bits_long(&gb, 32); /* max bitrate */
     st->codecpar->bit_rate = get_bits_long(&gb, 32);
     st->codecpar->bits_per_coded_sample = get_bits(&gb, 8);
@@ -1219,6 +1223,10 @@ static int mov_read_mdhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     mov_metadata_creation_time(&st->metadata, creation_time);
 
     sc->time_scale = avio_rb32(pb);
+    if (sc->time_scale <= 0) {
+        av_log(c->fc, AV_LOG_ERROR, "Invalid mdhd time scale %d\n", sc->time_scale);
+        return AVERROR_INVALIDDATA;
+    }
     st->duration = (version == 1) ? avio_rb64(pb) : avio_rb32(pb); /* duration */
 
     lang = avio_rb16(pb); /* language */
@@ -1244,7 +1252,10 @@ static int mov_read_mvhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     }
     mov_metadata_creation_time(&c->fc->metadata, creation_time);
     c->time_scale = avio_rb32(pb); /* time scale */
-
+    if (c->time_scale <= 0) {
+        av_log(c->fc, AV_LOG_ERROR, "Invalid mvhd time scale %d\n", c->time_scale);
+        return AVERROR_INVALIDDATA;
+    }
     av_log(c->fc, AV_LOG_TRACE, "time scale = %i\n", c->time_scale);
 
     c->duration = (version == 1) ? avio_rb64(pb) : avio_rb32(pb); /* duration */
@@ -1821,7 +1832,7 @@ static int mov_codec_id(AVStream *st, uint32_t format)
 static void mov_parse_stsd_video(MOVContext *c, AVIOContext *pb,
                                  AVStream *st, MOVStreamContext *sc)
 {
-    uint8_t codec_name[32];
+    uint8_t codec_name[32] = { 0 };
     int64_t stsd_start;
     unsigned int len;
 
@@ -2202,6 +2213,8 @@ static int mov_skip_multiple_stsd(MOVContext *c, AVIOContext *pb,
          (codec_tag != format &&
           // prores is allowed to have differing data format and codec tag
           codec_tag != AV_RL32("apcn") && codec_tag != AV_RL32("apch") &&
+          // so is dv (sigh)
+          codec_tag != AV_RL32("dvpp") && codec_tag != AV_RL32("dvcp") &&
           (c->fc->video_codec_id ? video_codec_id != c->fc->video_codec_id
                                  : codec_tag != MKTAG('j','p','e','g')))) {
         /* Multiple fourcc, we skip JPEG. This is not correct, we should
@@ -2273,6 +2286,10 @@ int ff_mov_read_stsd_entries(MOVContext *c, AVIOContext *pb, int entries)
         } else if (st->codecpar->codec_type==AVMEDIA_TYPE_AUDIO) {
             st->codecpar->codec_id = id;
             mov_parse_stsd_audio(c, pb, st, sc);
+            if (st->codecpar->sample_rate < 0) {
+                av_log(c->fc, AV_LOG_ERROR, "Invalid sample rate %d\n", st->codecpar->sample_rate);
+                return AVERROR_INVALIDDATA;
+            }
         } else if (st->codecpar->codec_type==AVMEDIA_TYPE_SUBTITLE){
             st->codecpar->codec_id = id;
             mov_parse_stsd_subtitle(c, pb, st, sc,
@@ -2805,16 +2822,17 @@ static int get_edit_list_entry(MOVContext *mov,
 }
 
 /**
- * Find the closest previous keyframe to the timestamp, in e_old index
- * entries.
+ * Find the closest previous frame to the timestamp, in e_old index
+ * entries. Searching for just any frame / just key frames can be controlled by
+ * last argument 'flag'.
  * Returns the index of the entry in st->index_entries if successful,
  * else returns -1.
  */
-static int64_t find_prev_closest_keyframe_index(AVStream *st,
-                                                AVIndexEntry *e_old,
-                                                int nb_old,
-                                                int64_t timestamp,
-                                                int flag)
+static int64_t find_prev_closest_index(AVStream *st,
+                                       AVIndexEntry *e_old,
+                                       int nb_old,
+                                       int64_t timestamp,
+                                       int flag)
 {
     AVIndexEntry *e_keep = st->index_entries;
     int nb_keep = st->nb_index_entries;
@@ -2961,7 +2979,7 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
     int first_non_zero_audio_edit = -1;
     int packet_skip_samples = 0;
 
-    if (!msc->elst_data || msc->elst_count <= 0) {
+    if (!msc->elst_data || msc->elst_count <= 0 || nb_old <= 0) {
         return;
     }
     // Clean AVStream from traces of old index
@@ -3028,13 +3046,24 @@ static void mov_fix_index(MOVContext *mov, AVStream *st)
             // Audio decoders like AAC need need a decoder delay samples previous to the current sample,
             // to correctly decode this frame. Hence for audio we seek to a frame 1 sec. before the
             // edit_list_media_time to cover the decoder delay.
-            search_timestamp = FFMAX(search_timestamp - mov->time_scale, e_old[0].timestamp);
+            search_timestamp = FFMAX(search_timestamp - msc->time_scale, e_old[0].timestamp);
         }
 
-        index = find_prev_closest_keyframe_index(st, e_old, nb_old, search_timestamp, 0);
+        index = find_prev_closest_index(st, e_old, nb_old, search_timestamp, 0);
         if (index == -1) {
-            av_log(mov->fc, AV_LOG_ERROR, "Missing key frame while reordering index according to edit list\n");
-            continue;
+            av_log(mov->fc, AV_LOG_WARNING,
+                   "st: %d edit list: %"PRId64" Missing key frame while searching for timestamp: %"PRId64"\n",
+                   st->index, edit_list_index, search_timestamp);
+            index = find_prev_closest_index(st, e_old, nb_old, search_timestamp, AVSEEK_FLAG_ANY);
+
+            if (index == -1) {
+                av_log(mov->fc, AV_LOG_WARNING,
+                       "st: %d edit list %"PRId64" Cannot find an index entry before timestamp: %"PRId64".\n"
+                       "Rounding edit list media time to zero.\n",
+                       st->index, edit_list_index, search_timestamp);
+                index = 0;
+                edit_list_media_time = 0;
+            }
         }
         current = e_old + index;
 
@@ -4202,7 +4231,8 @@ static int mov_read_sidx(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     uint8_t version;
     unsigned i, track_id;
     AVStream *st = NULL;
-    MOVStreamContext *sc;
+    AVStream *ref_st;
+    MOVStreamContext *sc, *ref_sc;
     MOVFragmentIndex *index = NULL;
     MOVFragmentIndex **tmp;
     AVRational timescale;
@@ -4230,6 +4260,11 @@ static int mov_read_sidx(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     sc = st->priv_data;
 
     timescale = av_make_q(1, avio_rb32(pb));
+
+    if (timescale.den <= 0) {
+        av_log(c->fc, AV_LOG_ERROR, "Invalid sidx timescale 1/%d\n", timescale.den);
+        return AVERROR_INVALIDDATA;
+    }
 
     if (version == 0) {
         pts = avio_rb32(pb);
@@ -4284,9 +4319,26 @@ static int mov_read_sidx(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 
     c->fragment_index_data = tmp;
     c->fragment_index_data[c->fragment_index_count++] = index;
+    sc->has_sidx = 1;
 
-    if (offset == avio_size(pb))
+    if (offset == avio_size(pb)) {
+        for (i = 0; i < c->fc->nb_streams; i++) {
+            if (c->fc->streams[i]->id == c->fragment_index_data[0]->track_id) {
+                ref_st = c->fc->streams[i];
+                ref_sc = ref_st->priv_data;
+                break;
+            }
+        }
+        for (i = 0; i < c->fc->nb_streams; i++) {
+            st = c->fc->streams[i];
+            sc = st->priv_data;
+            if (!sc->has_sidx) {
+                st->duration = sc->track_end = av_rescale(ref_st->duration, sc->time_scale, ref_sc->time_scale);
+            }
+        }
+
         c->fragment_index_complete = 1;
+    }
 
     return 0;
 }
@@ -4403,7 +4455,14 @@ static int mov_read_elst(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         }
         e->rate = avio_rb32(pb) / 65536.0;
         av_log(c->fc, AV_LOG_TRACE, "duration=%"PRId64" time=%"PRId64" rate=%f\n",
-                e->duration, e->time, e->rate);
+               e->duration, e->time, e->rate);
+
+        if (e->time < 0 && e->time != -1 &&
+            c->fc->strict_std_compliance >= FF_COMPLIANCE_STRICT) {
+            av_log(c->fc, AV_LOG_ERROR, "Track %d, edit %d: Invalid edit list media time=%"PRId64"\n",
+                   c->fc->nb_streams-1, i, e->time);
+            return AVERROR_INVALIDDATA;
+        }
     }
     sc->elst_count = i;
 
@@ -4884,6 +4943,7 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
             a.type = avio_rl32(pb);
             if (a.type == MKTAG('f','r','e','e') &&
                 a.size >= 8 &&
+                c->fc->strict_std_compliance < FF_COMPLIANCE_STRICT &&
                 c->moov_retry) {
                 uint8_t buf[8];
                 uint32_t *type = (uint32_t *)buf + 1;
@@ -5847,13 +5907,14 @@ static int mov_read_packet(AVFormatContext *s, AVPacket *pkt)
 static int mov_seek_fragment(AVFormatContext *s, AVStream *st, int64_t timestamp)
 {
     MOVContext *mov = s->priv_data;
+    MOVStreamContext *sc = st->priv_data;
     int i, j;
 
     if (!mov->fragment_index_complete)
         return 0;
 
     for (i = 0; i < mov->fragment_index_count; i++) {
-        if (mov->fragment_index_data[i]->track_id == st->id) {
+        if (mov->fragment_index_data[i]->track_id == st->id || !sc->has_sidx) {
             MOVFragmentIndex *index = mov->fragment_index_data[i];
             for (j = index->item_count - 1; j >= 0; j--) {
                 if (index->items[j].time <= timestamp) {

@@ -231,6 +231,18 @@ typedef struct InputFilter {
     struct InputStream *ist;
     struct FilterGraph *graph;
     uint8_t            *name;
+
+    // parameters configured for this input
+    int format;
+
+    int width, height;
+    AVRational sample_aspect_ratio;
+
+    int sample_rate;
+    int channels;
+    uint64_t channel_layout;
+
+    AVBufferRef *hw_frames_ctx;
 } InputFilter;
 
 typedef struct OutputFilter {
@@ -570,6 +582,8 @@ extern float max_error_rate;
 extern char *videotoolbox_pixfmt;
 
 extern volatile int64_t open_stream_time;
+extern int filter_nbthreads;
+extern int filter_complex_nbthreads;
 
 extern const AVIOInterruptCB int_cb;
 
@@ -601,6 +615,9 @@ int ist_in_filtergraph(FilterGraph *fg, InputStream *ist);
 int filtergraph_is_simple(FilterGraph *fg);
 int init_simple_filtergraph(InputStream *ist, OutputStream *ost);
 int init_complex_filtergraph(FilterGraph *fg);
+
+int ifilter_parameters_from_frame(InputFilter *ifilter, const AVFrame *frame);
+int ifilter_parameters_from_decoder(InputFilter *ifilter, const AVCodecContext *avctx);
 
 int ffmpeg_parse_options(int argc, char **argv);
 
