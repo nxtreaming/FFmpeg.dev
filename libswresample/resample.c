@@ -449,7 +449,7 @@ static int rebuild_filter_bank_with_compensation(ResampleContext *c)
 static int set_compensation(ResampleContext *c, int sample_delta, int compensation_distance){
     int ret;
 
-    if (compensation_distance) {
+    if (compensation_distance && sample_delta) {
         ret = rebuild_filter_bank_with_compensation(c);
         if (ret < 0)
             return ret;
@@ -496,7 +496,12 @@ static int swri_resample(ResampleContext *c,
 
         dst_size = FFMIN(dst_size, delta_n);
         if (dst_size > 0) {
-            *consumed = c->dsp.resample(c, dst, src, dst_size, update_ctx);
+            /* resample_linear and resample_common should have same behavior
+             * when frac and dst_incr_mod are zero */
+            if (c->linear && (c->frac || c->dst_incr_mod))
+                *consumed = c->dsp.resample_linear(c, dst, src, dst_size, update_ctx);
+            else
+                *consumed = c->dsp.resample_common(c, dst, src, dst_size, update_ctx);
         } else {
             *consumed = 0;
         }

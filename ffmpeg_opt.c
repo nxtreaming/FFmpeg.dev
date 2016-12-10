@@ -120,6 +120,8 @@ int qp_hist           = 0;
 int stdin_interaction = 1;
 int frame_bits_per_raw_sample = 0;
 float max_error_rate  = 2.0/3;
+int filter_nbthreads = 0;
+int filter_complex_nbthreads = 0;
 
 
 static int intra_only         = 0;
@@ -2052,7 +2054,7 @@ static int open_output_file(OptionsContext *o, const char *filename)
     InputStream  *ist;
     AVDictionary *unused_opts = NULL;
     AVDictionaryEntry *e = NULL;
-
+    int format_flags = 0;
 
     if (o->stop_time != INT64_MAX && o->recording_time != INT64_MAX) {
         o->stop_time = INT64_MAX;
@@ -2098,6 +2100,12 @@ static int open_output_file(OptionsContext *o, const char *filename)
     file_oformat= oc->oformat;
     oc->interrupt_callback = int_cb;
 
+    e = av_dict_get(o->g->format_opts, "fflags", NULL, 0);
+    if (e) {
+        const AVOption *o = av_opt_find(oc, "fflags", NULL, 0, 0);
+        av_opt_eval_flags(oc, o, e->value, &format_flags);
+    }
+
     /* create streams for all unlabeled output pads */
     for (i = 0; i < nb_filtergraphs; i++) {
         FilterGraph *fg = filtergraphs[i];
@@ -2118,6 +2126,7 @@ static int open_output_file(OptionsContext *o, const char *filename)
 
     /* ffserver seeking with date=... needs a date reference */
     if (!strcmp(file_oformat->name, "ffm") &&
+        !(format_flags & AVFMT_FLAG_BITEXACT) &&
         av_strstart(filename, "http:", NULL)) {
         int err = parse_option(o, "metadata", "creation_time=now", options);
         if (err < 0) {
@@ -3194,8 +3203,8 @@ enum OptGroup {
 };
 
 static const OptionGroupDef groups[] = {
-    [GROUP_OUTFILE] = { "output file",  NULL, OPT_OUTPUT },
-    [GROUP_INFILE]  = { "input file",   "i",  OPT_INPUT },
+    [GROUP_OUTFILE] = { "output url",  NULL, OPT_OUTPUT },
+    [GROUP_INFILE]  = { "input url",   "i",  OPT_INPUT },
 };
 
 static int open_files(OptionGroupList *l, const char *inout,

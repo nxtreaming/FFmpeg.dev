@@ -43,6 +43,7 @@
 #include "libavutil/mathematics.h"
 #include "libavutil/opt.h"
 #include "libavutil/time_internal.h"
+#include "libavutil/spherical.h"
 
 #include "libavcodec/bytestream.h"
 #include "libavcodec/flac.h"
@@ -161,6 +162,14 @@ typedef struct MatroskaTrackVideoColor {
     MatroskaMasteringMeta mastering_meta;
 } MatroskaTrackVideoColor;
 
+typedef struct MatroskaTrackVideoProjection {
+    uint64_t type;
+    EbmlBin private;
+    double yaw;
+    double pitch;
+    double roll;
+} MatroskaTrackVideoProjection;
+
 typedef struct MatroskaTrackVideo {
     double   frame_rate;
     uint64_t display_width;
@@ -174,6 +183,7 @@ typedef struct MatroskaTrackVideo {
     uint64_t stereo_mode;
     uint64_t alpha_mode;
     MatroskaTrackVideoColor color;
+    MatroskaTrackVideoProjection projection;
 } MatroskaTrackVideo;
 
 typedef struct MatroskaTrackAudio {
@@ -424,6 +434,15 @@ static const EbmlSyntax matroska_track_video_color[] = {
     { 0 }
 };
 
+static const EbmlSyntax matroska_track_video_projection[] = {
+    { MATROSKA_ID_VIDEOPROJECTIONTYPE,        EBML_UINT,  0, offsetof(MatroskaTrackVideoProjection, type), { .u = MATROSKA_VIDEO_PROJECTION_TYPE_RECTANGULAR } },
+    { MATROSKA_ID_VIDEOPROJECTIONPRIVATE,     EBML_BIN,   0, offsetof(MatroskaTrackVideoProjection, private) },
+    { MATROSKA_ID_VIDEOPROJECTIONPOSEYAW,     EBML_FLOAT, 0, offsetof(MatroskaTrackVideoProjection, yaw), { .f=0.0 } },
+    { MATROSKA_ID_VIDEOPROJECTIONPOSEPITCH,   EBML_FLOAT, 0, offsetof(MatroskaTrackVideoProjection, pitch), { .f=0.0 } },
+    { MATROSKA_ID_VIDEOPROJECTIONPOSEROLL,    EBML_FLOAT, 0, offsetof(MatroskaTrackVideoProjection, roll), { .f=0.0 } },
+    { 0 }
+};
+
 static const EbmlSyntax matroska_track_video[] = {
     { MATROSKA_ID_VIDEOFRAMERATE,      EBML_FLOAT, 0, offsetof(MatroskaTrackVideo, frame_rate) },
     { MATROSKA_ID_VIDEODISPLAYWIDTH,   EBML_UINT,  0, offsetof(MatroskaTrackVideo, display_width), { .u=-1 } },
@@ -433,6 +452,7 @@ static const EbmlSyntax matroska_track_video[] = {
     { MATROSKA_ID_VIDEOCOLORSPACE,     EBML_BIN,   0, offsetof(MatroskaTrackVideo, color_space) },
     { MATROSKA_ID_VIDEOALPHAMODE,      EBML_UINT,  0, offsetof(MatroskaTrackVideo, alpha_mode) },
     { MATROSKA_ID_VIDEOCOLOR,          EBML_NEST,  0, offsetof(MatroskaTrackVideo, color), { .n = matroska_track_video_color } },
+    { MATROSKA_ID_VIDEOPROJECTION,     EBML_NEST,  0, offsetof(MatroskaTrackVideo, projection), { .n = matroska_track_video_projection } },
     { MATROSKA_ID_VIDEOPIXELCROPB,     EBML_NONE },
     { MATROSKA_ID_VIDEOPIXELCROPT,     EBML_NONE },
     { MATROSKA_ID_VIDEOPIXELCROPL,     EBML_NONE },
@@ -1237,6 +1257,7 @@ static void ebml_free(EbmlSyntax *syntax, void *data)
                      j++, ptr += syntax[i].list_elem_size)
                     ebml_free(syntax[i].def.n, ptr);
                 av_freep(&list->elem);
+                list->nb_elem = 0;
             } else
                 ebml_free(syntax[i].def.n, data_off);
         default:
@@ -1878,6 +1899,46 @@ static int mkv_parse_video_color(AVStream *st, const MatroskaTrack *track) {
     return 0;
 }
 
+static int mkv_parse_video_projection(AVStream *st, const MatroskaTrack *track) {
+    AVSphericalMapping *spherical;
+    enum AVSphericalProjection projection;
+    size_t spherical_size;
+    int ret;
+
+    switch (track->video.projection.type) {
+    case MATROSKA_VIDEO_PROJECTION_TYPE_EQUIRECTANGULAR:
+        if (track->video.projection.private.size < 4)
+            return AVERROR_INVALIDDATA;
+        projection = AV_SPHERICAL_EQUIRECTANGULAR;
+        break;
+    case MATROSKA_VIDEO_PROJECTION_TYPE_CUBEMAP:
+        if (track->video.projection.private.size < 4)
+            return AVERROR_INVALIDDATA;
+        projection = AV_SPHERICAL_CUBEMAP;
+        break;
+    default:
+        return 0;
+    }
+
+    spherical = av_spherical_alloc(&spherical_size);
+    if (!spherical)
+        return AVERROR(ENOMEM);
+    spherical->projection = projection;
+
+    spherical->yaw   = (int32_t)(track->video.projection.yaw   * (1 << 16));
+    spherical->pitch = (int32_t)(track->video.projection.pitch * (1 << 16));
+    spherical->roll  = (int32_t)(track->video.projection.roll  * (1 << 16));
+
+    ret = av_stream_add_side_data(st, AV_PKT_DATA_SPHERICAL, (uint8_t *)spherical,
+                                  spherical_size);
+    if (ret < 0) {
+        av_freep(&spherical);
+        return ret;
+    }
+
+    return 0;
+}
+
 static int get_qt_codec(MatroskaTrack *track, uint32_t *fourcc, enum AVCodecID *codec_id)
 {
     const AVCodecTag *codec_tags;
@@ -2360,6 +2421,10 @@ static int matroska_parse_tracks(AVFormatContext *s)
                 if (ret < 0)
                     return ret;
             }
+
+            ret = mkv_parse_video_projection(st, track);
+            if (ret < 0)
+                return ret;
         } else if (track->type == MATROSKA_TRACK_TYPE_AUDIO) {
             st->codecpar->codec_type  = AVMEDIA_TYPE_AUDIO;
             st->codecpar->codec_tag   = fourcc;
@@ -3364,7 +3429,7 @@ static int matroska_read_seek(AVFormatContext *s, int stream_index,
     MatroskaDemuxContext *matroska = s->priv_data;
     MatroskaTrack *tracks = NULL;
     AVStream *st = s->streams[stream_index];
-    int i, index, index_sub, index_min;
+    int i, index, index_min;
 
     /* Parse the CUES now since we need the index data to seek. */
     if (matroska->cues_parsing_deferred > 0) {
@@ -3398,18 +3463,6 @@ static int matroska_read_seek(AVFormatContext *s, int stream_index,
         tracks[i].audio.sub_packet_cnt = 0;
         tracks[i].audio.buf_timecode   = AV_NOPTS_VALUE;
         tracks[i].end_timecode         = 0;
-        if (tracks[i].type == MATROSKA_TRACK_TYPE_SUBTITLE &&
-            tracks[i].stream &&
-            tracks[i].stream->discard != AVDISCARD_ALL) {
-            index_sub = av_index_search_timestamp(
-                tracks[i].stream, st->index_entries[index].timestamp,
-                AVSEEK_FLAG_BACKWARD);
-            while (index_sub >= 0 &&
-                  index_min > 0 &&
-                  tracks[i].stream->index_entries[index_sub].pos < st->index_entries[index_min].pos &&
-                  st->index_entries[index].timestamp - tracks[i].stream->index_entries[index_sub].timestamp < 30000000000 / matroska->time_scale)
-                index_min--;
-        }
     }
 
     avio_seek(s->pb, st->index_entries[index_min].pos, SEEK_SET);
