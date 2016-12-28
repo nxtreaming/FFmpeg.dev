@@ -182,6 +182,7 @@ SKIPHEADERS-$(CONFIG_OPENCL)           += opencl.h
 TESTPROGS = adler32                                                     \
             aes                                                         \
             atomic                                                      \
+            audio_fifo                                                  \
             avstring                                                    \
             base64                                                      \
             blowfish                                                    \
@@ -190,7 +191,6 @@ TESTPROGS = adler32                                                     \
             camellia                                                    \
             color_utils                                                 \
             cpu                                                         \
-            cpu_init                                                    \
             crc                                                         \
             des                                                         \
             dict                                                        \
@@ -202,6 +202,7 @@ TESTPROGS = adler32                                                     \
             float_dsp                                                   \
             hash                                                        \
             hmac                                                        \
+            imgutils                                                    \
             lfg                                                         \
             lls                                                         \
             log                                                         \
@@ -225,6 +226,7 @@ TESTPROGS = adler32                                                     \
             tea                                                         \
 
 TESTPROGS-$(HAVE_LZO1X_999_COMPRESS) += lzo
+TESTPROGS-$(HAVE_THREADS) += cpu_init
 
 TOOLS = crypto_bench ffhash ffeval ffescape
 
