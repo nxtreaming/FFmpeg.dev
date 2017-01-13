@@ -64,6 +64,8 @@ typedef struct {
     ConcatMatchMode stream_match_mode;
     unsigned auto_convert;
     int segment_time_metadata;
+    char *sub_demux_options_str;
+    AVDictionary *sub_demux_options;
 } ConcatContext;
 
 static int concat_probe(AVProbeData *probe)
@@ -313,6 +315,7 @@ static int open_file(AVFormatContext *avf, unsigned fileno)
 {
     ConcatContext *cat = avf->priv_data;
     ConcatFile *file = &cat->files[fileno];
+    AVDictionary *options = NULL;
     int ret;
 
     if (cat->avf)
@@ -327,12 +330,20 @@ static int open_file(AVFormatContext *avf, unsigned fileno)
     if ((ret = ff_copy_whiteblacklists(cat->avf, avf)) < 0)
         return ret;
 
-    if ((ret = avformat_open_input(&cat->avf, file->url, NULL, NULL)) < 0 ||
+    av_dict_copy(&options, cat->sub_demux_options, 0);
+    if ((ret = avformat_open_input(&cat->avf, file->url, NULL, &options)) < 0 ||
         (ret = avformat_find_stream_info(cat->avf, NULL)) < 0) {
         av_log(avf, AV_LOG_ERROR, "Impossible to open '%s'\n", file->url);
         avformat_close_input(&cat->avf);
+        av_dict_free(&options);
         return ret;
     }
+    if (av_dict_count(options)) {
+        av_log(avf, AV_LOG_ERROR, "Some of provided format options in '%s' are not recognized\n",
+               cat->sub_demux_options_str);
+    }
+    av_dict_free(&options);
+
     av_log(avf, AV_LOG_WARNING, "Open input url: %s\n", file->url);
     cat->cur_file = file;
     if (file->start_time == AV_NOPTS_VALUE)
@@ -377,6 +388,7 @@ static int concat_read_close(AVFormatContext *avf)
     }
     if (cat->avf)
         avformat_close_input(&cat->avf);
+    av_opt_free(&cat->sub_demux_options);
     av_freep(&cat->files);
     return 0;
 }
@@ -390,6 +402,14 @@ static int concat_read_header(AVFormatContext *avf)
     unsigned nb_files_alloc = 0;
     ConcatFile *file = NULL;
     int64_t time = 0;
+
+    if (cat->sub_demux_options_str) {
+        ret = av_dict_parse_string(&cat->sub_demux_options, cat->sub_demux_options_str, "=", ":", 0);
+        if (ret < 0) {
+            av_log(avf, AV_LOG_ERROR, "Could not parse format options list '%s'\n", cat->sub_demux_options_str);
+            goto fail;
+        }
+    }
 
     while (1) {
         if ((ret = ff_get_line(avf->pb, buf, sizeof(buf))) <= 0)
@@ -771,6 +791,8 @@ static const AVOption options[] = {
       OFFSET(auto_convert), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, DEC },
     { "segment_time_metadata", "output file segment start time and duration as packet metadata",
       OFFSET(segment_time_metadata), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, DEC },
+    { "sub_demux_options", "setup the sub demux global options: key1=value1:key2=value2:..",
+      OFFSET(sub_demux_options_str), AV_OPT_TYPE_STRING, {.str = NULL}, CHAR_MIN, CHAR_MAX, DEC },
     { NULL }
 };
 
