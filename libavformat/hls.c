@@ -193,6 +193,7 @@ typedef struct HLSContext {
     struct rendition **renditions;
 
     int cur_seq_no;
+    int force_end_list;
     int live_start_index;
     int first_packet;
     int64_t first_timestamp;
@@ -844,6 +845,8 @@ fail:
     av_free(new_url);
     if (close_in)
         ff_format_io_close(c->ctx, &in);
+    if (c->force_end_list && pls)
+        pls->finished = 1;
     return ret;
 }
 
@@ -2124,7 +2127,7 @@ static int hls_probe(AVProbeData *p)
 #define FLAGS AV_OPT_FLAG_DECODING_PARAM
 static const AVOption hls_options[] = {
     {"force_end_list", "make the stream finished even if it misses EXT-X-ENDLIST tag in the end of file",
-        OFFSET(finished), AV_OPT_TYPE_INT, {.i64 = 1}, INT_MIN, INT_MAX, FLAGS},
+        OFFSET(force_end_list), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, FLAGS},
     {"live_start_index", "segment index to start live streams at (negative values are from the end)",
         OFFSET(live_start_index), AV_OPT_TYPE_INT, {.i64 = -3}, INT_MIN, INT_MAX, FLAGS},
     {NULL}
