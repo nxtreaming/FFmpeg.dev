@@ -2925,7 +2925,12 @@ static int init_output_stream_streamcopy(OutputStream *ost)
         return ret;
 
     // copy timebase while removing common factors
-    ost->st->time_base = av_add_q(av_stream_get_codec_timebase(ost->st), (AVRational){0, 1});
+    if (ost->st->time_base.num <= 0 || ost->st->time_base.den <= 0)
+        ost->st->time_base = av_add_q(av_stream_get_codec_timebase(ost->st), (AVRational){0, 1});
+
+    // copy estimated duration as a hint to the muxer
+    if (ost->st->duration <= 0 && ist->st->duration > 0)
+        ost->st->duration = av_rescale_q(ist->st->duration, ist->st->time_base, ost->st->time_base);
 
     // copy disposition
     ost->st->disposition = ist->st->disposition;
@@ -3350,7 +3355,13 @@ static int init_output_stream(OutputStream *ost, char *error, int error_len)
         }
 
         // copy timebase while removing common factors
-        ost->st->time_base = av_add_q(ost->enc_ctx->time_base, (AVRational){0, 1});
+        if (ost->st->time_base.num <= 0 || ost->st->time_base.den <= 0)
+            ost->st->time_base = av_add_q(ost->enc_ctx->time_base, (AVRational){0, 1});
+
+        // copy estimated duration as a hint to the muxer
+        if (ost->st->duration <= 0 && ist && ist->st->duration > 0)
+            ost->st->duration = av_rescale_q(ist->st->duration, ist->st->time_base, ost->st->time_base);
+
         ost->st->codec->codec= ost->enc_ctx->codec;
     } else if (ost->stream_copy) {
         ret = init_output_stream_streamcopy(ost);
