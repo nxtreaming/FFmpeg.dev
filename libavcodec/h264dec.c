@@ -285,7 +285,7 @@ int ff_h264_slice_context_init(H264Context *h, H264SliceContext *sl)
                           mb_array_size * sizeof(uint8_t), fail);
 
         FF_ALLOC_OR_GOTO(h->avctx, er->er_temp_buffer,
-                         h->mb_height * h->mb_stride, fail);
+                         h->mb_height * h->mb_stride * (4*sizeof(int) + 1), fail);
 
         FF_ALLOCZ_OR_GOTO(h->avctx, sl->dc_val_base,
                           yc_size * sizeof(int16_t), fail);
@@ -607,6 +607,7 @@ static int decode_nal_units(H264Context *h, const uint8_t *buf, int buf_size)
     int idr_cleared=0;
     int i, ret = 0;
 
+    h->has_slice = 0;
     h->nal_unit_type= 0;
 
     h->max_contexts = h->nb_slice_ctx;
@@ -672,6 +673,7 @@ again:
             h->has_recovery_point = 1;
         case H264_NAL_SLICE:
             sl->gb = nal->gb;
+            h->has_slice = 1;
 
             if ((err = ff_h264_decode_slice_header(h, sl, nal)))
                 break;
@@ -839,7 +841,7 @@ end:
     }
 #endif /* CONFIG_ERROR_RESILIENCE */
     /* clean up */
-    if (h->cur_pic_ptr && !h->droppable) {
+    if (h->cur_pic_ptr && !h->droppable && h->has_slice) {
         ff_thread_report_progress(&h->cur_pic_ptr->tf, INT_MAX,
                                   h->picture_structure == PICT_BOTTOM_FIELD);
     }
@@ -1055,7 +1057,7 @@ static int h264_decode_frame(AVCodecContext *avctx, void *data,
         return send_next_delayed_frame(h, pict, got_frame, buf_index);
     }
 
-    if (!(avctx->flags2 & AV_CODEC_FLAG2_CHUNKS) && !h->cur_pic_ptr) {
+    if (!(avctx->flags2 & AV_CODEC_FLAG2_CHUNKS) && (!h->cur_pic_ptr || !h->has_slice)) {
         if (avctx->skip_frame >= AVDISCARD_NONREF ||
             buf_size >= 4 && !memcmp("Q264", buf, 4))
             return buf_size;
