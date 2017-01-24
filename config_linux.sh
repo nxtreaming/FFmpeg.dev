@@ -40,6 +40,10 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-decoder=libfdk_aac          \
 --enable-decoder=h264                \
 --enable-librtmp                     \
+--enable-decoder=srt                 \
+--enable-encoder=srt                 \
+--enable-decoder=webvtt              \
+--enable-encoder=webvtt              \
 --extra-cflags=-I/usr/local/include  \
 --extra-ldflags=-L/usr/local/lib     \
 
