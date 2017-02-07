@@ -31,7 +31,7 @@ typedef struct SCCContext {
 
 static int scc_probe(AVProbeData *p)
 {
-    char buf[128];
+    char buf[18];
     FFTextReader tr;
 
     ff_text_init_buf(&tr, p->buf, p->buf_size);
@@ -39,8 +39,7 @@ static int scc_probe(AVProbeData *p)
     while (ff_text_peek_r8(&tr) == '\r' || ff_text_peek_r8(&tr) == '\n')
         ff_text_r8(&tr);
 
-    if (ff_subtitles_read_line(&tr, buf, sizeof(buf)) < 0)
-        return 0;
+    ff_text_read(&tr, buf, sizeof(buf));
 
     if (!memcmp(buf, "Scenarist_SCC V1.0", 18))
         return AVPROBE_SCORE_MAX;
@@ -95,8 +94,7 @@ static int scc_read_header(AVFormatContext *s)
 
         if (!strncmp(line, "Scenarist_SCC V1.0", 18))
             continue;
-        if (sscanf(line, "%d:%d:%d:%d", &hh1, &mm1, &ss1, &fs1) != 4 &&
-            sscanf(line, "%d:%d:%d;%d", &hh1, &mm1, &ss1, &fs1) != 4)
+        if (sscanf(line, "%d:%d:%d%*[:;]%d", &hh1, &mm1, &ss1, &fs1) != 4)
             continue;
 
         ts_start = (hh1 * 3600LL + mm1 * 60LL + ss1) * 1000LL + fs1 * 33;
@@ -106,8 +104,7 @@ static int scc_read_header(AVFormatContext *s)
             if (len2 > 13)
                 break;
         }
-        if (sscanf(line2, "%d:%d:%d:%d", &hh2, &mm2, &ss2, &fs2) != 4 &&
-            sscanf(line2, "%d:%d:%d;%d", &hh2, &mm2, &ss2, &fs2) != 4)
+        if (sscanf(line2, "%d:%d:%d%*[:;]%d", &hh2, &mm2, &ss2, &fs2) != 4)
             continue;
 
         ts_end = (hh2 * 3600LL + mm2 * 60LL + ss2) * 1000LL + fs2 * 33;

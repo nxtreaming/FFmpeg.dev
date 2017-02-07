@@ -1367,8 +1367,13 @@ static void do_video_stats(OutputStream *ost, int frame_size)
     enc = ost->enc_ctx;
     if (enc->codec_type == AVMEDIA_TYPE_VIDEO) {
         frame_number = ost->st->nb_frames;
-        fprintf(vstats_file, "frame= %5d q= %2.1f ", frame_number,
-                ost->quality / (float)FF_QP2LAMBDA);
+        if (vstats_version <= 1) {
+            fprintf(vstats_file, "frame= %5d q= %2.1f ", frame_number,
+                    ost->quality / (float)FF_QP2LAMBDA);
+        } else  {
+            fprintf(vstats_file, "out= %2d st= %2d frame= %5d q= %2.1f ", ost->file_index, ost->index, frame_number,
+                    ost->quality / (float)FF_QP2LAMBDA);
+        }
 
         if (ost->error[0]>=0 && (enc->flags & AV_CODEC_FLAG_PSNR))
             fprintf(vstats_file, "PSNR= %6.2f ", psnr(ost->error[0] / (enc->width * enc->height * 255.0 * 255.0)));
@@ -2273,7 +2278,7 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int eo
                    "video_delay is larger in decoder than demuxer %d > %d.\n"
                    "If you want to help, upload a sample "
                    "of this file to ftp://upload.ffmpeg.org/incoming/ "
-                   "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)",
+                   "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)\n",
                    ist->dec_ctx->has_b_frames,
                    ist->st->codecpar->video_delay);
     }
@@ -3156,7 +3161,7 @@ static int init_output_stream_encode(OutputStream *ost)
                    ost->file_index, ost->index);
         }
 //      ost->frame_rate = ist->st->avg_frame_rate.num ? ist->st->avg_frame_rate : (AVRational){25, 1};
-        if (ost->enc && ost->enc->supported_framerates && !ost->force_fps) {
+        if (ost->enc->supported_framerates && !ost->force_fps) {
             int idx = av_find_nearest_q_idx(ost->frame_rate, ost->enc->supported_framerates);
             ost->frame_rate = ost->enc->supported_framerates[idx];
         }
