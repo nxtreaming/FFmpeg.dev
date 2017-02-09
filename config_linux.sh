@@ -42,6 +42,8 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-librtmp                     \
 --enable-decoder=srt                 \
 --enable-encoder=srt                 \
+--enable-decoder=ass                 \
+--enable-encoder=ass                 \
 --enable-decoder=webvtt              \
 --enable-encoder=webvtt              \
 --extra-cflags=-I/usr/local/include  \
