@@ -661,11 +661,13 @@ void avcodec_register_all(void)
     REGISTER_DECODER(MPEG1_CUVID,       mpeg1_cuvid);
     REGISTER_DECODER(MPEG2_CUVID,       mpeg2_cuvid);
     REGISTER_ENCODER(MPEG2_QSV,         mpeg2_qsv);
+    REGISTER_ENCODER(MPEG2_VAAPI,       mpeg2_vaapi);
     REGISTER_DECODER(MPEG4_CUVID,       mpeg4_cuvid);
     REGISTER_DECODER(MPEG4_MEDIACODEC,  mpeg4_mediacodec);
     REGISTER_DECODER(VC1_CUVID,         vc1_cuvid);
     REGISTER_DECODER(VP8_CUVID,         vp8_cuvid);
     REGISTER_DECODER(VP8_MEDIACODEC,    vp8_mediacodec);
+    REGISTER_ENCODER(VP8_VAAPI,         vp8_vaapi);
     REGISTER_DECODER(VP9_CUVID,         vp9_cuvid);
     REGISTER_DECODER(VP9_MEDIACODEC,    vp9_mediacodec);
 
