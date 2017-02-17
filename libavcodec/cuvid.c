@@ -113,6 +113,10 @@ static int CUDAAPI cuvid_handle_video_sequence(void *opaque, CUVIDEOFORMAT* form
 
     ctx->internal_error = 0;
 
+    // width and height need to be set before calling ff_get_format
+    avctx->width = format->display_area.right;
+    avctx->height = format->display_area.bottom;
+
     switch (format->bit_depth_luma_minus8) {
     case 0: // 8-bit
         pix_fmts[1] = AV_PIX_FMT_NV12;
@@ -143,8 +147,18 @@ static int CUDAAPI cuvid_handle_video_sequence(void *opaque, CUVIDEOFORMAT* form
 
     avctx->pix_fmt = surface_fmt;
 
-    avctx->width = format->display_area.right;
-    avctx->height = format->display_area.bottom;
+    // Update our hwframe ctx, as the get_format callback might have refreshed it!
+    if (avctx->hw_frames_ctx) {
+        av_buffer_unref(&ctx->hwframe);
+
+        ctx->hwframe = av_buffer_ref(avctx->hw_frames_ctx);
+        if (!ctx->hwframe) {
+            ctx->internal_error = AVERROR(ENOMEM);
+            return 0;
+        }
+
+        hwframe_ctx = (AVHWFramesContext*)ctx->hwframe->data;
+    }
 
     ff_set_sar(avctx, av_div_q(
         (AVRational){ format->display_aspect_ratio.x, format->display_aspect_ratio.y },
@@ -193,6 +207,11 @@ static int CUDAAPI cuvid_handle_video_sequence(void *opaque, CUVIDEOFORMAT* form
             hwframe_ctx->format != AV_PIX_FMT_CUDA ||
             hwframe_ctx->sw_format != avctx->sw_pix_fmt)) {
         av_log(avctx, AV_LOG_ERROR, "AVHWFramesContext is already initialized with incompatible parameters\n");
+        av_log(avctx, AV_LOG_DEBUG, "width: %d <-> %d\n", hwframe_ctx->width, avctx->width);
+        av_log(avctx, AV_LOG_DEBUG, "height: %d <-> %d\n", hwframe_ctx->height, avctx->height);
+        av_log(avctx, AV_LOG_DEBUG, "format: %s <-> cuda\n", av_get_pix_fmt_name(hwframe_ctx->format));
+        av_log(avctx, AV_LOG_DEBUG, "sw_format: %s <-> %s\n",
+               av_get_pix_fmt_name(hwframe_ctx->sw_format), av_get_pix_fmt_name(avctx->sw_pix_fmt));
         ctx->internal_error = AVERROR(EINVAL);
         return 0;
     }
