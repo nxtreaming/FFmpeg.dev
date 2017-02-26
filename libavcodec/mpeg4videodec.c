@@ -368,8 +368,13 @@ static int mpeg4_decode_sprite_trajectory(Mpeg4DecContext *ctx, GetBitContext *g
         int shift_y = 16 - ctx->sprite_shift[0];
         int shift_c = 16 - ctx->sprite_shift[1];
 
-        if (shift_c < 0 || shift_y < 0) {
-            avpriv_request_sample(s->avctx, "Too large sprite shift");
+        if (shift_c < 0 || shift_y < 0 ||
+            FFABS(s->sprite_offset[0][0]) >= INT_MAX >> shift_y  ||
+            FFABS(s->sprite_offset[1][0]) >= INT_MAX >> shift_c  ||
+            FFABS(s->sprite_offset[0][1]) >= INT_MAX >> shift_y  ||
+            FFABS(s->sprite_offset[1][1]) >= INT_MAX >> shift_c
+        ) {
+            avpriv_request_sample(s->avctx, "Too large sprite shift or offset");
             return AVERROR_PATCHWELCOME;
         }
 
@@ -379,6 +384,13 @@ static int mpeg4_decode_sprite_trajectory(Mpeg4DecContext *ctx, GetBitContext *g
             s->sprite_delta[0][i]  *= 1 << shift_y;
             s->sprite_delta[1][i]  *= 1 << shift_y;
             ctx->sprite_shift[i]     = 16;
+
+            if (llabs(s->sprite_offset[i][0] + s->sprite_delta[i][0] * (int64_t)w) >= INT_MAX ||
+                llabs(s->sprite_offset[i][0] + s->sprite_delta[i][1] * (int64_t)h) >= INT_MAX ||
+                llabs(s->sprite_offset[i][0] + s->sprite_delta[i][0] * (int64_t)w + s->sprite_delta[i][1] * (int64_t)h) >= INT_MAX) {
+                avpriv_request_sample(s->avctx, "Overflow on sprite points");
+                return AVERROR_PATCHWELCOME;
+            }
         }
         s->real_sprite_warping_points = ctx->num_sprite_warping_points;
     }
@@ -510,7 +522,7 @@ static inline int get_amv(Mpeg4DecContext *ctx, int n)
         if (ctx->divx_version == 500 && ctx->divx_build == 413)
             sum = s->sprite_offset[0][n] / (1 << (a - s->quarter_sample));
         else
-            sum = RSHIFT(s->sprite_offset[0][n] << s->quarter_sample, a);
+            sum = RSHIFT(s->sprite_offset[0][n] * (1 << s->quarter_sample), a);
     } else {
         dx    = s->sprite_delta[n][0];
         dy    = s->sprite_delta[n][1];

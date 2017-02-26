@@ -303,6 +303,10 @@ static int h263p_decode_umotion(MpegEncContext * s, int pred)
    {
       code <<= 1;
       code += get_bits1(&s->gb);
+      if (code >= 32768) {
+          avpriv_request_sample(s->avctx, "Huge DMV");
+          return AVERROR_INVALIDDATA;
+      }
    }
    sign = code & 1;
    code >>= 1;
@@ -524,7 +528,7 @@ retry:
                     }else{
                         level = SHOW_UBITS(re, &s->gb, 5);
                         SKIP_CACHE(re, &s->gb, 5);
-                        level |= SHOW_SBITS(re, &s->gb, 6)<<5;
+                        level |= SHOW_SBITS(re, &s->gb, 6) * (1<<5);
                         SKIP_COUNTER(re, &s->gb, 5 + 6);
                     }
                 }
