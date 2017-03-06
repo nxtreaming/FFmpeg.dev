@@ -497,7 +497,7 @@ static inline int mpeg2_decode_block_intra(MpegEncContext *s,
     dc  = s->last_dc[component];
     dc += diff;
     s->last_dc[component] = dc;
-    block[0] = dc << (3 - s->intra_dc_precision);
+    block[0] = dc * (1 << (3 - s->intra_dc_precision));
     ff_tlog(s->avctx, "dc=%d\n", block[0]);
     mismatch = block[0] ^ 1;
     i = 0;
@@ -948,8 +948,8 @@ static int mpeg_decode_mb(MpegEncContext *s, int16_t block[12][64])
                         dmy = get_dmv(s);
 
 
-                        s->last_mv[i][0][1] = my << my_shift;
-                        s->last_mv[i][1][1] = my << my_shift;
+                        s->last_mv[i][0][1] = my * (1 << my_shift);
+                        s->last_mv[i][1][1] = my * (1 << my_shift);
 
                         s->mv[i][0][0] = mx;
                         s->mv[i][0][1] = my;

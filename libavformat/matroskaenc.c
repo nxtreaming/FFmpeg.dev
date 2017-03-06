@@ -1138,7 +1138,7 @@ static int mkv_write_track(AVFormatContext *s, MatroskaMuxContext *mkv,
         // if none are found, use AVI codes
         if (par->codec_id != AV_CODEC_ID_RAWVIDEO || par->codec_tag) {
             for (j = 0; ff_mkv_codec_tags[j].id != AV_CODEC_ID_NONE; j++) {
-                if (ff_mkv_codec_tags[j].id == par->codec_id) {
+                if (ff_mkv_codec_tags[j].id == par->codec_id && par->codec_id != AV_CODEC_ID_FFV1) {
                     put_ebml_string(pb, MATROSKA_ID_CODECID, ff_mkv_codec_tags[j].str);
                     native_id = 1;
                     break;
@@ -2528,6 +2528,7 @@ static const AVCodecTag additional_audio_tags[] = {
     { AV_CODEC_ID_PCM_S16BE, 0xFFFFFFFF },
     { AV_CODEC_ID_PCM_S24BE, 0xFFFFFFFF },
     { AV_CODEC_ID_PCM_S32BE, 0xFFFFFFFF },
+    { AV_CODEC_ID_QDMC,      0xFFFFFFFF },
     { AV_CODEC_ID_QDM2,      0xFFFFFFFF },
     { AV_CODEC_ID_RA_144,    0xFFFFFFFF },
     { AV_CODEC_ID_RA_288,    0xFFFFFFFF },
