@@ -142,8 +142,9 @@
  *
  * Not all codecs will follow a rigid and predictable dataflow; the only
  * guarantee is that an AVERROR(EAGAIN) return value on a send/receive call on
- * one end implies that a receive/send call on the other end will succeed. In
- * general, no codec will permit unlimited buffering of input or output.
+ * one end implies that a receive/send call on the other end will succeed, or
+ * at least will not fail with AVERROR(EAGAIN). In general, no codec will
+ * permit unlimited buffering of input or output.
  *
  * This API replaces the following legacy functions:
  * - avcodec_decode_video2() and avcodec_decode_audio4():
@@ -440,6 +441,7 @@ enum AVCodecID {
     AV_CODEC_ID_SCPR,
     AV_CODEC_ID_CLEARVIDEO,
     AV_CODEC_ID_XPM,
+    AV_CODEC_ID_AV1,
 
     /* various PCM "codecs" */
     AV_CODEC_ID_FIRST_AUDIO = 0x10000,     ///< A dummy id pointing at the start of audio codecs
@@ -1393,6 +1395,11 @@ typedef struct AVCPBProperties {
  * @{
  */
 enum AVPacketSideDataType {
+    /**
+     * An AV_PKT_DATA_PALETTE side data packet contains exactly AVPALETTE_SIZE
+     * bytes worth of palette. This side data signals that a new palette is
+     * present.
+     */
     AV_PKT_DATA_PALETTE,
 
     /**
@@ -3618,6 +3625,15 @@ typedef struct AVCodecContext {
      * contexts used must be created on the same device.
      */
     AVBufferRef *hw_device_ctx;
+
+    /**
+     * Bit set of AV_HWACCEL_FLAG_* flags, which affect hardware accelerated
+     * decoding (if active).
+     * - encoding: unused
+     * - decoding: Set by user (either before avcodec_open2(), or in the
+     *             AVCodecContext.get_format callback)
+     */
+    int hwaccel_flags;
 } AVCodecContext;
 
 AVRational av_codec_get_pkt_timebase         (const AVCodecContext *avctx);
@@ -3904,6 +3920,11 @@ typedef struct AVHWAccel {
      * AVCodecInternal.hwaccel_priv_data.
      */
     int priv_data_size;
+
+    /**
+     * Internal hwaccel capabilities.
+     */
+    int caps_internal;
 } AVHWAccel;
 
 /**
@@ -4575,9 +4596,13 @@ int av_packet_shrink_side_data(AVPacket *pkt, enum AVPacketSideDataType type,
 uint8_t* av_packet_get_side_data(const AVPacket *pkt, enum AVPacketSideDataType type,
                                  int *size);
 
+#if FF_API_MERGE_SD_API
+attribute_deprecated
 int av_packet_merge_side_data(AVPacket *pkt);
 
+attribute_deprecated
 int av_packet_split_side_data(AVPacket *pkt);
+#endif
 
 const char *av_packet_side_data_name(enum AVPacketSideDataType type);
 
@@ -5811,12 +5836,15 @@ typedef struct AVBSFContext {
     void *priv_data;
 
     /**
-     * Parameters of the input stream. Set by the caller before av_bsf_init().
+     * Parameters of the input stream. This field is allocated in
+     * av_bsf_alloc(), it needs to be filled by the caller before
+     * av_bsf_init().
      */
     AVCodecParameters *par_in;
 
     /**
-     * Parameters of the output stream. Set by the filter in av_bsf_init().
+     * Parameters of the output stream. This field is allocated in
+     * av_bsf_alloc(), it is set by the filter in av_bsf_init().
      */
     AVCodecParameters *par_out;
 

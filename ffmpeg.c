@@ -838,7 +838,6 @@ static void output_packet(OutputFile *of, AVPacket *pkt, OutputStream *ost)
     if (ost->nb_bitstream_filters) {
         int idx;
 
-        av_packet_split_side_data(pkt);
         ret = av_bsf_send_packet(ost->bsf_ctx[0], pkt);
         if (ret < 0)
             goto finish;
@@ -1455,7 +1454,7 @@ static int reap_filters(int flush)
         filter = ost->filter->filter;
 
         if (!ost->initialized) {
-            char error[1024];
+            char error[1024] = "";
             ret = init_output_stream(ost, error, sizeof(error));
             if (ret < 0) {
                 av_log(NULL, AV_LOG_ERROR, "Error initializing output stream %d:%d -- %s\n",
@@ -1868,7 +1867,7 @@ static void flush_encoders(void)
         // Maybe we should just let encoding fail instead.
         if (!ost->initialized) {
             FilterGraph *fg = ost->filter->graph;
-            char error[1024];
+            char error[1024] = "";
 
             av_log(NULL, AV_LOG_WARNING,
                    "Finishing stream %d:%d without any data written to it.\n",
@@ -2309,7 +2308,8 @@ static int send_frame_to_filters(InputStream *ist, AVFrame *decoded_frame)
     return ret;
 }
 
-static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output)
+static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output,
+                        int *decode_failed)
 {
     AVFrame *decoded_frame;
     AVCodecContext *avctx = ist->dec_ctx;
@@ -2325,6 +2325,8 @@ static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output)
     update_benchmark(NULL);
     ret = decode(avctx, decoded_frame, got_output, pkt);
     update_benchmark("decode_audio %d.%d", ist->file_index, ist->st->index);
+    if (ret < 0)
+        *decode_failed = 1;
 
     if (ret >= 0 && avctx->sample_rate <= 0) {
         av_log(avctx, AV_LOG_ERROR, "Sample rate %d invalid\n", avctx->sample_rate);
@@ -2370,7 +2372,8 @@ static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output)
     return err < 0 ? err : ret;
 }
 
-static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int eof)
+static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int eof,
+                        int *decode_failed)
 {
     AVFrame *decoded_frame;
     int i, ret = 0, err = 0;
@@ -2409,6 +2412,8 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int eo
     update_benchmark(NULL);
     ret = decode(ist->dec_ctx, decoded_frame, got_output, pkt ? &avpkt : NULL);
     update_benchmark("decode_video %d.%d", ist->file_index, ist->st->index);
+    if (ret < 0)
+        *decode_failed = 1;
 
     // The following line may be required in some cases where there is no parser
     // or the parser does not has_b_frames correctly
@@ -2499,7 +2504,8 @@ fail:
     return err < 0 ? err : ret;
 }
 
-static int transcode_subtitles(InputStream *ist, AVPacket *pkt, int *got_output)
+static int transcode_subtitles(InputStream *ist, AVPacket *pkt, int *got_output,
+                               int *decode_failed)
 {
     AVSubtitle subtitle;
     int free_sub = 1;
@@ -2509,6 +2515,7 @@ static int transcode_subtitles(InputStream *ist, AVPacket *pkt, int *got_output)
     check_decode_result(NULL, got_output, ret);
 
     if (ret < 0 || !*got_output) {
+        *decode_failed = 1;
         if (!pkt->size)
             sub2video_flush(ist);
         return ret;
@@ -2627,16 +2634,19 @@ static int process_input_packet(InputStream *ist, const AVPacket *pkt, int no_eo
     while (ist->decoding_needed) {
         int duration = 0;
         int got_output = 0;
+        int decode_failed = 0;
 
         ist->pts = ist->next_pts;
         ist->dts = ist->next_dts;
 
         switch (ist->dec_ctx->codec_type) {
         case AVMEDIA_TYPE_AUDIO:
-            ret = decode_audio    (ist, repeating ? NULL : &avpkt, &got_output);
+            ret = decode_audio    (ist, repeating ? NULL : &avpkt, &got_output,
+                                   &decode_failed);
             break;
         case AVMEDIA_TYPE_VIDEO:
-            ret = decode_video    (ist, repeating ? NULL : &avpkt, &got_output, !pkt);
+            ret = decode_video    (ist, repeating ? NULL : &avpkt, &got_output, !pkt,
+                                   &decode_failed);
             if (!repeating || !pkt || got_output) {
                 if (pkt && pkt->duration) {
                     duration = av_rescale_q(pkt->duration, ist->st->time_base, AV_TIME_BASE_Q);
@@ -2659,7 +2669,7 @@ static int process_input_packet(InputStream *ist, const AVPacket *pkt, int no_eo
         case AVMEDIA_TYPE_SUBTITLE:
             if (repeating)
                 break;
-            ret = transcode_subtitles(ist, &avpkt, &got_output);
+            ret = transcode_subtitles(ist, &avpkt, &got_output, &decode_failed);
             if (!pkt && ret >= 0)
                 ret = AVERROR_EOF;
             break;
@@ -2673,9 +2683,14 @@ static int process_input_packet(InputStream *ist, const AVPacket *pkt, int no_eo
         }
 
         if (ret < 0) {
-            av_log(NULL, AV_LOG_ERROR, "Error while decoding stream #%d:%d: %s\n",
-                   ist->file_index, ist->st->index, av_err2str(ret));
-            if (exit_on_error)
+            if (decode_failed) {
+                av_log(NULL, AV_LOG_ERROR, "Error while decoding stream #%d:%d: %s\n",
+                       ist->file_index, ist->st->index, av_err2str(ret));
+            } else {
+                av_log(NULL, AV_LOG_FATAL, "Error while processing the decoded "
+                       "data for stream #%d:%d\n", ist->file_index, ist->st->index);
+            }
+            if (!decode_failed || exit_on_error)
                 exit_program(1);
             break;
         }
@@ -4269,8 +4284,6 @@ static int process_input(int file_index)
 
     /* add the stream-global side data to the first packet */
     if (ist->nb_packets == 1) {
-        if (ist->st->nb_side_data)
-            av_packet_split_side_data(&pkt);
         for (i = 0; i < ist->st->nb_side_data; i++) {
             AVPacketSideData *src_sd = &ist->st->side_data[i];
             uint8_t *dst_data;
