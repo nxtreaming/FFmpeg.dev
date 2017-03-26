@@ -137,20 +137,16 @@ static int extract_extradata_vc1(AVBSFContext *ctx, AVPacket *pkt,
                                  uint8_t **data, int *size)
 {
     ExtractExtradataContext *s = ctx->priv_data;
+    const uint8_t *ptr = pkt->data, *end = pkt->data + pkt->size;
     uint32_t state = UINT32_MAX;
     int has_extradata = 0, extradata_size = 0;
-    int i;
 
-    for (i = 0; i < pkt->size; i++) {
-        state = (state << 8) | pkt->data[i];
-        if (IS_MARKER(state)) {
-            if (state == VC1_CODE_SEQHDR || state == VC1_CODE_ENTRYPOINT) {
-                has_extradata = 1;
-            } else if (has_extradata) {
-                extradata_size = i - 3;
-                break;
-            }
-        }
+    while (ptr < end) {
+        ptr = avpriv_find_start_code(ptr, end, &state);
+        if (state == VC1_CODE_SEQHDR || state == VC1_CODE_ENTRYPOINT) {
+            has_extradata = 1;
+        } else if (has_extradata && IS_MARKER(state))
+            extradata_size = ptr - 4 - pkt->data;
     }
 
     if (extradata_size) {
@@ -170,21 +166,49 @@ static int extract_extradata_vc1(AVBSFContext *ctx, AVPacket *pkt,
     return 0;
 }
 
-static int extract_extradata_mpeg124(AVBSFContext *ctx, AVPacket *pkt,
+static int extract_extradata_mpeg12(AVBSFContext *ctx, AVPacket *pkt,
                                      uint8_t **data, int *size)
 {
     ExtractExtradataContext *s = ctx->priv_data;
-    int is_mpeg12 = ctx->par_in->codec_id == AV_CODEC_ID_MPEG1VIDEO ||
-                    ctx->par_in->codec_id == AV_CODEC_ID_MPEG2VIDEO;
     uint32_t state = UINT32_MAX;
-    int i;
+    int i, found = 0;
 
     for (i = 0; i < pkt->size; i++) {
         state = (state << 8) | pkt->data[i];
-        if ((is_mpeg12 && state != 0x1B3 && state != 0x1B5 && state < 0x200 && state >= 0x100) ||
-            (!is_mpeg12 && (state == 0x1B3 || state == 0x1B6))) {
+        if (state == 0x1B3)
+            found = 1;
+        else if (found && state != 0x1B5 && state < 0x200 && state >= 0x100) {
             if (i > 3) {
                 *size = i - 3;
+                *data = av_malloc(*size + AV_INPUT_BUFFER_PADDING_SIZE);
+                if (!*data)
+                    return AVERROR(ENOMEM);
+
+                memcpy(*data, pkt->data, *size);
+
+                if (s->remove) {
+                    pkt->data += *size;
+                    pkt->size -= *size;
+                }
+            }
+            break;
+        }
+    }
+    return 0;
+}
+
+static int extract_extradata_mpeg4(AVBSFContext *ctx, AVPacket *pkt,
+                                   uint8_t **data, int *size)
+{
+    ExtractExtradataContext *s = ctx->priv_data;
+    const uint8_t *ptr = pkt->data, *end = pkt->data + pkt->size;
+    uint32_t state = UINT32_MAX;
+
+    while (ptr < end) {
+        ptr = avpriv_find_start_code(ptr, end, &state);
+        if (state == 0x1B3 || state == 0x1B6) {
+            if (ptr - pkt->data > 4) {
+                *size = ptr - 4 - pkt->data;
                 *data = av_malloc(*size + AV_INPUT_BUFFER_PADDING_SIZE);
                 if (!*data)
                     return AVERROR(ENOMEM);
@@ -207,12 +231,12 @@ static const struct {
     int (*extract)(AVBSFContext *ctx, AVPacket *pkt,
                    uint8_t **data, int *size);
 } extract_tab[] = {
-    { AV_CODEC_ID_CAVS,       extract_extradata_mpeg124 },
+    { AV_CODEC_ID_CAVS,       extract_extradata_mpeg4   },
     { AV_CODEC_ID_H264,       extract_extradata_h2645   },
     { AV_CODEC_ID_HEVC,       extract_extradata_h2645   },
-    { AV_CODEC_ID_MPEG1VIDEO, extract_extradata_mpeg124 },
-    { AV_CODEC_ID_MPEG2VIDEO, extract_extradata_mpeg124 },
-    { AV_CODEC_ID_MPEG4,      extract_extradata_mpeg124 },
+    { AV_CODEC_ID_MPEG1VIDEO, extract_extradata_mpeg12  },
+    { AV_CODEC_ID_MPEG2VIDEO, extract_extradata_mpeg12  },
+    { AV_CODEC_ID_MPEG4,      extract_extradata_mpeg4   },
     { AV_CODEC_ID_VC1,        extract_extradata_vc1     },
 };
 
