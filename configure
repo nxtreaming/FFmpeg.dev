@@ -63,6 +63,7 @@ Options: [defaults in brackets after descriptions]
 
 Help options:
   --help                   print this message
+  --quiet                  Suppress showing informative output
   --list-decoders          show all available decoders
   --list-encoders          show all available encoders
   --list-hwaccels          show all available hardware accelerators
@@ -79,7 +80,7 @@ Standard options:
   --logfile=FILE           log tests and output to FILE [config.log]
   --disable-logging        do not log configure debug information
   --fatal-warnings         fail if any configure warning is generated
-  --prefix=PREFIX          install in PREFIX [$prefix]
+  --prefix=PREFIX          install in PREFIX [$prefix_default]
   --bindir=DIR             install binaries in DIR [PREFIX/bin]
   --datadir=DIR            install data files in DIR [PREFIX/share/ffmpeg]
   --docdir=DIR             install documentation in DIR [PREFIX/share/doc/ffmpeg]
@@ -90,7 +91,7 @@ Standard options:
   --pkgconfigdir=DIR       install pkg-config files in DIR [LIBDIR/pkgconfig]
   --enable-rpath           use rpath to allow installing libraries in paths
                            not part of the dynamic linker search path
-                           use rpath when linking programs [USE WITH CARE]
+                           use rpath when linking programs (USE WITH CARE)
   --install-name-dir=DIR   Darwin directory name for installed targets
 
 Licensing options:
@@ -104,7 +105,7 @@ Configuration options:
   --disable-static         do not build static libraries [no]
   --enable-shared          build shared libraries [no]
   --enable-small           optimize for size instead of speed
-  --disable-runtime-cpudetect disable detecting cpu capabilities at runtime (smaller binary)
+  --disable-runtime-cpudetect disable detecting CPU capabilities at runtime (smaller binary)
   --enable-gray            enable full grayscale support (slower color)
   --disable-swscale-alpha  disable alpha channel support in swscale
   --disable-all            disable building components, libraries and programs
@@ -1417,7 +1418,7 @@ EOF
 }
 
 cp_if_changed(){
-    cmp -s "$1" "$2" && echo "$2 is unchanged" && return
+    cmp -s "$1" "$2" && { test "$quiet" != "yes" && echo "$2 is unchanged"; } && return
     mkdir -p "$(dirname $2)"
     $cp_f "$1" "$2"
 }
@@ -3508,6 +3509,8 @@ for opt do
             eval show_list $NAME \$$(toupper $NAME)_LIST
         ;;
         --help|-h) show_help
+        ;;
+        --quiet|-q) quiet=yes
         ;;
         --fatal-warnings) enable fatal_warnings
         ;;
@@ -6504,6 +6507,19 @@ postproc_deps="$(filter_out 'gpl' $postproc_deps)"
 
 map 'expand_deps $v' $LIBRARY_LIST
 
+license="LGPL version 2.1 or later"
+if enabled nonfree; then
+    license="nonfree and unredistributable"
+elif enabled gplv3; then
+    license="GPL version 3 or later"
+elif enabled lgplv3; then
+    license="LGPL version 3 or later"
+elif enabled gpl; then
+    license="GPL version 2 or later"
+fi
+
+if test "$quiet" != "yes"; then
+
 echo "install prefix            $prefix"
 echo "source path               $source_path"
 echo "C compiler                $cc"
@@ -6575,13 +6591,9 @@ echo "optimizations             ${optimizations-no}"
 echo "static                    ${static-no}"
 echo "shared                    ${shared-no}"
 echo "postprocessing support    ${postproc-no}"
-echo "new filter support        ${avfilter-no}"
 echo "network support           ${network-no}"
 echo "threading support         ${thread_type-no}"
 echo "safe bitstream reader     ${safe_bitstream_reader-no}"
-echo "SDL2 support              ${sdl2-no}"
-echo "opencl enabled            ${opencl-no}"
-echo "JNI support               ${jni-no}"
 echo "texi2html enabled         ${texi2html-no}"
 echo "perl enabled              ${perl-no}"
 echo "pod2man enabled           ${pod2man-no}"
@@ -6589,10 +6601,6 @@ echo "makeinfo enabled          ${makeinfo-no}"
 echo "makeinfo supports HTML    ${makeinfo_html-no}"
 test -n "$random_seed" &&
     echo "random seed               ${random_seed}"
-echo
-
-echo "Enabled programs:"
-print_enabled '' $PROGRAM_LIST | print_in_columns
 echo
 
 echo "External libraries:"
@@ -6607,6 +6615,10 @@ echo "Libraries:"
 print_enabled '' $LIBRARY_LIST | print_in_columns
 echo
 
+echo "Programs:"
+print_enabled '' $PROGRAM_LIST | print_in_columns
+echo
+
 for type in decoder encoder hwaccel parser demuxer muxer protocol filter bsf indev outdev; do
     echo "Enabled ${type}s:"
     eval list=\$$(toupper $type)_LIST
@@ -6614,20 +6626,11 @@ for type in decoder encoder hwaccel parser demuxer muxer protocol filter bsf ind
     echo
 done
 
-license="LGPL version 2.1 or later"
-if enabled nonfree; then
-    license="nonfree and unredistributable"
-elif enabled gplv3; then
-    license="GPL version 3 or later"
-elif enabled lgplv3; then
-    license="LGPL version 3 or later"
-elif enabled gpl; then
-    license="GPL version 2 or later"
-fi
-
 echo "License: $license"
 
-echo "Creating config.mak, config.h, and doc/config.texi..."
+echo "Creating configuration files ..."
+
+fi # test "$quiet" != "yes"
 
 test -e Makefile || echo "include $source_path/Makefile" > Makefile
 
