@@ -79,7 +79,6 @@ static void register_all(void)
     REGISTER_FILTER(ASPLIT,         asplit,         af);
     REGISTER_FILTER(ASTATS,         astats,         af);
     REGISTER_FILTER(ASTREAMSELECT,  astreamselect,  af);
-    REGISTER_FILTER(ASYNCTS,        asyncts,        af);
     REGISTER_FILTER(ATEMPO,         atempo,         af);
     REGISTER_FILTER(ATRIM,          atrim,          af);
     REGISTER_FILTER(AZMQ,           azmq,           af);
@@ -210,6 +209,7 @@ static void register_all(void)
     REGISTER_FILTER(HSTACK,         hstack,         vf);
     REGISTER_FILTER(HUE,            hue,            vf);
     REGISTER_FILTER(HWDOWNLOAD,     hwdownload,     vf);
+    REGISTER_FILTER(HWMAP,          hwmap,          vf);
     REGISTER_FILTER(HWUPLOAD,       hwupload,       vf);
     REGISTER_FILTER(HWUPLOAD_CUDA,  hwupload_cuda,  vf);
     REGISTER_FILTER(HYSTERESIS,     hysteresis,     vf);

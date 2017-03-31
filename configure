@@ -1461,8 +1461,11 @@ COMPONENT_LIST="
 EXAMPLE_LIST="
     avio_dir_cmd_example
     avio_reading_example
-    decoding_encoding_example
+    decode_audio_example
+    decode_video_example
     demuxing_decoding_example
+    encode_audio_example
+    encode_video_example
     extract_mvs_example
     filter_audio_example
     filtering_audio_example
@@ -3076,7 +3079,6 @@ afftfilt_filter_select="fft"
 amovie_filter_deps="avcodec avformat"
 aresample_filter_deps="swresample"
 ass_filter_deps="libass"
-asyncts_filter_deps="avresample"
 atempo_filter_deps="avcodec"
 atempo_filter_select="rdft"
 azmq_filter_deps="libzmq"
@@ -3168,8 +3170,11 @@ scale_vaapi_filter_deps="vaapi VAProcPipelineParameterBuffer"
 # examples
 avio_dir_cmd_deps="avformat avutil"
 avio_reading_deps="avformat avcodec avutil"
-decoding_encoding_example_deps="avcodec avformat avutil"
+decode_audio_example_deps="avcodec avutil"
+decode_video_example_deps="avcodec avutil"
 demuxing_decoding_example_deps="avcodec avformat avutil"
+encode_audio_example_deps="avcodec avutil"
+encode_video_example_deps="avcodec avutil"
 extract_mvs_example_deps="avcodec avformat avutil"
 filter_audio_example_deps="avfilter avutil"
 filtering_audio_example_deps="avfilter avcodec avformat avutil"
@@ -4105,7 +4110,7 @@ probe_cc(){
         _type=lld-link
         # The link.exe mode doesn't have a switch for getting the version,
         # but we can force it back to gnu mode and get the version from there.
-        _ident=$($_cc -flavor gnu --version)
+        _ident=$($_cc -flavor gnu --version 2>/dev/null)
         _ld_o='-out:$@'
         _flags_filter=msvc_flags
         _ld_lib='lib%.a'
@@ -4650,7 +4655,7 @@ fi
 
 add_cppflags -D_ISOC99_SOURCE
 add_cxxflags -D__STDC_CONSTANT_MACROS
-add_cxxflags -std=c++98
+check_cxxflags -std=c++11 || check_cxxflags -std=c++0x
 
 # some compilers silently accept -std=c11, so we also need to check that the
 # version macro is defined properly
@@ -6459,7 +6464,6 @@ enabled zlib && add_cppflags -DZLIB_CONST
 enabled afftfilt_filter     && prepend avfilter_deps "avcodec"
 enabled amovie_filter       && prepend avfilter_deps "avformat avcodec"
 enabled aresample_filter    && prepend avfilter_deps "swresample"
-enabled asyncts_filter      && prepend avfilter_deps "avresample"
 enabled atempo_filter       && prepend avfilter_deps "avcodec"
 enabled cover_rect_filter   && prepend avfilter_deps "avformat avcodec"
 enabled ebur128_filter && enabled swresample && prepend avfilter_deps "swresample"

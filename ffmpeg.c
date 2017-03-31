@@ -47,9 +47,11 @@
 #include "libavutil/parseutils.h"
 #include "libavutil/samplefmt.h"
 #include "libavutil/fifo.h"
+#include "libavutil/hwcontext.h"
 #include "libavutil/internal.h"
 #include "libavutil/intreadwrite.h"
 #include "libavutil/dict.h"
+#include "libavutil/display.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/avstring.h"
@@ -2194,8 +2196,10 @@ static int ifilter_send_frame(InputFilter *ifilter, AVFrame *frame)
 
                 if (!av_fifo_space(ifilter->frame_queue)) {
                     ret = av_fifo_realloc2(ifilter->frame_queue, 2 * av_fifo_size(ifilter->frame_queue));
-                    if (ret < 0)
+                    if (ret < 0) {
+                        av_frame_free(&tmp);
                         return ret;
+                    }
                 }
                 av_fifo_generic_write(ifilter->frame_queue, &tmp, sizeof(tmp), NULL);
                 return 0;
@@ -2528,7 +2532,7 @@ static int transcode_subtitles(InputStream *ist, AVPacket *pkt, int *got_output,
                              1000, AV_TIME_BASE);
             if (end < ist->prev_sub.subtitle.end_display_time) {
                 av_log(ist->dec_ctx, AV_LOG_DEBUG,
-                       "Subtitle duration reduced from %d to %d%s\n",
+                       "Subtitle duration reduced from %"PRId32" to %d%s\n",
                        ist->prev_sub.subtitle.end_display_time, end,
                        end <= 0 ? ", dropping it" : "");
                 ist->prev_sub.subtitle.end_display_time = end;
@@ -3087,9 +3091,6 @@ static int init_output_stream_streamcopy(OutputStream *ost)
             const AVPacketSideData *sd_src = &ist->st->side_data[i];
             AVPacketSideData *sd_dst = &ost->st->side_data[ost->st->nb_side_data];
 
-            if (ost->rotate_overridden && sd_src->type == AV_PKT_DATA_DISPLAYMATRIX)
-                continue;
-
             sd_dst->data = av_malloc(sd_src->size);
             if (!sd_dst->data)
                 return AVERROR(ENOMEM);
@@ -3098,6 +3099,13 @@ static int init_output_stream_streamcopy(OutputStream *ost)
             sd_dst->type = sd_src->type;
             ost->st->nb_side_data++;
         }
+    }
+
+    if (ost->rotate_overridden) {
+        uint8_t *sd = av_stream_new_side_data(ost->st, AV_PKT_DATA_DISPLAYMATRIX,
+                                              sizeof(int32_t) * 9);
+        if (sd)
+            av_display_rotation_set((int32_t *)sd, -ost->rotate_override_value);
     }
 
     ost->parser = av_parser_init(par_dst->codec_id);
@@ -3252,6 +3260,11 @@ static int init_output_stream_encode(OutputStream *ost)
     int j, ret;
 
     set_encoder_id(output_files[ost->file_index], ost);
+
+    // Muxers use AV_PKT_DATA_DISPLAYMATRIX to signal rotation. On the other
+    // hand, the legacy API makes demuxers set "rotate" metadata entries,
+    // which have to be filtered out to prevent leaking them to output files.
+    av_dict_set(&ost->st->metadata, "rotate", NULL, 0);
 
     if (ist) {
         ost->st->disposition          = ist->st->disposition;
@@ -3431,7 +3444,9 @@ static int init_output_stream(OutputStream *ost, char *error, int error_len)
             !av_dict_get(ost->encoder_opts, "ab", NULL, 0))
             av_dict_set(&ost->encoder_opts, "b", "128000", 0);
 
-        if (ost->filter && av_buffersink_get_hw_frames_ctx(ost->filter->filter)) {
+        if (ost->filter && av_buffersink_get_hw_frames_ctx(ost->filter->filter) &&
+            ((AVHWFramesContext*)av_buffersink_get_hw_frames_ctx(ost->filter->filter)->data)->format ==
+            av_buffersink_get_format(ost->filter->filter)) {
             ost->enc_ctx->hw_frames_ctx = av_buffer_ref(av_buffersink_get_hw_frames_ctx(ost->filter->filter));
             if (!ost->enc_ctx->hw_frames_ctx)
                 return AVERROR(ENOMEM);
@@ -3487,6 +3502,26 @@ static int init_output_stream(OutputStream *ost, char *error, int error_len)
                 sd_dst->size = sd_src->size;
                 sd_dst->type = sd_src->type;
                 ost->st->nb_side_data++;
+            }
+        }
+
+        /*
+         * Add global input side data. For now this is naive, and copies it
+         * from the input stream's global side data. All side data should
+         * really be funneled over AVFrame and libavfilter, then added back to
+         * packet side data, and then potentially using the first packet for
+         * global side data.
+         */
+        if (ist) {
+            int i;
+            for (i = 0; i < ist->st->nb_side_data; i++) {
+                AVPacketSideData *sd = &ist->st->side_data[i];
+                uint8_t *dst = av_stream_new_side_data(ost->st, sd->type, sd->size);
+                if (!dst)
+                    return AVERROR(ENOMEM);
+                memcpy(dst, sd->data, sd->size);
+                if (ist->autorotate && sd->type == AV_PKT_DATA_DISPLAYMATRIX)
+                    av_display_rotation_set((uint32_t *)dst, 0);
             }
         }
 
@@ -4288,9 +4323,10 @@ static int process_input(int file_index)
             AVPacketSideData *src_sd = &ist->st->side_data[i];
             uint8_t *dst_data;
 
-            if (av_packet_get_side_data(&pkt, src_sd->type, NULL))
+            if (src_sd->type == AV_PKT_DATA_DISPLAYMATRIX)
                 continue;
-            if (ist->autorotate && src_sd->type == AV_PKT_DATA_DISPLAYMATRIX)
+
+            if (av_packet_get_side_data(&pkt, src_sd->type, NULL))
                 continue;
 
             dst_data = av_packet_new_side_data(&pkt, src_sd->type, src_sd->size);
