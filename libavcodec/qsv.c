@@ -34,6 +34,10 @@
 #include "avcodec.h"
 #include "qsv_internal.h"
 
+#if QSV_VERSION_ATLEAST(1, 12)
+#include "mfx/mfxvp8.h"
+#endif
+
 int ff_qsv_codec_id_to_mfx(enum AVCodecID codec_id)
 {
     switch (codec_id) {
@@ -48,6 +52,10 @@ int ff_qsv_codec_id_to_mfx(enum AVCodecID codec_id)
         return MFX_CODEC_MPEG2;
     case AV_CODEC_ID_VC1:
         return MFX_CODEC_VC1;
+#if QSV_VERSION_ATLEAST(1, 12)
+    case AV_CODEC_ID_VP8:
+        return MFX_CODEC_VP8;
+#endif
     default:
         break;
     }
@@ -458,9 +466,7 @@ static mfxStatus qsv_frame_lock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
     QSVMid *qsv_mid = mid;
     AVHWFramesContext *hw_frames_ctx = (AVHWFramesContext*)qsv_mid->hw_frames_ref->data;
     AVQSVFramesContext *hw_frames_hwctx = hw_frames_ctx->hwctx;
-    int size;
     int ret;
-    mfxStatus err;
 
     if (qsv_mid->locked_frame)
         return MFX_ERR_UNDEFINED_BEHAVIOR;
@@ -515,7 +521,6 @@ fail:
 static mfxStatus qsv_frame_unlock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
 {
     QSVMid *qsv_mid = mid;
-    int ret;
 
     av_frame_free(&qsv_mid->locked_frame);
     av_frame_free(&qsv_mid->hw_frame);

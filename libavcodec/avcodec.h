@@ -724,7 +724,7 @@ typedef struct AVCodecDescriptor {
 
 /**
  * Codec uses only intra compression.
- * Video codecs only.
+ * Video and audio codecs only.
  */
 #define AV_CODEC_PROP_INTRA_ONLY    (1 << 0)
 /**
@@ -4452,7 +4452,7 @@ AVPacket *av_packet_alloc(void);
  * @see av_packet_alloc
  * @see av_packet_ref
  */
-AVPacket *av_packet_clone(AVPacket *src);
+AVPacket *av_packet_clone(const AVPacket *src);
 
 /**
  * Free the packet, if the packet is reference counted, it will be

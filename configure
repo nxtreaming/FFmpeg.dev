@@ -1018,7 +1018,7 @@ check_code(){
 
 check_cppflags(){
     log check_cppflags "$@"
-    check_cc "$@" <<EOF && append CPPFLAGS "$@"
+    check_cpp "$@" <<EOF && append CPPFLAGS "$@"
 int x;
 EOF
 }
@@ -1045,15 +1045,15 @@ EOF
 }
 
 test_objcflags(){
-    log test_cflags "$@"
-    set -- $($cflags_filter "$@")
+    log test_objcflags "$@"
+    set -- $($objcflags_filter "$@")
     check_objcc "$@" <<EOF
 int x;
 EOF
 }
 
 check_objcflags(){
-    log check_cflags "$@"
+    log check_objcflags "$@"
     test_objcflags "$@" && add_objcflags "$@"
 }
 
@@ -1251,6 +1251,7 @@ check_exec(){
 }
 
 check_exec_crash(){
+    log check_exec_crash "$@"
     code=$(cat)
 
     # exit() is not async signal safe.  _Exit (C99) and _exit (POSIX)
@@ -1321,6 +1322,7 @@ check_compile_assert(){
 }
 
 require(){
+    log require "$@"
     name="$1"
     headers="$2"
     func="$3"
@@ -1337,6 +1339,7 @@ require_cpp(){
 }
 
 use_pkg_config(){
+    log use_pkg_config "$@"
     pkg="$1"
     check_pkg_config "$@" || return 1
     add_cflags    $(get_safe "${pkg}_cflags")
@@ -1391,7 +1394,7 @@ check_host_cpp(){
 
 check_host_cppflags(){
     log check_host_cppflags "$@"
-    check_host_cc "$@" <<EOF && append host_cppflags "$@"
+    check_host_cpp "$@" <<EOF && append host_cppflags "$@"
 int x;
 EOF
 }
@@ -1498,6 +1501,7 @@ EXTERNAL_AUTODETECT_LIBRARY_LIST="
 "
 
 EXTERNAL_LIBRARY_GPL_LIST="
+    avisynth
     frei0r
     libcdio
     librubberband
@@ -1530,7 +1534,6 @@ EXTERNAL_LIBRARY_LIST="
     $EXTERNAL_LIBRARY_NONFREE_LIST
     $EXTERNAL_LIBRARY_VERSION3_LIST
     $EXTERNAL_LIBRARY_GPLV3_LIST
-    avisynth
     chromaprint
     crystalhd
     decklink
@@ -2458,8 +2461,6 @@ mimic_decoder_select="blockdsp bswapdsp hpeldsp idctdsp"
 mjpeg_decoder_select="blockdsp hpeldsp exif idctdsp jpegtables"
 mjpeg_encoder_select="aandcttables jpegtables mpegvideoenc"
 mjpegb_decoder_select="mjpeg_decoder"
-mjpeg_vaapi_encoder_deps="VAEncPictureParameterBufferJPEG"
-mjpeg_vaapi_encoder_select="vaapi_encode jpegtables"
 mlp_decoder_select="mlp_parser"
 motionpixels_decoder_select="bswapdsp"
 mp1_decoder_select="mpegaudio"
@@ -2547,7 +2548,7 @@ utvideo_encoder_select="bswapdsp huffman llvidencdsp"
 vble_decoder_select="llviddsp"
 vc1_decoder_select="blockdsp h263_decoder h264qpel intrax8 mpegvideo vc1dsp"
 vc1_qsv_decoder_deps="libmfx"
-vc1_qsv_decoder_select="qsvdec vc1_qsv_hwaccel"
+vc1_qsv_decoder_select="qsvdec vc1_qsv_hwaccel vc1_parser"
 vc1image_decoder_select="vc1_decoder"
 vorbis_decoder_select="mdct"
 vorbis_encoder_select="mdct"
@@ -2651,6 +2652,8 @@ hevc_vdpau_hwaccel_deps="vdpau VdpPictureInfoHEVC"
 hevc_vdpau_hwaccel_select="hevc_decoder"
 mjpeg_cuvid_hwaccel_deps="cuda cuvid"
 mjpeg_cuvid_hwaccel_select="mjpeg_cuvid_decoder"
+mjpeg_vaapi_encoder_deps="VAEncPictureParameterBufferJPEG"
+mjpeg_vaapi_encoder_select="vaapi_encode jpegtables"
 mpeg_vdpau_decoder_deps="vdpau"
 mpeg_vdpau_decoder_select="mpeg2video_decoder"
 mpeg_xvmc_hwaccel_deps="xvmc"
@@ -2727,6 +2730,7 @@ vp9_cuvid_hwaccel_deps="cuda cuvid"
 vp9_cuvid_hwaccel_select="vp9_cuvid_decoder"
 vp8_mediacodec_decoder_deps="mediacodec"
 vp8_mediacodec_hwaccel_deps="mediacodec"
+vp8_qsv_hwaccel_deps="libmfx"
 vp9_d3d11va_hwaccel_deps="d3d11va DXVA_PicParams_VP9"
 vp9_d3d11va_hwaccel_select="vp9_decoder"
 vp9_dxva2_hwaccel_deps="dxva2 DXVA_PicParams_VP9"
@@ -2789,6 +2793,8 @@ nvenc_hevc_encoder_deps="nvenc"
 
 vc1_cuvid_decoder_deps="cuda cuvid"
 vp8_cuvid_decoder_deps="cuda cuvid"
+vp8_qsv_decoder_deps="libmfx"
+vp8_qsv_decoder_select="qsvdec vp8_qsv_hwaccel vp8_parser"
 vp8_vaapi_encoder_deps="VAEncPictureParameterBufferVP8"
 vp8_vaapi_encoder_select="vaapi_encode"
 vp9_cuvid_decoder_deps="cuda cuvid"
@@ -3548,6 +3554,22 @@ enable_weak xlib
 enable_weak cuda cuvid nvenc vda_framework videotoolbox videotoolbox_encoder
 
 disabled logging && logfile=/dev/null
+
+die_license_disabled() {
+    enabled $1 || { enabled $v && die "$v is $1 and --enable-$1 is not specified."; }
+}
+
+die_license_disabled_gpl() {
+    enabled $1 || { enabled $v && die "$v is incompatible with the gpl and --enable-$1 is not specified."; }
+}
+
+map "die_license_disabled gpl"      $EXTERNAL_LIBRARY_GPL_LIST $EXTERNAL_LIBRARY_GPLV3_LIST
+map "die_license_disabled version3" $EXTERNAL_LIBRARY_VERSION3_LIST $EXTERNAL_LIBRARY_GPLV3_LIST
+
+enabled gpl && map "die_license_disabled_gpl nonfree" $EXTERNAL_LIBRARY_NONFREE_LIST
+map "die_license_disabled nonfree" $HWACCEL_LIBRARY_NONFREE_LIST
+
+enabled version3 && { enabled gpl && enable gplv3 || enable lgplv3; }
 
 # Disable all the library-specific components if the library itself
 # is disabled, see AVCODEC_LIST and following _LIST variables.
@@ -5158,22 +5180,6 @@ EOF
     exit 1
 fi
 
-die_license_disabled() {
-    enabled $1 || { enabled $v && die "$v is $1 and --enable-$1 is not specified."; }
-}
-
-die_license_disabled_gpl() {
-    enabled $1 || { enabled $v && die "$v is incompatible with the gpl and --enable-$1 is not specified."; }
-}
-
-map "die_license_disabled gpl"      $EXTERNAL_LIBRARY_GPL_LIST $EXTERNAL_LIBRARY_GPLV3_LIST
-map "die_license_disabled version3" $EXTERNAL_LIBRARY_VERSION3_LIST $EXTERNAL_LIBRARY_GPLV3_LIST
-
-enabled gpl && map "die_license_disabled_gpl nonfree" $EXTERNAL_LIBRARY_NONFREE_LIST
-map "die_license_disabled nonfree" $HWACCEL_LIBRARY_NONFREE_LIST
-
-enabled version3 && { enabled gpl && enable gplv3 || enable lgplv3; }
-
 disabled optimizations || check_cflags -fomit-frame-pointer
 
 enable_weak_pic() {
@@ -6026,9 +6032,6 @@ if enabled libcdio; then
     die "ERROR: No usable libcdio/cdparanoia found"
 fi
 
-enabled xlib &&
-    check_lib X11/Xlib.h XOpenDisplay -lX11 || disable xlib
-
 if ! disabled libxcb; then
     check_pkg_config "xcb >= 1.4" xcb/xcb.h xcb_connect || {
         enabled libxcb && die "ERROR: libxcb >= 1.4 not found";
@@ -6075,18 +6078,19 @@ enabled vaapi &&
     check_code cc "va/va.h" "vaCreateSurfaces(0, 0, 0, 0, 0, 0, 0, 0)" ||
     disable vaapi
 
-if enabled vaapi ; then
-    enabled xlib &&
-    check_lib "va/va.h va/va_x11.h" vaGetDisplay -lva -lva-x11 &&
-    enable vaapi_x11
-
+enabled vaapi &&
     check_lib "va/va.h va/va_drm.h" vaGetDisplayDRM -lva -lva-drm &&
     enable vaapi_drm
-fi
 
 enabled vdpau &&
     check_cpp_condition vdpau/vdpau.h "defined VDP_DECODER_PROFILE_MPEG4_PART2_ASP" ||
     disable vdpau
+
+enabled_any vaapi vdpau && check_lib X11/Xlib.h XOpenDisplay -lX11 && enable xlib
+
+enabled vaapi && enabled xlib &&
+    check_lib "va/va.h va/va_x11.h" vaGetDisplay -lva -lva-x11 &&
+    enable vaapi_x11
 
 enabled vdpau && enabled xlib &&
     check_lib "vdpau/vdpau.h vdpau/vdpau_x11.h" vdp_device_create_x11 -lvdpau &&

@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <limits.h>
+#include <stdatomic.h>
 #include <stdint.h>
 
 #if HAVE_IO_H
@@ -322,7 +323,7 @@ void term_exit(void)
 
 static volatile int received_sigterm = 0;
 static volatile int received_nb_signals = 0;
-static volatile int transcode_init_done = 0;
+static atomic_int transcode_init_done = ATOMIC_VAR_INIT(0);
 static volatile int ffmpeg_exited = 0;
 static int main_return_code = 0;
 
@@ -477,7 +478,7 @@ static int decode_interrupt_cb(void *ctx)
             return 1;
         }
     }
-    return received_nb_signals > transcode_init_done;
+    return received_nb_signals > atomic_load(&transcode_init_done);
 }
 
 const AVIOInterruptCB int_cb = { decode_interrupt_cb, NULL };
@@ -632,7 +633,7 @@ static void ffmpeg_cleanup(int ret)
     if (received_sigterm) {
         av_log(NULL, AV_LOG_INFO, "Exiting normally, received signal %d.\n",
                (int) received_sigterm);
-    } else if (ret && transcode_init_done) {
+    } else if (ret && atomic_load(&transcode_init_done)) {
         av_log(NULL, AV_LOG_INFO, "Conversion failed!\n");
     }
     term_exit();
@@ -3778,7 +3779,7 @@ static int transcode_init(void)
         return ret;
     }
 
-    transcode_init_done = 1;
+    atomic_store(&transcode_init_done, 1);
 
     return 0;
 }
