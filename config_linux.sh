@@ -43,6 +43,10 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-encoder=libfdk_aac          \
 --enable-decoder=libfdk_aac          \
 --enable-decoder=h264                \
+--enable-decoder=mp2                 \
+--enable-encoder=mp2                 \
+--enable-decoder=mp2float            \
+--enable-encoder=mp2fixed            \
 --enable-librtmp                     \
 --enable-decoder=srt                 \
 --enable-encoder=srt                 \
