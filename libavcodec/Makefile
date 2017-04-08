@@ -31,8 +31,10 @@ OBJS = allcodecs.o                                                      \
        bsf.o                                                            \
        codec_desc.o                                                     \
        d3d11va.o                                                        \
+       decode.o                                                         \
        dirac.o                                                          \
        dv_profile.o                                                     \
+       encode.o                                                         \
        imgconvert.o                                                     \
        jni.o                                                            \
        mathtables.o                                                     \
