@@ -1233,12 +1233,12 @@ check_lib_cpp(){
 
 check_pkg_config(){
     log check_pkg_config "$@"
-    pkgandversion="$1"
+    pkg_version="$1"
     pkg="${1%% *}"
     headers="$2"
     funcs="$3"
     shift 3
-    check_cmd $pkg_config --exists --print-errors $pkgandversion || return
+    check_cmd $pkg_config --exists --print-errors $pkg_version || return
     pkg_cflags=$($pkg_config --cflags $pkg_config_flags $pkg)
     pkg_libs=$($pkg_config --libs $pkg_config_flags $pkg)
     check_func_headers "$headers" "$funcs" $pkg_cflags $pkg_libs "$@" &&
@@ -1323,11 +1323,11 @@ check_compile_assert(){
 
 require(){
     log require "$@"
-    name="$1"
+    name_version="$1"
     headers="$2"
     func="$3"
     shift 3
-    check_lib "$headers" $func "$@" || die "ERROR: $name not found"
+    check_lib "$headers" $func "$@" || die "ERROR: $name_version not found"
 }
 
 require_cpp(){
@@ -1423,7 +1423,7 @@ EOF
 cp_if_changed(){
     cmp -s "$1" "$2" && { test "$quiet" != "yes" && echo "$2 is unchanged"; } && return
     mkdir -p "$(dirname $2)"
-    $cp_f "$1" "$2"
+    cp -f "$1" "$2"
 }
 
 # CONFIG_LIST contains configurable options, while HAVE_LIST is for
@@ -1513,6 +1513,7 @@ EXTERNAL_LIBRARY_GPL_LIST="
 "
 
 EXTERNAL_LIBRARY_NONFREE_LIST="
+    decklink
     libfdk_aac
     openssl
 "
@@ -1536,7 +1537,6 @@ EXTERNAL_LIBRARY_LIST="
     $EXTERNAL_LIBRARY_GPLV3_LIST
     chromaprint
     crystalhd
-    decklink
     gcrypt
     gnutls
     jni
@@ -1678,8 +1678,8 @@ SUBSYSTEM_LIST="
     rdft
 "
 
+# COMPONENT_LIST needs to come last to ensure correct dependency checking
 CONFIG_LIST="
-    $COMPONENT_LIST
     $DOCUMENT_LIST
     $EXAMPLE_LIST
     $EXTERNAL_LIBRARY_LIST
@@ -1697,6 +1697,7 @@ CONFIG_LIST="
     thumb
     valgrind_backtrace
     xmm_clobber_test
+    $COMPONENT_LIST
 "
 
 THREADS_LIST="
@@ -2063,8 +2064,6 @@ HAVE_LIST="
     dxva2_lib
     dxva2api_cobj
     libc_msvcrt
-    libdc1394_1
-    libdc1394_2
     makeinfo
     makeinfo_html
     MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS
@@ -2107,6 +2106,7 @@ CONFIG_EXTRA="
     h264parse
     h264pred
     h264qpel
+    hevcparse
     hpeldsp
     huffman
     huffyuvdsp
@@ -2129,6 +2129,7 @@ CONFIG_EXTRA="
     mpeg_er
     mpegaudio
     mpegaudiodsp
+    mpegaudioheader
     mpegvideo
     mpegvideoenc
     mss34dsp
@@ -2349,7 +2350,7 @@ mdct_select="fft"
 mdct15_select="fft"
 me_cmp_select="fdctdsp idctdsp pixblockdsp"
 mpeg_er_select="error_resilience"
-mpegaudio_select="mpegaudiodsp"
+mpegaudio_select="mpegaudiodsp mpegaudioheader"
 mpegaudiodsp_select="dct"
 mpegvideo_select="blockdsp h264chroma hpeldsp idctdsp me_cmp mpeg_er videodsp"
 mpegvideoenc_select="me_cmp mpegvideo pixblockdsp qpeldsp"
@@ -2438,7 +2439,7 @@ h264_decoder_suggest="error_resilience"
 hap_decoder_select="snappy texturedsp"
 hap_encoder_deps="libsnappy"
 hap_encoder_select="texturedspenc"
-hevc_decoder_select="bswapdsp cabac golomb videodsp"
+hevc_decoder_select="bswapdsp cabac golomb hevcparse videodsp"
 huffyuv_decoder_select="bswapdsp huffyuvdsp llviddsp"
 huffyuv_encoder_select="bswapdsp huffman huffyuvencdsp llvidencdsp"
 iac_decoder_select="imc_decoder"
@@ -2489,7 +2490,7 @@ msmpeg4v2_decoder_select="h263_decoder"
 msmpeg4v2_encoder_select="h263_encoder"
 msmpeg4v3_decoder_select="h263_decoder"
 msmpeg4v3_encoder_select="h263_encoder"
-mss2_decoder_select="vc1_decoder mpegvideo"
+mss2_decoder_select="mpegvideo qpeldsp vc1_decoder"
 mts2_decoder_select="mss34dsp"
 mxpeg_decoder_select="mjpeg_decoder"
 nellymoser_decoder_select="mdct sinewin"
@@ -2710,6 +2711,7 @@ wmv3_vdpau_hwaccel_select="vc1_vdpau_hwaccel"
 # hardware-accelerated codecs
 omx_deps="dlopen pthreads"
 omx_extralibs='$ldl'
+omx_rpi_select="omx"
 qsvdec_select="qsv"
 qsvenc_select="qsv"
 vaapi_encode_deps="vaapi"
@@ -2747,7 +2749,7 @@ hevc_nvenc_encoder_deps="nvenc"
 hevc_qsv_decoder_deps="libmfx"
 hevc_qsv_decoder_select="hevc_mp4toannexb_bsf hevc_parser qsvdec hevc_qsv_hwaccel"
 hevc_qsv_encoder_deps="libmfx"
-hevc_qsv_encoder_select="qsvenc"
+hevc_qsv_encoder_select="hevcparse qsvenc"
 hevc_vaapi_encoder_deps="VAEncPictureParameterBufferHEVC"
 hevc_vaapi_encoder_select="vaapi_encode golomb"
 mjpeg_cuvid_decoder_deps="cuda cuvid"
@@ -2795,7 +2797,8 @@ wmv3_vdpau_decoder_select="vc1_vdpau_decoder"
 
 # parsers
 h264_parser_select="golomb h264dsp h264parse"
-hevc_parser_select="golomb"
+hevc_parser_select="golomb hevcparse"
+mpegaudio_parser_select="mpegaudioheader"
 mpegvideo_parser_select="mpegvideo"
 mpeg4video_parser_select="h263dsp mpegvideo qpeldsp"
 vc1_parser_select="vc1dsp"
@@ -2820,6 +2823,9 @@ ilbc_at_decoder_deps="audiotoolbox"
 mp1_at_decoder_deps="audiotoolbox"
 mp2_at_decoder_deps="audiotoolbox"
 mp3_at_decoder_deps="audiotoolbox"
+mp1_at_decoder_select="mpegaudioheader"
+mp2_at_decoder_select="mpegaudioheader"
+mp3_at_decoder_select="mpegaudioheader"
 pcm_alaw_at_decoder_deps="audiotoolbox"
 pcm_mulaw_at_decoder_deps="audiotoolbox"
 qdmc_at_decoder_deps="audiotoolbox"
@@ -2850,7 +2856,7 @@ libilbc_encoder_deps="libilbc"
 libkvazaar_encoder_deps="libkvazaar"
 libmodplug_demuxer_deps="libmodplug"
 libmp3lame_encoder_deps="libmp3lame"
-libmp3lame_encoder_select="audio_frame_queue"
+libmp3lame_encoder_select="audio_frame_queue mpegaudioheader"
 libopencore_amrnb_decoder_deps="libopencore_amrnb"
 libopencore_amrnb_encoder_deps="libopencore_amrnb"
 libopencore_amrnb_encoder_select="audio_frame_queue"
@@ -2882,6 +2888,7 @@ libvpx_vp8_encoder_deps="libvpx"
 libvpx_vp9_decoder_deps="libvpx"
 libvpx_vp9_encoder_deps="libvpx"
 libwavpack_encoder_deps="libwavpack"
+libwavpack_encoder_select="audio_frame_queue"
 libwebp_encoder_deps="libwebp"
 libwebp_anim_encoder_deps="libwebp"
 libx262_encoder_deps="libx262"
@@ -2937,6 +2944,7 @@ mov_demuxer_select="iso_media riffdec"
 mov_demuxer_suggest="zlib"
 mov_muxer_select="iso_media riffenc rtpenc_chain"
 mp3_demuxer_select="mpegaudio_parser"
+mp3_muxer_select="mpegaudioheader"
 mp4_muxer_select="mov_muxer"
 mpegts_demuxer_select="iso_media"
 mpegts_muxer_select="adts_muxer latm_muxer"
@@ -2980,8 +2988,8 @@ xwma_demuxer_select="riffdec"
 # indevs / outdevs
 alsa_indev_deps="alsa_asoundlib_h snd_pcm_htimestamp"
 alsa_outdev_deps="alsa_asoundlib_h"
-avfoundation_indev_extralibs="-framework CoreVideo -framework Foundation -framework AVFoundation -framework CoreMedia"
-avfoundation_indev_select="avfoundation"
+avfoundation_indev_deps="pthreads"
+avfoundation_indev_extralibs="-framework Foundation -framework AVFoundation -framework CoreVideo -framework CoreMedia"
 bktr_indev_deps_any="dev_bktr_ioctl_bt848_h machine_ioctl_bt848_h dev_video_bktr_ioctl_bt848_h dev_ic_bt8xx_h"
 caca_outdev_deps="libcaca"
 decklink_indev_deps="decklink pthreads"
@@ -3238,7 +3246,6 @@ ar_default="ar"
 cc_default="gcc"
 cxx_default="g++"
 host_cc_default="gcc"
-cp_f="cp -f"
 doxygen_default="doxygen"
 install="install"
 ln_s_default="ln -s -f"
@@ -4986,18 +4993,6 @@ case $target_os in
         ;;
     minix)
         ;;
-    plan9)
-        add_cppflags -D_C99_SNPRINTF_EXTENSION  \
-                     -D_REENTRANT_SOURCE        \
-                     -D_RESEARCH_SOURCE         \
-                     -DFD_SETSIZE=96            \
-                     -DHAVE_SOCK_OPTS
-        add_compat strtod.o strtod=avpriv_strtod
-        network_extralibs='-lbsd'
-        exeobjs=compat/plan9/main.o
-        disable ffserver
-        cp_f='cp'
-        ;;
     none)
         ;;
     *)
@@ -5771,6 +5766,7 @@ enabled libcelt           && require libcelt celt/celt.h celt_decode -lcelt0 &&
                              { check_lib celt/celt.h celt_decoder_create_custom -lcelt0 ||
                                die "ERROR: libcelt must be installed and version must be >= 0.11.0."; }
 enabled libcaca           && require_pkg_config caca caca.h caca_create_canvas
+enabled libdc1394         && require_pkg_config libdc1394-2 dc1394/dc1394.h dc1394_new
 enabled libfdk_aac        && { use_pkg_config fdk-aac "fdk-aac/aacenc_lib.h" aacEncOpen ||
                                { require libfdk_aac fdk-aac/aacenc_lib.h aacEncOpen -lfdk-aac &&
                                  warn "using libfdk without pkg-config"; } }
@@ -5876,14 +5872,12 @@ enabled libzvbi           && require libzvbi libzvbi.h vbi_decoder_new -lzvbi &&
                                enabled gpl || die "ERROR: libzvbi requires version 0.2.28 or --enable-gpl."; }
 enabled mediacodec        && { enabled jni || die "ERROR: mediacodec requires --enable-jni"; }
 enabled mmal              && { check_lib interface/mmal/mmal.h mmal_port_connect -lmmal_core -lmmal_util -lmmal_vc_client -lbcm_host ||
-                                { ! enabled cross_compile && {
-                                    add_cflags -isystem/opt/vc/include/ -isystem/opt/vc/include/interface/vmcs_host/linux -isystem/opt/vc/include/interface/vcos/pthreads -fgnu89-inline ;
-                                    add_extralibs -L/opt/vc/lib/ -lmmal_core -lmmal_util -lmmal_vc_client -lbcm_host ;
-                                    check_lib interface/mmal/mmal.h mmal_port_connect ; }
-                                check_lib interface/mmal/mmal.h mmal_port_connect ; } ||
-                               die "ERROR: mmal not found"; }
-enabled mmal && check_func_headers interface/mmal/mmal.h "MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS"
-
+                               { ! enabled cross_compile &&
+                                 add_cflags -isystem/opt/vc/include/ -isystem/opt/vc/include/interface/vmcs_host/linux -isystem/opt/vc/include/interface/vcos/pthreads -fgnu89-inline &&
+                                 add_ldflags -L/opt/vc/lib/ &&
+                                 check_lib interface/mmal/mmal.h mmal_port_connect -lmmal_core -lmmal_util -lmmal_vc_client -lbcm_host; } ||
+                               die "ERROR: mmal not found" &&
+                               check_func_headers interface/mmal/mmal.h "MMAL_PARAMETER_VIDEO_MAX_NUM_CALLBACKS"; }
 enabled netcdf            && require_pkg_config netcdf netcdf.h nc_inq_libvers
 enabled openal            && { { for al_libs in "${OPENAL_LIBS}" "-lopenal" "-lOpenAL32"; do
                                check_lib 'AL/al.h' alGetError "${al_libs}" && break; done } ||
@@ -5902,12 +5896,10 @@ enabled opengl            && { check_lib GL/glx.h glXGetProcAddress "-lGL" ||
                                check_lib ES2/gl.h glGetError "-isysroot=${sysroot} -Wl,-framework,OpenGLES" ||
                                die "ERROR: opengl not found."
                              }
-enabled omx_rpi && enable omx
-enabled omx               && { check_header OMX_Core.h ||
-                                { ! enabled cross_compile && enabled omx_rpi && {
-                                    add_cflags -isystem/opt/vc/include/IL ; }
-                                check_header OMX_Core.h ; } ||
+enabled omx_rpi           && { check_header OMX_Core.h ||
+                               { ! enabled cross_compile && add_cflags -isystem/opt/vc/include/IL && check_header OMX_Core.h ; } ||
                                die "ERROR: OpenMAX IL headers not found"; }
+enabled omx               && { check_header OMX_Core.h || die "ERROR: OpenMAX IL headers not found"; }
 enabled openssl           && { use_pkg_config openssl openssl/ssl.h OPENSSL_init_ssl ||
                                use_pkg_config openssl openssl/ssl.h SSL_library_init ||
                                check_lib openssl/ssl.h SSL_library_init -lssl -lcrypto ||
@@ -5915,15 +5907,6 @@ enabled openssl           && { use_pkg_config openssl openssl/ssl.h OPENSSL_init
                                check_lib openssl/ssl.h SSL_library_init -lssl -lcrypto -lws2_32 -lgdi32 ||
                                die "ERROR: openssl not found"; }
 enabled qtkit_indev      && { check_header_objcc QTKit/QTKit.h || disable qtkit_indev; }
-
-# libdc1394 check
-if enabled libdc1394; then
-    { require_pkg_config libdc1394-2 dc1394/dc1394.h dc1394_new &&
-        enable libdc1394_2; } ||
-    { check_lib libdc1394/dc1394_control.h dc1394_create_handle -ldc1394_control -lraw1394 &&
-        enable libdc1394_1; } ||
-    die "ERROR: No version of libdc1394 found "
-fi
 
 if enabled gcrypt; then
     GCRYPT_CONFIG="${cross_prefix}libgcrypt-config"
@@ -6384,9 +6367,6 @@ case $target_os in
     osf1)
         enabled ccc && add_ldflags '-Wl,-expect_unresolved,*'
     ;;
-    plan9)
-        add_cppflags -Dmain=plan9_main
-    ;;
 esac
 
 enable frame_thread_encoder
@@ -6755,7 +6735,6 @@ ZLIB=$($ldflags_filter -lz)
 LIB_INSTALL_EXTRA_CMD=$LIB_INSTALL_EXTRA_CMD
 EXTRALIBS=$extralibs
 COMPAT_OBJS=$compat_objs
-EXEOBJS=$exeobjs
 INSTALL=$install
 LIBTARGET=${LIBTARGET}
 SLIBNAME=${SLIBNAME}
