@@ -162,7 +162,11 @@ static int mov_read_mac_string(MOVContext *c, AVIOContext *pb, int len,
 
     for (i = 0; i < len; i++) {
         uint8_t t, c = avio_r8(pb);
-        if (c < 0x80 && p < end)
+
+        if (p >= end)
+            continue;
+
+        if (c < 0x80)
             *p++ = c;
         else if (p < end)
             PUT_UTF8(mac_to_unicode[c-0x80], t, if (p < end) *p++ = t;);
@@ -2321,7 +2325,7 @@ int ff_mov_read_stsd_entries(MOVContext *c, AVIOContext *pb, int entries)
         } else if (a.size > 0)
             avio_skip(pb, a.size);
 
-        if (sc->extradata) {
+        if (sc->extradata && st->codecpar->extradata) {
             int extra_size = st->codecpar->extradata_size;
 
             /* Move the current stream extradata to the stream context one. */

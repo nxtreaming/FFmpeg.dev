@@ -220,9 +220,9 @@ static union av_intfloat32 exr_half2float(uint16_t hf)
  *
  * @return normalized 16-bit unsigned int
  */
-static inline uint16_t exr_flt2uint(uint32_t v)
+static inline uint16_t exr_flt2uint(int32_t v)
 {
-    unsigned int exp = v >> 23;
+    int32_t exp = v >> 23;
     // "HACK": negative values result in exp<  0, so clipping them to 0
     // is also handled by this condition, avoids explicit check for sign bit.
     if (exp <= 127 + 7 - 24) // we would shift out all bits anyway
@@ -1630,7 +1630,7 @@ static int decode_header(EXRContext *s, AVFrame *frame)
         return AVERROR_INVALIDDATA;
     }
 
-    av_frame_set_metadata(frame, metadata);
+    frame->metadata = metadata;
 
     // aaand we are done
     bytestream2_skip(&s->gb, 1);

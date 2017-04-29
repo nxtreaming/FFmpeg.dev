@@ -1082,8 +1082,8 @@ static void do_video_out(OutputFile *of,
         !ost->filters &&
         next_picture &&
         ist &&
-        lrintf(av_frame_get_pkt_duration(next_picture) * av_q2d(ist->st->time_base) / av_q2d(enc->time_base)) > 0) {
-        duration = lrintf(av_frame_get_pkt_duration(next_picture) * av_q2d(ist->st->time_base) / av_q2d(enc->time_base));
+        lrintf(next_picture->pkt_duration * av_q2d(ist->st->time_base) / av_q2d(enc->time_base)) > 0) {
+        duration = lrintf(next_picture->pkt_duration * av_q2d(ist->st->time_base) / av_q2d(enc->time_base));
     }
 
     if (!next_picture) {
@@ -1526,7 +1526,7 @@ static int reap_filters(int flush)
                 break;
             case AVMEDIA_TYPE_AUDIO:
                 if (!(enc->codec->capabilities & AV_CODEC_CAP_PARAM_CHANGE) &&
-                    enc->channels != av_frame_get_channels(filtered_frame)) {
+                    enc->channels != filtered_frame->channels) {
                     av_log(NULL, AV_LOG_ERROR,
                            "Audio filter graph output is not normalized and encoder does not support parameter changes\n");
                     break;
@@ -1924,8 +1924,6 @@ static void flush_encoders(void)
         if (enc->codec_type != AVMEDIA_TYPE_VIDEO && enc->codec_type != AVMEDIA_TYPE_AUDIO)
             continue;
 
-        avcodec_send_frame(enc, NULL);
-
         for (;;) {
             const char *desc = NULL;
             AVPacket pkt;
@@ -1947,7 +1945,17 @@ static void flush_encoders(void)
                 pkt.size = 0;
 
                 update_benchmark(NULL);
-                ret = avcodec_receive_packet(enc, &pkt);
+
+                while ((ret = avcodec_receive_packet(enc, &pkt)) == AVERROR(EAGAIN)) {
+                    ret = avcodec_send_frame(enc, NULL);
+                    if (ret < 0) {
+                        av_log(NULL, AV_LOG_FATAL, "%s encoding failed: %s\n",
+                               desc,
+                               av_err2str(ret));
+                        exit_program(1);
+                    }
+                }
+
                 update_benchmark("flush_%s %d.%d", desc, ost->file_index, ost->index);
                 if (ret < 0 && ret != AVERROR_EOF) {
                     av_log(NULL, AV_LOG_FATAL, "%s encoding failed: %s\n",
@@ -2138,7 +2146,7 @@ static void check_decode_result(InputStream *ist, int *got_output, int ret)
         exit_program(1);
 
     if (exit_on_error && *got_output && ist) {
-        if (av_frame_get_decode_error_flags(ist->decoded_frame) || (ist->decoded_frame->flags & AV_FRAME_FLAG_CORRUPT)) {
+        if (ist->decoded_frame->decode_error_flags || (ist->decoded_frame->flags & AV_FRAME_FLAG_CORRUPT)) {
             av_log(NULL, AV_LOG_FATAL, "%s: corrupt decoded frame in stream %d\n", input_files[ist->file_index]->ctx->filename, ist->st->index);
             exit_program(1);
         }
@@ -2225,7 +2233,8 @@ static int ifilter_send_frame(InputFilter *ifilter, AVFrame *frame)
 
     ret = av_buffersrc_add_frame_flags(ifilter->filter, frame, AV_BUFFERSRC_FLAG_PUSH);
     if (ret < 0) {
-        av_log(NULL, AV_LOG_ERROR, "Error while filtering\n");
+        if (ret != AVERROR_EOF)
+            av_log(NULL, AV_LOG_ERROR, "Error while filtering: %s\n", av_err2str(ret));
         return ret;
     }
 
@@ -2467,7 +2476,7 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int eo
     }
     ist->hwaccel_retrieved_pix_fmt = decoded_frame->format;
 
-    best_effort_timestamp= av_frame_get_best_effort_timestamp(decoded_frame);
+    best_effort_timestamp= decoded_frame->best_effort_timestamp;
 
     if (ist->framerate.num)
         best_effort_timestamp = ist->cfr_next_pts++;
