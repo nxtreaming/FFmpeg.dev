@@ -9158,8 +9158,21 @@ This determines whether the interlaced frame is taken from the even
 (tff - default) or odd (bff) lines of the progressive frame.
 
 @item lowpass
-Enable (default) or disable the vertical lowpass filter to avoid twitter
-interlacing and reduce moire patterns.
+Vertical lowpass filter to avoid twitter interlacing and
+reduce moire patterns.
+
+@table @samp
+@item 0, off
+Disable vertical lowpass filter
+
+@item 1, linear
+Enable linear filter (default)
+
+@item 2, complex
+Enable complex filter. This will slightly less reduce twitter and moire
+but better retain detail and subjective sharpness impression.
+
+@end table
 @end table
 
 @section kerndeint
@@ -10233,6 +10246,84 @@ other parameters is 0.
 These parameters correspond to the parameters assigned to the
 libopencv function @code{cvSmooth}.
 
+@section oscilloscope
+
+2D Video Oscilloscope.
+
+Useful to measure spatial impulse, step responses, chroma delays, etc.
+
+It accepts the following parameters:
+
+@table @option
+@item x
+Set scope center x position.
+
+@item y
+Set scope center y position.
+
+@item s
+Set scope size, relative to frame diagonal.
+
+@item t
+Set scope tilt/rotation.
+
+@item o
+Set trace opacity.
+
+@item tx
+Set trace center x position.
+
+@item ty
+Set trace center y position.
+
+@item tw
+Set trace width, relative to width of frame.
+
+@item th
+Set trace height, relative to height of frame.
+
+@item c
+Set which components to trace. By default it traces first three components.
+
+@item g
+Draw trace grid. By default is enabled.
+
+@item st
+Draw some statistics. By default is enabled.
+
+@item sc
+Draw scope. By default is enabled.
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+Inspect full first row of video frame.
+@example
+oscilloscope=x=0.5:y=0:s=1
+@end example
+
+@item
+Inspect full last row of video frame.
+@example
+oscilloscope=x=0.5:y=1:s=1
+@end example
+
+@item
+Inspect full 5th line of video frame of height 1080.
+@example
+oscilloscope=x=0.5:y=5/1080:s=1
+@end example
+
+@item
+Inspect full last column of video frame.
+@example
+oscilloscope=x=1:y=0.5:s=1:t=1
+@end example
+
+@end itemize
+
 @anchor{overlay}
 @section overlay
 
@@ -10924,6 +11015,29 @@ format=monow, pixdesctest
 @end example
 
 can be used to test the monowhite pixel format descriptor definition.
+
+@section pixscope
+
+Display sample values of color channels. Mainly useful for checking color and levels.
+
+The filters accept the following options:
+
+@table @option
+@item x
+Set scope X position, offset on X axis.
+
+@item y
+Set scope Y position, offset on Y axis.
+
+@item w
+Set scope width.
+
+@item h
+Set scope height.
+
+@item o
+Set window opacity. This window also holds statistics about pixel area.
+@end table
 
 @section pp
 
@@ -13756,16 +13870,22 @@ Available value for @var{flags} is:
 
 @table @option
 @item low_pass_filter, vlfp
-Enable vertical low-pass filtering in the filter.
+Enable linear vertical low-pass filtering in the filter.
 Vertical low-pass filtering is required when creating an interlaced
 destination from a progressive source which contains high-frequency
 vertical detail. Filtering will reduce interlace 'twitter' and Moire
 patterning.
 
+@item complex_filter, cvlfp
+Enable complex vertical low-pass filtering.
+This will slightly less reduce interlace 'twitter' and Moire
+patterning but better retain detail and subjective sharpness impression.
+
+@end table
+
 Vertical low-pass filtering can only be enabled for @option{mode}
 @var{interleave_top} and @var{interleave_bottom}.
 
-@end table
 @end table
 
 @section transpose

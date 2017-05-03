@@ -369,7 +369,7 @@ static int decode_simple_internal(AVCodecContext *avctx, AVFrame *frame)
     AVPacket           *pkt = ds->in_pkt;
     // copy to ensure we do not change pkt
     AVPacket tmp;
-    int got_frame, did_split;
+    int got_frame, actual_got_frame, did_split;
     int ret;
 
     if (!pkt->data && !avci->draining) {
@@ -413,9 +413,9 @@ FF_ENABLE_DEPRECATION_WARNINGS
     } else {
         ret = avctx->codec->decode(avctx, frame, &got_frame, &tmp);
 
+        if (!(avctx->codec->caps_internal & FF_CODEC_CAP_SETS_PKT_DTS))
+            frame->pkt_dts = pkt->dts;
         if (avctx->codec->type == AVMEDIA_TYPE_VIDEO) {
-            if (!(avctx->codec->caps_internal & FF_CODEC_CAP_SETS_PKT_DTS))
-                frame->pkt_dts = pkt->dts;
             if(!avctx->has_b_frames)
                 frame->pkt_pos = pkt->pos;
             //FIXME these should be under if(!avctx->has_b_frames)
@@ -426,11 +426,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
                 if (!frame->height)                   frame->height              = avctx->height;
                 if (frame->format == AV_PIX_FMT_NONE) frame->format              = avctx->pix_fmt;
             }
-        } else if (avctx->codec->type == AVMEDIA_TYPE_AUDIO) {
-            frame->pkt_dts = pkt->dts;
         }
     }
     emms_c();
+    actual_got_frame = got_frame;
 
     if (avctx->codec->type == AVMEDIA_TYPE_VIDEO) {
         if (frame->flags & AV_FRAME_FLAG_DISCARD)
@@ -568,8 +567,25 @@ FF_ENABLE_DEPRECATION_WARNINGS
         avctx->time_base = av_inv_q(av_mul_q(avctx->framerate, (AVRational){avctx->ticks_per_frame, 1}));
 #endif
 
-    if (avctx->internal->draining && !got_frame)
-        avci->draining_done = 1;
+    /* do not stop draining when actual_got_frame != 0 or ret < 0 */
+    /* got_frame == 0 but actual_got_frame != 0 when frame is discarded */
+    if (avctx->internal->draining && !actual_got_frame) {
+        if (ret < 0) {
+            /* prevent infinite loop if a decoder wrongly always return error on draining */
+            /* reasonable nb_errors_max = maximum b frames + thread count */
+            int nb_errors_max = 20 + (HAVE_THREADS && avctx->active_thread_type & FF_THREAD_FRAME ?
+                                avctx->thread_count : 1);
+
+            if (avci->nb_draining_errors++ >= nb_errors_max) {
+                av_log(avctx, AV_LOG_ERROR, "Too many errors when draining, this is a bug. "
+                       "Stop draining and force EOF.\n");
+                avci->draining_done = 1;
+                ret = AVERROR_BUG;
+            }
+        } else {
+            avci->draining_done = 1;
+        }
+    }
 
     avci->compat_decode_consumed += ret;
 
@@ -1659,6 +1675,7 @@ void avcodec_flush_buffers(AVCodecContext *avctx)
 {
     avctx->internal->draining      = 0;
     avctx->internal->draining_done = 0;
+    avctx->internal->nb_draining_errors = 0;
     av_frame_unref(avctx->internal->buffer_frame);
     av_frame_unref(avctx->internal->compat_decode_frame);
     av_packet_unref(avctx->internal->buffer_pkt);
