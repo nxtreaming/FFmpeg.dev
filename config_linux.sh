@@ -47,7 +47,6 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-encoder=mp2                 \
 --enable-decoder=mp2float            \
 --enable-encoder=mp2fixed            \
---enable-librtmp                     \
 --enable-decoder=srt                 \
 --enable-encoder=srt                 \
 --enable-decoder=ass                 \
