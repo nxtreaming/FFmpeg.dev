@@ -66,8 +66,7 @@ static AVCodec *c = NULL;
 static AVCodec *AVCodecInitialize(enum AVCodecID codec_id)
 {
     AVCodec *res;
-    avcodec_register_all();
-    av_log_set_level(AV_LOG_PANIC);
+
     res = avcodec_find_decoder(codec_id);
     if (!res)
         error("Failed to find decoder");
@@ -140,8 +139,24 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
                           int *got_picture_ptr,
                           const AVPacket *avpkt) = NULL;
 
-    if (!c)
+    if (!c) {
+#ifdef FFMPEG_DECODER
+#define DECODER_SYMBOL0(CODEC) ff_##CODEC##_decoder
+#define DECODER_SYMBOL(CODEC) DECODER_SYMBOL0(CODEC)
+        extern AVCodec DECODER_SYMBOL(FFMPEG_DECODER);
+        avcodec_register(&DECODER_SYMBOL(FFMPEG_DECODER));
+
+        c = &DECODER_SYMBOL(FFMPEG_DECODER);
+
+        // Unsupported
+        if (c->capabilities & AV_CODEC_CAP_HWACCEL_VDPAU)
+            return 0;
+#else
+        avcodec_register_all();
         c = AVCodecInitialize(FFMPEG_CODEC);  // Done once.
+#endif
+        av_log_set_level(AV_LOG_PANIC);
+    }
 
     switch (c->type) {
     case AVMEDIA_TYPE_AUDIO   : decode_handler = avcodec_decode_audio4; break;
@@ -168,8 +183,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     }
 
     int res = avcodec_open2(ctx, c, NULL);
-    if (res < 0)
+    if (res < 0) {
+        av_free(ctx);
         return 0; // Failure of avcodec_open2() does not imply that a issue was found
+    }
 
     FDBCreate(&buffer);
     int got_frame;

@@ -1,6 +1,5 @@
-include $(SUBDIR)../config.mak
-
 NAME = avcodec
+DESC = FFmpeg codec library
 
 HEADERS = avcodec.h                                                     \
           avdct.h                                                       \
@@ -80,7 +79,7 @@ OBJS-$(CONFIG_H264DSP)                 += h264dsp.o h264idct.o
 OBJS-$(CONFIG_H264PARSE)               += h264_parse.o h2645_parse.o h264_ps.o
 OBJS-$(CONFIG_H264PRED)                += h264pred.o
 OBJS-$(CONFIG_H264QPEL)                += h264qpel.o
-OBJS-$(CONFIG_HEVCPARSE)               += hevc_parse.o h2645_parse.o hevc_ps.o
+OBJS-$(CONFIG_HEVCPARSE)               += hevc_parse.o h2645_parse.o hevc_ps.o hevc_sei.o
 OBJS-$(CONFIG_HPELDSP)                 += hpeldsp.o
 OBJS-$(CONFIG_HUFFMAN)                 += huffman.o
 OBJS-$(CONFIG_HUFFYUVDSP)              += huffyuvdsp.o
@@ -245,7 +244,8 @@ OBJS-$(CONFIG_CYUV_DECODER)            += cyuv.o
 OBJS-$(CONFIG_DCA_DECODER)             += dcadec.o dca.o dcadata.o dcahuff.o \
                                           dca_core.o dca_exss.o dca_xll.o dca_lbr.o \
                                           dcadsp.o dcadct.o synth_filter.o
-OBJS-$(CONFIG_DCA_ENCODER)             += dcaenc.o dca.o dcadata.o dcahuff.o
+OBJS-$(CONFIG_DCA_ENCODER)             += dcaenc.o dca.o dcadata.o dcahuff.o \
+                                          dcaadpcm.o
 OBJS-$(CONFIG_DDS_DECODER)             += dds.o
 OBJS-$(CONFIG_DIRAC_DECODER)           += diracdec.o dirac.o diracdsp.o diractab.o \
                                           dirac_arith.o dirac_dwt.o dirac_vlc.o
@@ -338,7 +338,7 @@ OBJS-$(CONFIG_H264_VAAPI_ENCODER)      += vaapi_encode_h264.o vaapi_encode_h26x.
 OBJS-$(CONFIG_H264_VIDEOTOOLBOX_ENCODER) += videotoolboxenc.o
 OBJS-$(CONFIG_HAP_DECODER)             += hapdec.o hap.o
 OBJS-$(CONFIG_HAP_ENCODER)             += hapenc.o hap.o
-OBJS-$(CONFIG_HEVC_DECODER)            += hevcdec.o hevc_mvs.o hevc_sei.o \
+OBJS-$(CONFIG_HEVC_DECODER)            += hevcdec.o hevc_mvs.o \
                                           hevc_cabac.o hevc_refs.o hevcpred.o    \
                                           hevcdsp.o hevc_filter.o hevc_data.o
 OBJS-$(CONFIG_HEVC_CUVID_DECODER)      += cuvid.o
@@ -551,6 +551,7 @@ OBJS-$(CONFIG_SUBVIEWER1_DECODER)      += textdec.o ass.o
 OBJS-$(CONFIG_SUBVIEWER_DECODER)       += subviewerdec.o ass.o
 OBJS-$(CONFIG_SUNRAST_DECODER)         += sunrast.o
 OBJS-$(CONFIG_SUNRAST_ENCODER)         += sunrastenc.o
+OBJS-$(CONFIG_LIBRSVG_DECODER)         += librsvgdec.o
 OBJS-$(CONFIG_SVQ1_DECODER)            += svq1dec.o svq1.o svq13.o h263data.o
 OBJS-$(CONFIG_SVQ1_ENCODER)            += svq1enc.o svq1.o  h263data.o  \
                                           h263.o ituh263enc.o
@@ -940,7 +941,7 @@ OBJS-$(CONFIG_CAVSVIDEO_PARSER)        += cavs_parser.o
 OBJS-$(CONFIG_COOK_PARSER)             += cook_parser.o
 OBJS-$(CONFIG_DCA_PARSER)              += dca_parser.o dca_exss.o dca.o
 OBJS-$(CONFIG_DIRAC_PARSER)            += dirac_parser.o
-OBJS-$(CONFIG_DNXHD_PARSER)            += dnxhd_parser.o
+OBJS-$(CONFIG_DNXHD_PARSER)            += dnxhd_parser.o dnxhddata.o
 OBJS-$(CONFIG_DPX_PARSER)              += dpx_parser.o
 OBJS-$(CONFIG_DVAUDIO_PARSER)          += dvaudio_parser.o
 OBJS-$(CONFIG_DVBSUB_PARSER)           += dvbsub_parser.o

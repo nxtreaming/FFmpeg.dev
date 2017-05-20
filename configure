@@ -77,7 +77,7 @@ Help options:
   --list-filters           show all available filters
 
 Standard options:
-  --logfile=FILE           log tests and output to FILE [config.log]
+  --logfile=FILE           log tests and output to FILE [ffbuild/config.log]
   --disable-logging        do not log configure debug information
   --fatal-warnings         fail if any configure warning is generated
   --prefix=PREFIX          install in PREFIX [$prefix_default]
@@ -109,7 +109,6 @@ Configuration options:
   --enable-gray            enable full grayscale support (slower color)
   --disable-swscale-alpha  disable alpha channel support in swscale
   --disable-all            disable building components, libraries and programs
-  --enable-raise-major     increase major version numbers in sonames [no]
 
 Program options:
   --disable-programs       do not build command line programs
@@ -245,6 +244,7 @@ External library support:
   --enable-libopenmpt      enable decoding tracked files via libopenmpt [no]
   --enable-libopus         enable Opus de/encoding via libopus [no]
   --enable-libpulse        enable Pulseaudio input via libpulse [no]
+  --enable-librsvg         enable SVG rasterization via librsvg [no]
   --enable-librubberband   enable rubberband needed for rubberband filter [no]
   --enable-librtmp         enable RTMP[E] support via librtmp [no]
   --enable-libschroedinger enable Dirac de/encoding via libschroedinger [no]
@@ -297,6 +297,7 @@ External library support:
   The following libraries provide various hardware acceleration features:
   --disable-audiotoolbox   disable Apple AudioToolbox code [autodetect]
   --disable-cuda           disable dynamically linked Nvidia CUDA code [autodetect]
+  --enable-cuda-sdk        enable CUDA features that require the CUDA SDK [no]
   --disable-cuvid          disable Nvidia CUVID support [autodetect]
   --disable-d3d11va        disable Microsoft Direct3D 11 video acceleration code [autodetect]
   --disable-dxva2          disable Microsoft DirectX 9 video acceleration code [autodetect]
@@ -337,6 +338,7 @@ Toolchain options:
   --cxx=CXX                use C compiler CXX [$cxx_default]
   --objcc=OCC              use ObjC compiler OCC [$cc_default]
   --dep-cc=DEPCC           use dependency generator DEPCC [$cc_default]
+  --nvcc=NVCC              use Nvidia CUDA compiler NVCC [$nvcc_default]
   --ld=LD                  use linker LD [$ld_default]
   --pkg-config=PKGCONFIG   use pkg-config tool PKGCONFIG [$pkg_config_default]
   --pkg-config-flags=FLAGS pass additional flags to pkgconf []
@@ -358,6 +360,7 @@ Toolchain options:
   --extra-libs=ELIBS       add ELIBS [$ELIBS]
   --extra-version=STRING   version string suffix []
   --optflags=OPTFLAGS      override optimization-related compiler flags
+  --nvccflags=NVCCFLAGS    override nvcc flags [$nvccflags_default]
   --build-suffix=SUFFIX    library name suffix []
   --enable-pic             build position-independent code
   --enable-thumb           compile for Thumb instruction set
@@ -440,6 +443,8 @@ Developer options (useful when working on FFmpeg itself):
                            (only applies to --disable-optimizations builds)
   --enable-osfuzz          Enable building fuzzer tool
   --libfuzzer=PATH         path to libfuzzer
+  --ignore-tests=TESTS     comma-separated list (without "fate-" prefix
+                           in the name) of tests whose result is ignored
 
 NOTE: Object files are built at the place where configure is launched.
 EOF
@@ -1555,6 +1560,7 @@ EXTERNAL_LIBRARY_LIST="
     libopenmpt
     libopus
     libpulse
+    librsvg
     librtmp
     libschroedinger
     libshine
@@ -1596,6 +1602,7 @@ HWACCEL_AUTODETECT_LIBRARY_LIST="
 "
 
 HWACCEL_LIBRARY_NONFREE_LIST="
+    cuda_sdk
     libnpp
 "
 
@@ -1684,7 +1691,6 @@ CONFIG_LIST="
     neon_clobber_test
     ossfuzz
     pic
-    raise_major
     thumb
     valgrind_backtrace
     xmm_clobber_test
@@ -2209,6 +2215,7 @@ CMDLINE_SET="
     host_ld
     host_ldflags
     host_os
+    ignore_tests
     install
     ld
     ln_s
@@ -2216,6 +2223,7 @@ CMDLINE_SET="
     malloc_prefix
     nm
     optflags
+    nvccflags
     pkg_config
     pkg_config_flags
     progs_suffix
@@ -2455,6 +2463,7 @@ mjpeg_decoder_select="blockdsp hpeldsp exif idctdsp jpegtables"
 mjpeg_encoder_select="aandcttables jpegtables mpegvideoenc"
 mjpegb_decoder_select="mjpeg_decoder"
 mlp_decoder_select="mlp_parser"
+mlp_encoder_select="lpc"
 motionpixels_decoder_select="bswapdsp"
 mp1_decoder_select="mpegaudio"
 mp1float_decoder_select="mpegaudio"
@@ -2533,6 +2542,7 @@ thp_decoder_select="mjpeg_decoder"
 tiff_decoder_suggest="zlib lzma"
 tiff_encoder_suggest="zlib"
 truehd_decoder_select="mlp_parser"
+truehd_encoder_select="lpc"
 truemotion2_decoder_select="bswapdsp"
 truespeech_decoder_select="bswapdsp"
 tscc_decoder_select="zlib"
@@ -2711,7 +2721,8 @@ qsvenc_select="qsv"
 vaapi_encode_deps="vaapi"
 
 hwupload_cuda_filter_deps="cuda"
-scale_npp_filter_deps="cuda libnpp"
+scale_npp_filter_deps="cuda_sdk libnpp"
+scale_cuda_filter_deps="cuda_sdk"
 
 nvenc_deps="cuda"
 nvenc_deps_any="dlopen LoadLibrary"
@@ -2864,6 +2875,7 @@ libopenmpt_demuxer_deps="libopenmpt"
 libopus_decoder_deps="libopus"
 libopus_encoder_deps="libopus"
 libopus_encoder_select="audio_frame_queue"
+librsvg_decoder_deps="librsvg"
 libschroedinger_decoder_deps="libschroedinger"
 libschroedinger_encoder_deps="libschroedinger"
 libshine_encoder_deps="libshine"
@@ -3078,6 +3090,8 @@ unix_protocol_select="network"
 # filters
 afftfilt_filter_deps="avcodec"
 afftfilt_filter_select="fft"
+afir_filter_deps="avcodec"
+afir_filter_select="fft"
 amovie_filter_deps="avcodec avformat"
 aresample_filter_deps="swresample"
 ass_filter_deps="libass"
@@ -3095,6 +3109,7 @@ deinterlace_vaapi_filter_deps="vaapi"
 delogo_filter_deps="gpl"
 deshake_filter_select="pixelutils"
 drawtext_filter_deps="libfreetype"
+elbg_filter_deps="avcodec"
 eq_filter_deps="gpl"
 fftfilt_filter_deps="avcodec"
 fftfilt_filter_select="rdft"
@@ -3224,7 +3239,7 @@ doc_deps_any="manpages htmlpages podpages txtpages"
 
 # default parameters
 
-logfile="config.log"
+logfile="ffbuild/config.log"
 
 # installation paths
 prefix_default="/usr/local"
@@ -3251,6 +3266,8 @@ strip_default="strip"
 version_script='--version-script'
 yasmexe_default="yasm"
 windres_default="windres"
+nvcc_default="nvcc"
+nvccflags_default="-gencode arch=compute_30,code=sm_30 -O2"
 
 # OS
 target_os_default=$(tolower $(uname -s))
@@ -3324,6 +3341,8 @@ HOSTCC_C='-c'
 HOSTCC_E='-E -o $@'
 HOSTCC_O='-o $@'
 HOSTLD_O='-o $@'
+NVCC_C='-c'
+NVCC_O='-o $@'
 
 host_extralibs='-lm'
 host_cflags_filter=echo
@@ -3581,6 +3600,7 @@ disable_components(){
 
 map 'disable_components $v' $LIBRARY_LIST
 
+mkdir -p ffbuild
 echo "# $0 $FFMPEG_CONFIGURATION" > $logfile
 set >> $logfile
 
@@ -3710,7 +3730,7 @@ windres_default="${cross_prefix}${windres_default}"
 sysinclude_default="${sysroot}/usr/include"
 
 set_default arch cc cxx doxygen pkg_config ranlib strip sysinclude \
-    target_exec target_os yasmexe
+    target_exec target_os yasmexe nvcc
 enabled cross_compile || host_cc_default=$cc
 set_default host_cc
 
@@ -4203,6 +4223,7 @@ set_ccvars CXX
 
 probe_cc hostcc "$host_cc"
 host_cflags_filter=$_flags_filter
+host_cflags_speed=$_cflags_speed
 add_host_cflags  $_flags $_cflags
 set_ccvars HOSTCC
 
@@ -4706,7 +4727,7 @@ EOF
 add_host_cppflags -D_ISOC99_SOURCE
 check_host_cflags -std=c99
 check_host_cflags -Wall
-check_host_cflags -O3
+check_host_cflags $host_cflags_speed
 
 check_64bit(){
     arch32=$1
@@ -4846,8 +4867,6 @@ case $target_os in
         else
             target_os=mingw32
         fi
-        decklink_outdev_extralibs="$decklink_outdev_extralibs -lole32 -loleaut32"
-        decklink_indev_extralibs="$decklink_indev_extralibs -lole32 -loleaut32"
         LIBTARGET=i386
         if enabled x86_64; then
             LIBTARGET="i386:x86-64"
@@ -4953,7 +4972,7 @@ case $target_os in
         strip="lxlite -CS"
         objformat="aout"
         add_cppflags -D_GNU_SOURCE
-        add_ldflags -Zomf -Zbin-files -Zargs-wild -Zmap
+        add_ldflags -Zomf -Zbin-files -Zargs-wild -Zhigh-mem -Zmap
         SHFLAGS='$(SUBDIR)$(NAME).def -Zdll -Zomf'
         LIBSUF="_s.a"
         SLIBPREF=""
@@ -5152,7 +5171,7 @@ esc(){
     echo "$*" | sed 's/%/%25/g;s/:/%3a/g'
 }
 
-echo "config:$arch:$subarch:$cpu:$target_os:$(esc $cc_ident):$(esc $FFMPEG_CONFIGURATION)" >config.fate
+echo "config:$arch:$subarch:$cpu:$target_os:$(esc $cc_ident):$(esc $FFMPEG_CONFIGURATION)" > ffbuild/config.fate
 
 check_cpp_condition stdlib.h "defined(__PIC__) || defined(__pic__) || defined(PIC)" && enable_weak pic
 
@@ -5174,7 +5193,7 @@ EOF
     exit 1
 fi
 
-disabled optimizations || check_cflags -fomit-frame-pointer
+disabled optimizations || enabled ossfuzz || check_cflags -fomit-frame-pointer
 
 enable_weak_pic() {
     disabled pic && return
@@ -5748,7 +5767,7 @@ done
 enabled avfoundation_indev && { check_header_objcc AVFoundation/AVFoundation.h || disable avfoundation_indev; }
 enabled avfoundation_indev && { check_lib avfoundation_indev CoreGraphics/CoreGraphics.h CGGetActiveDisplayList -framework CoreGraphics ||
                                 check_lib avfoundation_indev ApplicationServices/ApplicationServices.h CGGetActiveDisplayList -framework ApplicationServices; }
-enabled cuda              && check_header cuda.h # this is not a dependency
+enabled cuda_sdk          && require cuda_sdk cuda.h cuCtxCreate -lcuda
 enabled cuvid             && { enabled cuda ||
                                die "ERROR: CUVID requires CUDA"; }
 enabled chromaprint       && require chromaprint chromaprint.h chromaprint_get_version -lchromaprint
@@ -5759,8 +5778,7 @@ enabled decklink          && { { check_header DeckLinkAPI.h || die "ERROR: DeckL
 enabled frei0r            && { check_header frei0r.h || die "ERROR: frei0r.h header not found"; }
 enabled gmp               && require gmp gmp.h mpz_export -lgmp
 enabled gnutls            && require_pkg_config gnutls gnutls/gnutls.h gnutls_global_init
-enabled jni               && { [ $target_os = "android" ] && check_header jni.h && enabled pthreads &&
-                               check_lib jni "dlfcn.h" dlopen -ldl || die "ERROR: jni not found"; }
+enabled jni               && { [ $target_os = "android" ] && check_header jni.h && enabled pthreads || die "ERROR: jni not found"; }
 enabled ladspa            && { check_header ladspa.h || die "ERROR: ladspa.h header not found"; }
 enabled libiec61883       && require libiec61883 libiec61883/iec61883.h iec61883_cmp_connect -lraw1394 -lavc1394 -lrom1394 -liec61883
 enabled libass            && require_pkg_config libass ass/ass.h ass_library_init
@@ -5786,7 +5804,14 @@ enabled libgsm            && { for gsm_hdr in "gsm.h" "gsm/gsm.h"; do
                                done || die "ERROR: libgsm not found"; }
 enabled libilbc           && require libilbc ilbc.h WebRtcIlbcfix_InitDecode -lilbc
 enabled libkvazaar        && require_pkg_config "kvazaar >= 0.8.1" kvazaar.h kvz_api_get
-enabled libmfx            && require_pkg_config libmfx "mfx/mfxvideo.h" MFXInit
+# While it may appear that require is being used as a pkg-config
+# fallback for libmfx, it is actually being used to detect a different
+# installation route altogether.  If libmfx is installed via the Intel
+# Media SDK or Intel Media Server Studio, these don't come with
+# pkg-config support.  Instead, users should make sure that the build
+# can find the libraries and headers through other means.
+enabled libmfx            && { use_pkg_config libmfx "mfx/mfxvideo.h" MFXInit ||
+                               { require libmfx "mfx/mfxvideo.h" MFXInit -llibmfx && warn "using libmfx without pkg-config"; } }
 enabled libmodplug        && require_pkg_config libmodplug libmodplug/modplug.h ModPlug_Load
 enabled libmp3lame        && require "libmp3lame >= 3.98.3" lame/lame.h lame_set_VBR_quality -lmp3lame
 enabled libnut            && require libnut libnut.h nut_demuxer_init -lnut
@@ -5805,8 +5830,16 @@ enabled libopenjpeg       && { { check_lib libopenjpeg openjpeg-2.1/openjpeg.h o
                                { check_lib libopenjpeg openjpeg.h opj_version -lopenjpeg -DOPJ_STATIC && add_cppflags -DOPJ_STATIC; } ||
                                die "ERROR: libopenjpeg not found"; }
 enabled libopenmpt        && require_pkg_config "libopenmpt >= 0.2.6557" libopenmpt/libopenmpt.h openmpt_module_create
-enabled libopus           && require_pkg_config opus opus_multistream.h opus_multistream_decoder_create
+enabled libopus           && {
+    enabled libopus_decoder && {
+        require_pkg_config opus opus_multistream.h opus_multistream_decoder_create
+    }
+    enabled libopus_encoder && {
+        require_pkg_config opus opus_multistream.h opus_multistream_surround_encoder_create
+    }
+}
 enabled libpulse          && require_pkg_config libpulse pulse/pulseaudio.h pa_context_new
+enabled librsvg           && require_pkg_config librsvg-2.0 librsvg-2.0/librsvg/rsvg.h rsvg_handle_render_cairo
 enabled librtmp           && require_pkg_config librtmp librtmp/rtmp.h RTMP_Socket
 enabled librubberband     && require_pkg_config "rubberband >= 1.8.1" rubberband/rubberband-c.h rubberband_new
 enabled libschroedinger   && require_pkg_config schroedinger-1.0 schroedinger/schro.h schro_init
@@ -5944,6 +5977,15 @@ if ! disabled sdl2; then
     fi
 fi
 enabled sdl2 && enable sdl && add_cflags $sdl2_cflags && add_extralibs $sdl2_extralibs
+
+if enabled decklink; then
+    case $target_os in
+        mingw32*|mingw64*|win32|win64)
+            decklink_outdev_extralibs="$decklink_outdev_extralibs -lole32 -loleaut32"
+            decklink_indev_extralibs="$decklink_indev_extralibs -lole32 -loleaut32"
+            ;;
+    esac
+fi
 
 disabled securetransport || { check_func SecIdentityCreate "-Wl,-framework,CoreFoundation -Wl,-framework,Security" &&
     check_lib securetransport "Security/SecureTransport.h Security/Security.h" "SSLCreateContext SecItemImport" "-Wl,-framework,CoreFoundation -Wl,-framework,Security"; }
@@ -6209,11 +6251,24 @@ if [ -z "$optflags" ]; then
     fi
 fi
 
+if [ -z "$nvccflags" ]; then
+    nvccflags=$nvccflags_default
+fi
+
+if enabled x86_64 || enabled ppc64 || enabled aarch64; then
+    nvccflags="$nvccflags -m64"
+else
+    nvccflags="$nvccflags -m32"
+fi
+
 check_optflags(){
     check_cflags "$@"
     enabled lto && check_ldflags "$@"
 }
 
+check_optflags $optflags
+check_optflags -fno-math-errno
+check_optflags -fno-signed-zeros
 
 if enabled lto; then
     test "$cc_type" != "$ld_type" && die "LTO requires same compiler and linker"
@@ -6221,10 +6276,6 @@ if enabled lto; then
     check_ldflags -flto $cpuflags
     disable inline_asm_direct_symbol_refs
 fi
-
-check_optflags $optflags
-check_optflags -fno-math-errno
-check_optflags -fno-signed-zeros
 
 enabled ftrapv && check_cflags -ftrapv
 
@@ -6344,7 +6395,7 @@ fi
 for pfx in "" host_; do
     varname=${pfx%_}cc_type
     eval "type=\$$varname"
-    if [ $type = "msvc" ]; then
+    if [ "$type" = "msvc" ]; then
         check_${pfx}cc <<EOF || add_${pfx}cflags -Dinline=__inline
 static inline int foo(int a) { return a; }
 EOF
@@ -6448,6 +6499,7 @@ enabled zlib && add_cppflags -DZLIB_CONST
 
 # conditional library dependencies, in linking order
 enabled afftfilt_filter     && prepend avfilter_deps "avcodec"
+enabled afir_filter         && prepend avfilter_deps "avcodec"
 enabled amovie_filter       && prepend avfilter_deps "avformat avcodec"
 enabled aresample_filter    && prepend avfilter_deps "swresample"
 enabled atempo_filter       && prepend avfilter_deps "avcodec"
@@ -6456,6 +6508,7 @@ enabled ebur128_filter && enabled swresample && prepend avfilter_deps "swresampl
 enabled elbg_filter         && prepend avfilter_deps "avcodec"
 enabled fftfilt_filter      && prepend avfilter_deps "avcodec"
 enabled find_rect_filter    && prepend avfilter_deps "avformat avcodec"
+enabled firequalizer_filter && prepend avfilter_deps "avcodec"
 enabled mcdeint_filter      && prepend avfilter_deps "avcodec"
 enabled movie_filter    && prepend avfilter_deps "avformat avcodec"
 enabled pan_filter          && prepend avfilter_deps "swresample"
@@ -6469,10 +6522,13 @@ enabled sofalizer_filter    && prepend avfilter_deps "avcodec"
 enabled showcqt_filter      && prepend avfilter_deps "avformat avcodec swscale"
 enabled showfreqs_filter    && prepend avfilter_deps "avcodec"
 enabled showspectrum_filter && prepend avfilter_deps "avcodec"
+enabled signature_filter    && prepend avfilter_deps "avcodec avformat"
 enabled smartblur_filter    && prepend avfilter_deps "swscale"
 enabled spectrumsynth_filter && prepend avfilter_deps "avcodec"
+enabled spp_filter          && prepend avfilter_deps "avcodec"
 enabled subtitles_filter    && prepend avfilter_deps "avformat avcodec"
 enabled uspp_filter         && prepend avfilter_deps "avcodec"
+enabled zoompan_filter      && prepend avfilter_deps "swscale"
 
 enabled lavfi_indev         && prepend avdevice_deps "avfilter"
 
@@ -6609,6 +6665,13 @@ for type in decoder encoder hwaccel parser demuxer muxer protocol filter bsf ind
     echo
 done
 
+if test -n "$ignore_tests"; then
+    ignore_tests=$(echo $ignore_tests | tr ',' ' ')
+    echo "Ignored FATE tests:"
+    echo $ignore_tests | print_in_columns
+    echo
+fi
+
 echo "License: $license"
 
 echo "Creating configuration files ..."
@@ -6619,9 +6682,9 @@ test -e Makefile || echo "include $source_path/Makefile" > Makefile
 
 enabled stripping || strip="echo skipping strip"
 
-config_files="$TMPH config.mak doc/config.texi"
+config_files="$TMPH ffbuild/config.mak doc/config.texi"
 
-cat > config.mak <<EOF
+cat > ffbuild/config.mak <<EOF
 # Automatically generated by configure - do not modify!
 ifndef FFMPEG_CONFIG_MAK
 FFMPEG_CONFIG_MAK=1
@@ -6660,6 +6723,7 @@ ARFLAGS=$arflags
 AR_O=$ar_o
 RANLIB=$ranlib
 STRIP=$strip
+NVCC=$nvcc
 CP=cp -p
 LN_S=$ln_s
 CPPFLAGS=$CPPFLAGS
@@ -6667,6 +6731,7 @@ CFLAGS=$CFLAGS
 CXXFLAGS=$CXXFLAGS
 OBJCFLAGS=$OBJCFLAGS
 ASFLAGS=$ASFLAGS
+NVCCFLAGS=$nvccflags
 AS_C=$AS_C
 AS_O=$AS_O
 OBJCC_C=$OBJCC_C
@@ -6677,6 +6742,8 @@ CC_E=$CC_E
 CC_O=$CC_O
 CXX_C=$CXX_C
 CXX_O=$CXX_O
+NVCC_C=$NVCC_C
+NVCC_O=$NVCC_O
 LD_O=$LD_O
 LD_LIB=$LD_LIB
 LD_PATH=$LD_PATH
@@ -6746,27 +6813,14 @@ VERSION_SCRIPT_POSTPROCESS_CMD=${VERSION_SCRIPT_POSTPROCESS_CMD}
 SAMPLES:=${samples:-\$(FATE_SAMPLES)}
 NOREDZONE_FLAGS=$noredzone_flags
 LIBFUZZER_PATH=$libfuzzer_path
+IGNORE_TESTS=$ignore_tests
 EOF
 
-get_version(){
-    lcname=lib${1}
-    name=$(toupper $lcname)
-    file=$source_path/$lcname/version.h
-    eval $(awk "/#define ${name}_VERSION_M/ { print \$2 \"=\" \$3 }" "$file")
-    enabled raise_major && eval ${name}_VERSION_MAJOR=$((${name}_VERSION_MAJOR+100))
-    eval ${name}_VERSION=\$${name}_VERSION_MAJOR.\$${name}_VERSION_MINOR.\$${name}_VERSION_MICRO
-    eval echo "${lcname}_VERSION=\$${name}_VERSION" >> config.mak
-    eval echo "${lcname}_VERSION_MAJOR=\$${name}_VERSION_MAJOR" >> config.mak
-    eval echo "${lcname}_VERSION_MINOR=\$${name}_VERSION_MINOR" >> config.mak
-}
-
-map 'get_version $v' $LIBRARY_LIST
-
-map 'eval echo "${v}_FFLIBS=\$${v}_deps" >> config.mak' $LIBRARY_LIST
+map 'eval echo "${v}_FFLIBS=\$${v}_deps" >> ffbuild/config.mak' $LIBRARY_LIST
 
 print_program_extralibs(){
     eval "program_extralibs=\$${1}_extralibs"
-    eval echo "EXTRALIBS-${1}=${program_extralibs}" >> config.mak
+    eval echo "EXTRALIBS-${1}=${program_extralibs}" >> ffbuild/config.mak
 }
 
 map 'print_program_extralibs $v' $PROGRAM_LIST
@@ -6816,11 +6870,11 @@ print_config CONFIG_ "$config_files" $CONFIG_LIST       \
                                      $ALL_COMPONENTS    \
 
 echo "#endif /* FFMPEG_CONFIG_H */" >> $TMPH
-echo "endif # FFMPEG_CONFIG_MAK" >> config.mak
+echo "endif # FFMPEG_CONFIG_MAK" >> ffbuild/config.mak
 
 # Do not overwrite an unchanged config.h to avoid superfluous rebuilds.
 cp_if_changed $TMPH config.h
-touch .config
+touch ffbuild/.config
 
 enabled yasm && cp_if_changed $TMPASM config.asm
 
@@ -6858,64 +6912,32 @@ if test -n "$WARNINGS"; then
     enabled fatal_warnings && exit 1
 fi
 
-# build pkg-config files
+# Settings for pkg-config files
 
-lib_version(){
-    eval printf "\"lib${1}${build_suffix} >= \$LIB$(toupper ${1})_VERSION, \""
-}
-
-pkgconfig_generate(){
-    name=$1
-    shortname=${name#lib}${build_suffix}
-    comment=$2
-    version=$3
-    libs=$4
-    requires=$(map 'lib_version $v' $(eval echo \$${name#lib}_deps))
-    requires=${requires%, }
-    enabled ${name#lib} || return 0
-    mkdir -p $name
-    cat <<EOF > $name/$name${build_suffix}.pc
+cat > ffbuild/config.sh <<EOF
+# Automatically generated by configure - do not modify!
+shared=$shared
+build_suffix=$build_suffix
 prefix=$prefix
-exec_prefix=\${prefix}
 libdir=$libdir
-includedir=$incdir
+incdir=$incdir
+rpath=$(enabled rpath && echo "-Wl,-rpath,\${libdir}")
+source_path=${source_path}
+LIBPREF=${LIBPREF}
+LIBSUF=${LIBSUF}
 
-Name: $name
-Description: $comment
-Version: $version
-Requires: $(enabled shared || echo $requires)
-Requires.private: $(enabled shared && echo $requires)
-Conflicts:
-Libs: -L\${libdir} $(enabled rpath && echo "-Wl,-rpath,\${libdir}") -l${shortname} $(enabled shared || echo $libs)
-Libs.private: $(enabled shared && echo $libs)
-Cflags: -I\${includedir}
+extralibs_avutil="$LIBRT $LIBM"
+extralibs_avcodec="$extralibs"
+extralibs_avformat="$extralibs"
+extralibs_avdevice="$extralibs"
+extralibs_avfilter="$extralibs"
+extralibs_avresample="$LIBM"
+extralibs_postproc=""
+extralibs_swscale="$LIBM"
+extralibs_swresample="$LIBM $LIBSOXR"
 EOF
 
-mkdir -p doc/examples/pc-uninstalled
-includedir=${source_path}
-[ "$includedir" = . ] && includedir="\${pcfiledir}/../../.."
-    cat <<EOF > doc/examples/pc-uninstalled/${name}-uninstalled.pc
-prefix=
-exec_prefix=
-libdir=\${pcfiledir}/../../../$name
-includedir=${includedir}
-
-Name: $name
-Description: $comment
-Version: $version
-Requires: $requires
-Conflicts:
-Libs: -L\${libdir} -Wl,-rpath,\${libdir} -l${shortname} $(enabled shared || echo $libs)
-Cflags: -I\${includedir}
-EOF
-}
-
-pkgconfig_generate libavutil     "FFmpeg utility library"               "$LIBAVUTIL_VERSION"     "$LIBRT $LIBM"
-pkgconfig_generate libavcodec    "FFmpeg codec library"                 "$LIBAVCODEC_VERSION"    "$extralibs"
-pkgconfig_generate libavformat   "FFmpeg container format library"      "$LIBAVFORMAT_VERSION"   "$extralibs"
-pkgconfig_generate libavdevice   "FFmpeg device handling library"       "$LIBAVDEVICE_VERSION"   "$extralibs"
-pkgconfig_generate libavfilter   "FFmpeg audio/video filtering library" "$LIBAVFILTER_VERSION"   "$extralibs"
-pkgconfig_generate libpostproc   "FFmpeg postprocessing library"        "$LIBPOSTPROC_VERSION"   ""
-pkgconfig_generate libavresample "Libav audio resampling library"       "$LIBAVRESAMPLE_VERSION" "$LIBM"
-pkgconfig_generate libswscale    "FFmpeg image rescaling library"       "$LIBSWSCALE_VERSION"    "$LIBM"
-pkgconfig_generate libswresample "FFmpeg audio resampling library"      "$LIBSWRESAMPLE_VERSION" "$LIBM $LIBSOXR"
+for lib in $LIBRARY_LIST; do
+    lib_deps="$(eval echo \$${lib}_deps)"
+    echo ${lib}_deps=\"$lib_deps\" >> ffbuild/config.sh
+done

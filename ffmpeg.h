@@ -226,6 +226,8 @@ typedef struct OptionsContext {
     int        nb_program;
     SpecifierOpt *time_bases;
     int        nb_time_bases;
+    SpecifierOpt *enc_time_bases;
+    int        nb_enc_time_bases;
 } OptionsContext;
 
 typedef struct InputFilter {
@@ -453,6 +455,7 @@ typedef struct OutputStream {
     int64_t last_mux_dts;
     // the timebase of the packets sent to the muxer
     AVRational mux_timebase;
+    AVRational enc_timebase;
 
     int                    nb_bitstream_filters;
     uint8_t                  *bsf_extradata_updated;
@@ -639,6 +642,7 @@ void choose_sample_fmt(AVStream *st, AVCodec *codec);
 
 int configure_filtergraph(FilterGraph *fg);
 int configure_output_filter(FilterGraph *fg, OutputFilter *ofilter, AVFilterInOut *out);
+void check_filter_outputs(void);
 int ist_in_filtergraph(FilterGraph *fg, InputStream *ist);
 int filtergraph_is_simple(FilterGraph *fg);
 int init_simple_filtergraph(InputStream *ist, OutputStream *ost);

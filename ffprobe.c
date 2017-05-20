@@ -57,11 +57,11 @@
 #  ifdef pthread_mutex_lock
 #    undef pthread_mutex_lock
 #  endif
-#  define pthread_mutex_lock(a)
+#  define pthread_mutex_lock(a) do{}while(0)
 #  ifdef pthread_mutex_unlock
 #    undef pthread_mutex_unlock
 #  endif
-#  define pthread_mutex_unlock(a)
+#  define pthread_mutex_unlock(a) do{}while(0)
 #endif
 
 typedef struct InputStream {
@@ -2886,6 +2886,8 @@ static int probe_file(WriterContext *wctx, const char *filename)
         } else {
             selected_streams[i] = 1;
         }
+        if (!selected_streams[i])
+            ifile.fmt_ctx->streams[i]->discard = AVDISCARD_ALL;
     }
 
     if (do_read_frames || do_read_packets) {
@@ -3379,7 +3381,7 @@ DEFINE_OPT_SHOW_SECTION(streams,          STREAMS)
 DEFINE_OPT_SHOW_SECTION(programs,         PROGRAMS)
 
 static const OptionDef real_options[] = {
-#include "cmdutils_common_opts.h"
+    CMDUTILS_COMMON_OPTIONS
     { "f", HAS_ARG, {.func_arg = opt_format}, "force format", "format" },
     { "unit", OPT_BOOL, {&show_value_unit}, "show unit of the displayed values" },
     { "prefix", OPT_BOOL, {&use_value_prefix}, "use SI prefixes for the displayed values" },
