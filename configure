@@ -2004,6 +2004,7 @@ TOOLCHAIN_FEATURES="
     asm_mod_q
     attribute_may_alias
     attribute_packed
+    blocks_extension
     ebp_available
     ebx_available
     gnu_as
@@ -2599,7 +2600,7 @@ d3d11va_deps="d3d11_h dxva_h ID3D11VideoDecoder ID3D11VideoContext"
 dxva2_deps="dxva2api_h DXVA2_ConfigPictureDecode"
 dxva2_extralibs="-luser32"
 dxva2_lib_deps="dxva2"
-vda_framework_deps="VideoDecodeAcceleration_VDADecoder_h"
+vda_framework_deps="VideoDecodeAcceleration_VDADecoder_h blocks_extension"
 vda_framework_extralibs="-framework VideoDecodeAcceleration"
 vda_deps="vda_framework pthreads"
 vda_extralibs="-framework CoreFoundation -framework QuartzCore"
@@ -3764,25 +3765,32 @@ HOSTEXESUF=$(exesuf $host_os)
 
 if [ -n "$tempprefix" ] ; then
     mktemp(){
-        echo $tempprefix.${HOSTNAME}.${UID}
+        tmpname="$tempprefix.${HOSTNAME}.${UID}"
+        echo "$tmpname"
+        mkdir "$tmpname"
     }
 elif ! check_cmd mktemp -u XXXXXX; then
     # simple replacement for missing mktemp
     # NOT SAFE FOR GENERAL USE
     mktemp(){
-        echo "${2%%XXX*}.${HOSTNAME}.${UID}.$$"
+        tmpname="${2%%XXX*}.${HOSTNAME}.${UID}.$$"
+        echo "$tmpname"
+        mkdir "$tmpname"
     }
 fi
 
+FFTMPDIR=$(mktemp -d "${TMPDIR}/ffconf.XXXXXXXX" 2> /dev/null) ||
+    die "Unable to create temporary directory in $TMPDIR."
+
 tmpfile(){
-    tmp=$(mktemp -u "${TMPDIR}/ffconf.XXXXXXXX")$2 &&
-        (set -C; exec > $tmp) 2>/dev/null ||
-        die "Unable to create temporary file in $TMPDIR."
-    append TMPFILES $tmp
+    tmp="${FFTMPDIR}/test"$2
+    (set -C; exec > $tmp) 2> /dev/null ||
+        die "Unable to create temporary file in $FFTMPDIR."
     eval $1=$tmp
 }
 
-trap 'rm -f -- $TMPFILES' EXIT
+trap 'rm -rf -- "$FFTMPDIR"' EXIT
+trap 'exit 2' INT
 
 tmpfile TMPASM .asm
 tmpfile TMPC   .c
@@ -3860,6 +3868,7 @@ msvc_common_flags(){
             # specific filters, they must be specified here as well or else the
             # generic catch all at the bottom will print the original flag.
             -Wall)                ;;
+            -Wextra)              ;;
             -std=c99)             ;;
             # Common flags
             -fomit-frame-pointer) ;;
@@ -3885,7 +3894,9 @@ msvc_flags(){
     msvc_common_flags "$@"
     for flag; do
         case $flag in
-            -Wall)                echo -W4 -wd4244 -wd4127 -wd4018 -wd4389     \
+            -Wall)                echo -W3 -wd4018 -wd4146 -wd4244 -wd4305     \
+                                       -wd4554 ;;
+            -Wextra)              echo -W4 -wd4244 -wd4127 -wd4018 -wd4389     \
                                        -wd4146 -wd4057 -wd4204 -wd4706 -wd4305 \
                                        -wd4152 -wd4324 -we4013 -wd4100 -wd4214 \
                                        -wd4307 \
@@ -6175,6 +6186,10 @@ check_disable_warning_headers(){
 
 check_disable_warning_headers -Wno-deprecated-declarations
 check_disable_warning_headers -Wno-unused-variable
+
+check_cc <<EOF && enable blocks_extension
+void (^block)(void);
+EOF
 
 # add some linker flags
 check_ldflags -Wl,--warn-common
