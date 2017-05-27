@@ -113,10 +113,10 @@ static int update_error_limit(WavpackFrameContext *ctx)
     if (ctx->stereo_in && ctx->hybrid_bitrate) {
         int balance = (sl[1] - sl[0] + br[1] + 1) >> 1;
         if (balance > br[0]) {
-            br[1] = br[0] << 1;
+            br[1] = br[0] * 2;
             br[0] = 0;
         } else if (-balance > br[0]) {
-            br[0] <<= 1;
+            br[0]  *= 2;
             br[1]   = 0;
         } else {
             br[1] = br[0] + balance;
@@ -310,7 +310,7 @@ static float wv_get_value_float(WavpackFrameContext *s, uint32_t *crc, int S)
     }
 
     if (S) {
-        S  <<= s->float_shift;
+        S  *= 1 << s->float_shift;
         sign = S < 0;
         if (sign)
             S = -S;
@@ -542,9 +542,9 @@ static inline int wv_unpack_mono(WavpackFrameContext *s, GetBitContext *gb,
             t = s->decorr[i].value;
             if (t > 8) {
                 if (t & 1)
-                    A =  2 * s->decorr[i].samplesA[0] - s->decorr[i].samplesA[1];
+                    A =  2U * s->decorr[i].samplesA[0] - s->decorr[i].samplesA[1];
                 else
-                    A = (3 * s->decorr[i].samplesA[0] - s->decorr[i].samplesA[1]) >> 1;
+                    A = (int)(3U * s->decorr[i].samplesA[0] - s->decorr[i].samplesA[1]) >> 1;
                 s->decorr[i].samplesA[1] = s->decorr[i].samplesA[0];
                 j                        = 0;
             } else {
