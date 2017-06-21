@@ -2389,6 +2389,7 @@ bink_decoder_select="blockdsp hpeldsp"
 binkaudio_dct_decoder_select="mdct rdft dct sinewin wma_freqs"
 binkaudio_rdft_decoder_select="mdct rdft sinewin wma_freqs"
 cavs_decoder_select="blockdsp golomb h264chroma idctdsp qpeldsp videodsp"
+clearvideo_decoder_select="idctdsp"
 cllc_decoder_select="bswapdsp"
 comfortnoise_encoder_select="lpc"
 cook_decoder_select="audiodsp mdct sinewin"
@@ -3349,6 +3350,8 @@ target_path='$(CURDIR)'
 DEPCMD='$(DEP$(1)) $(DEP$(1)FLAGS) $($(1)DEP_FLAGS) $< 2>/dev/null | sed -e "/^\#.*/d" -e "s,^[[:space:]]*$(@F),$(@D)/$(@F)," > $(@:.o=.d)'
 DEPFLAGS='-MM'
 
+mkdir -p ffbuild
+
 # find source path
 if test -f configure; then
     source_path=.
@@ -3594,7 +3597,6 @@ disable_components(){
 
 map 'disable_components $v' $LIBRARY_LIST
 
-mkdir -p ffbuild
 echo "# $0 $FFMPEG_CONFIGURATION" > $logfile
 set >> $logfile
 
