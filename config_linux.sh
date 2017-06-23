@@ -25,6 +25,7 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --disable-decoders                   \
 --disable-vda                        \
 --disable-cuvid                      \
+--enable-openssl                     \
 --enable-libopus                     \
 --enable-decoder=libopus             \
 --enable-encoder=libopus             \
