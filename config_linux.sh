@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 #
 # Note: the Native rtmp protocol will cause VLC and iPhone break on audio playback
