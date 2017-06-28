@@ -31,6 +31,7 @@
 #include "libavutil/lfg.h"
 #include "libavutil/timer.h"
 
+void checkasm_check_aacpsdsp(void);
 void checkasm_check_alacdsp(void);
 void checkasm_check_audiodsp(void);
 void checkasm_check_blend(void);
@@ -100,7 +101,7 @@ static av_unused void *func_ref, *func_new;
 /* Call the reference function */
 #define call_ref(...) ((func_type *)func_ref)(__VA_ARGS__)
 
-#if ARCH_X86 && HAVE_YASM
+#if ARCH_X86 && HAVE_X86ASM
 /* Verifies that clobbered callee-saved registers are properly saved and restored
  * and that either no MMX registers are touched or emms is issued */
 void checkasm_checked_call(void *func, ...);
