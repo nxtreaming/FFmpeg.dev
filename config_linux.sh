@@ -23,6 +23,7 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --disable-outdevs                    \
 --disable-encoders                   \
 --disable-decoders                   \
+--disable-parsers                    \
 --disable-vda                        \
 --disable-cuvid                      \
 --enable-openssl                     \
@@ -32,7 +33,6 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-parser=opus                 \
 --enable-decoder=png                 \
 --enable-encoder=png                 \
---disable-parser=hevc                \
 --enable-parser=mpegaudio            \
 --enable-decoder=mp3                 \
 --enable-decoder=mp3float            \
@@ -40,10 +40,18 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-encoder=libx264             \
 --enable-decoder=aac                 \
 --enable-encoder=aac                 \
+--enable-parser=aac                  \
+--enable-parser=aac_latm             \
 --enable-libfdk-aac                  \
 --enable-encoder=libfdk_aac          \
 --enable-decoder=libfdk_aac          \
 --enable-decoder=h264                \
+--enable-parser=h264                 \
+--enable-decoder=vp7                 \
+--enable-decoder=vp8                 \
+--enable-parser=vp8                  \
+--enable-decoder=vp9                 \
+--enable-parser=vp9                  \
 --enable-decoder=mp2                 \
 --enable-encoder=mp2                 \
 --enable-decoder=mp2float            \
