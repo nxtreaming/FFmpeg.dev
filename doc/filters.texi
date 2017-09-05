@@ -311,6 +311,39 @@ See @code{ffmpeg -filters} to view which filters have timeline support.
 
 @c man end FILTERGRAPH DESCRIPTION
 
+@anchor{framesync}
+@chapter Options for filters with several inputs (framesync)
+@c man begin OPTIONS FOR FILTERS WITH SEVERAL INPUTS
+
+Some filters with several inputs support a common set of options.
+These options can only be set by name, not with the short notation.
+
+@table @option
+@item eof_action
+The action to take when EOF is encountered on the secondary input; it accepts
+one of the following values:
+
+@table @option
+@item repeat
+Repeat the last frame (the default).
+@item endall
+End both streams.
+@item pass
+Pass the main input through.
+@end table
+
+@item shortest
+If set to 1, force the output to terminate when the shortest input
+terminates. Default value is 0.
+
+@item repeatlast
+If set to 1, force the filter to draw the last overlay frame over the
+main input until the end of the stream. A value of 0 disables this
+behavior. Default value is 1.
+@end table
+
+@c man end OPTIONS FOR FILTERS WITH SEVERAL INPUTS
+
 @chapter Audio Filters
 @c man begin AUDIO FILTERS
 
@@ -518,7 +551,6 @@ The filter accepts the following option:
 @table @option
 @item delays
 Set list of delays in milliseconds for each channel separated by '|'.
-At least one delay greater than 0 should be provided.
 Unused delays will be silently ignored. If number of given delays is
 smaller than number of channels all remaining channels will not be delayed.
 If you want to delay exact number of samples, append 'S' to number.
@@ -4949,16 +4981,9 @@ Value of pixel component at current location for first video frame (top layer).
 @item BOTTOM, B
 Value of pixel component at current location for second video frame (bottom layer).
 @end table
-
-@item shortest
-Force termination when the shortest input terminates. Default is
-@code{0}. This option is only defined for the @code{blend} filter.
-
-@item repeatlast
-Continue applying the last bottom frame after the end of the stream. A value of
-@code{0} disable the filter after the last frame of the bottom layer is reached.
-Default is @code{1}. This option is only defined for the @code{blend} filter.
 @end table
+
+The @code{blend} filter also supports the @ref{framesync} options.
 
 @subsection Examples
 
@@ -4967,6 +4992,12 @@ Default is @code{1}. This option is only defined for the @code{blend} filter.
 Apply transition from bottom layer to top layer in first 10 seconds:
 @example
 blend=all_expr='A*(if(gte(T,10),1,T/10))+B*(1-(if(gte(T,10),1,T/10)))'
+@end example
+
+@item
+Apply linear horizontal transition from top layer to bottom layer:
+@example
+blend=all_expr='A*(X/W)+B*(1-X/W)'
 @end example
 
 @item
@@ -4996,7 +5027,7 @@ blend=all_expr='if(gte(T*SH*40+Y,H)*gte((T*40*SW+X)*W/H,W),A,B)'
 @item
 Split diagonally video and shows top and bottom layer on each side:
 @example
-blend=all_expr=if(gt(X,Y*(W/H)),A,B)
+blend=all_expr='if(gt(X,Y*(W/H)),A,B)'
 @end example
 
 @item
@@ -6865,6 +6896,9 @@ Adjacent pixels will spread out to replace missing pixels.
 
 @item wrap
 Out of range pixels are wrapped so they point to pixels of other side.
+
+@item mirror
+Out of range pixels will be replaced with mirrored pixels.
 @end table
 Default is @samp{smear}.
 
@@ -7892,6 +7926,20 @@ Set the frequency domain weight expression for the 1st chroma plane.
 @item weight_V
 Set the frequency domain weight expression for the 2nd chroma plane.
 
+@item eval
+Set when the expressions are evaluated.
+
+It accepts the following values:
+@table @samp
+@item init
+Only evaluate expressions once during the filter initialization.
+
+@item frame
+Evaluate expressions for each incoming frame.
+@end table
+
+Default value is @samp{init}.
+
 The filter accepts the following variables:
 @item X
 @item Y
@@ -7900,6 +7948,9 @@ The coordinates of the current sample.
 @item W
 @item H
 The width and height of the image.
+
+@item N
+The number of input frame, starting from 0.
 @end table
 
 @subsection Examples
@@ -9757,6 +9808,8 @@ Enables computing ms_ssim along with vmaf.
 Set the pool method to be used for computing vmaf.
 @end table
 
+This filter also supports the @ref{framesync} options.
+
 For example:
 @example
 ffmpeg -i main.mpg -i ref.mpg -lavfi libvmaf -f null -
@@ -9837,6 +9890,8 @@ Interpolate values using the 8 points defining a cube.
 Interpolate values using a tetrahedron.
 @end table
 @end table
+
+This filter also supports the @ref{framesync} options.
 
 @section lumakey
 
@@ -10866,19 +10921,6 @@ on the main video. Default value is "0" for both expressions. In case
 the expression is invalid, it is set to a huge value (meaning that the
 overlay will not be displayed within the output visible area).
 
-@item eof_action
-The action to take when EOF is encountered on the secondary input; it accepts
-one of the following values:
-
-@table @option
-@item repeat
-Repeat the last frame (the default).
-@item endall
-End both streams.
-@item pass
-Pass the main input through.
-@end table
-
 @item eval
 Set when the expressions for @option{x}, and @option{y} are evaluated.
 
@@ -10893,10 +10935,6 @@ evaluate expressions for each incoming frame
 @end table
 
 Default value is @samp{frame}.
-
-@item shortest
-If set to 1, force the output to terminate when the shortest input
-terminates. Default value is 0.
 
 @item format
 Set the format for the output video.
@@ -10923,11 +10961,6 @@ automatically pick format
 @end table
 
 Default value is @samp{yuv420}.
-
-@item repeatlast
-If set to 1, force the filter to draw the last overlay frame over the
-main input until the end of the stream. A value of 0 disables this
-behavior. Default value is 1.
 @end table
 
 The @option{x}, and @option{y} expressions can contain the following
@@ -10963,6 +10996,8 @@ the position in the file of the input frame, NAN if unknown
 The timestamp, expressed in seconds. It's NAN if the input timestamp is unknown.
 
 @end table
+
+This filter also supports the @ref{framesync} options.
 
 Note that the @var{n}, @var{pos}, @var{t} variables are available only
 when evaluation is done @emph{per frame}, and will evaluate to NAN
@@ -11901,6 +11936,8 @@ Default value is 0.
 Requires stats_version >= 2. If this is set and stats_version < 2,
 the filter will return an error.
 @end table
+
+This filter also supports the @ref{framesync} options.
 
 The file printed if @var{stats_file} is selected, contains a sequence of
 key/value pairs of the form @var{key}:@var{value} for each compared
@@ -13655,6 +13692,8 @@ SSIM of the compared frames for the whole frame.
 Same as above but in dB representation.
 @end table
 
+This filter also supports the @ref{framesync} options.
+
 For example:
 @example
 movie=ref_movie.mpg, setpts=PTS-STARTPTS [main];
@@ -13991,6 +14030,9 @@ correctly scale the fonts if the aspect ratio has been changed.
 @item fontsdir
 Set a directory path containing fonts that can be used by the filter.
 These fonts will be used in addition to whatever the font provider uses.
+
+@item alpha
+Process alpha channel, by default alpha channel is untouched.
 
 @item charenc
 Set subtitles input character encoding. @code{subtitles} filter only. Only
@@ -14898,7 +14940,7 @@ This filter accepts the following options:
 @item threshold
 The filtering strength. The higher, the more filtered the video will be.
 Hard thresholding can use a higher threshold than soft thresholding
-before the video looks overfiltered.
+before the video looks overfiltered. Default value is 2.
 
 @item method
 The filtering method the filter will use.
@@ -14917,13 +14959,15 @@ Scales or nullifies coefficients - intermediary between (more) soft and
 (less) hard thresholding.
 @end table
 
+Default is garrote.
+
 @item nsteps
 Number of times, the wavelet will decompose the picture. Picture can't
 be decomposed beyond a particular point (typically, 8 for a 640x480
-frame - as 2^9 = 512 > 480)
+frame - as 2^9 = 512 > 480). Valid values are integers between 1 and 32. Default value is 6.
 
 @item percent
-Partial of full denoising (limited coefficients shrinking), from 0 to 100.
+Partial of full denoising (limited coefficients shrinking), from 0 to 100. Default value is 85.
 
 @item planes
 A list of the planes to process. By default all planes are processed.
