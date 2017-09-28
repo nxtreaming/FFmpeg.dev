@@ -47,6 +47,11 @@ version <next>:
 - SUP/PGS subtitle muxer
 - convolve video filter
 - VP9 tile threading support
+- KMS screen grabber
+- CUDA thumbnail filter
+- V4L2 mem2mem HW assisted codecs
+- Rockchip MPP hardware decoding
+
 
 version 3.3:
 - CrystalHD decoder moved to new decode API

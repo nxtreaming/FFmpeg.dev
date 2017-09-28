@@ -1709,6 +1709,13 @@ typedef struct AVPacket {
  * after decoding.
  **/
 #define AV_PKT_FLAG_DISCARD   0x0004
+/**
+ * The packet comes from a trusted source.
+ *
+ * Otherwise-unsafe constructs such as arbitrary pointers to data
+ * outside the packet may be followed.
+ */
+#define AV_PKT_FLAG_TRUSTED   0x0008
 
 enum AVSideDataParamChangeFlags {
     AV_SIDE_DATA_PARAM_CHANGE_CHANNEL_COUNT  = 0x0001,
@@ -2676,6 +2683,7 @@ typedef struct AVCodecContext {
      * - encoding: unused
      * - decoding: set by the caller before avcodec_open2().
      */
+    attribute_deprecated
     int refcounted_frames;
 
     /* - encoding parameters */
@@ -3557,7 +3565,7 @@ typedef struct AVCodecContext {
      */
     char *codec_whitelist;
 
-    /*
+    /**
      * Properties of the stream that gets decoded
      * - encoding: unused
      * - decoding: set by libavcodec
@@ -4607,7 +4615,10 @@ int av_dup_packet(AVPacket *pkt);
  * Copy packet, including contents
  *
  * @return 0 on success, negative AVERROR on fail
+ *
+ * @deprecated Use av_packet_ref
  */
+attribute_deprecated
 int av_copy_packet(AVPacket *dst, const AVPacket *src);
 
 /**

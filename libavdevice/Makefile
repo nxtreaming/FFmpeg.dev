@@ -24,7 +24,6 @@ OBJS-$(CONFIG_LIBNDI_NEWTEK_INDEV)       += libndi_newtek_dec.o
 OBJS-$(CONFIG_DSHOW_INDEV)               += dshow_crossbar.o dshow.o dshow_enummediatypes.o \
                                             dshow_enumpins.o dshow_filter.o \
                                             dshow_pin.o dshow_common.o
-OBJS-$(CONFIG_DV1394_INDEV)              += dv1394.o
 OBJS-$(CONFIG_FBDEV_INDEV)               += fbdev_dec.o \
                                             fbdev_common.o
 OBJS-$(CONFIG_FBDEV_OUTDEV)              += fbdev_enc.o \
@@ -32,6 +31,7 @@ OBJS-$(CONFIG_FBDEV_OUTDEV)              += fbdev_enc.o \
 OBJS-$(CONFIG_GDIGRAB_INDEV)             += gdigrab.o
 OBJS-$(CONFIG_IEC61883_INDEV)            += iec61883.o
 OBJS-$(CONFIG_JACK_INDEV)                += jack.o timefilter.o
+OBJS-$(CONFIG_KMSGRAB_INDEV)             += kmsgrab.o
 OBJS-$(CONFIG_LAVFI_INDEV)               += lavfi.o
 OBJS-$(CONFIG_OPENAL_INDEV)              += openal-dec.o
 OBJS-$(CONFIG_OPENGL_OUTDEV)             += opengl_enc.o
