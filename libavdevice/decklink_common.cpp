@@ -84,7 +84,7 @@ static char *dup_cfstring_to_utf8(CFStringRef w)
 }
 #define DECKLINK_STR    const __CFString *
 #define DECKLINK_STRDUP dup_cfstring_to_utf8
-#define DECKLINK_FREE(s) free((void *) s)
+#define DECKLINK_FREE(s) CFRelease(s)
 #define DECKLINK_BOOL bool
 #else
 #define DECKLINK_STR    const char *
@@ -241,7 +241,7 @@ int ff_decklink_set_format(AVFormatContext *avctx,
     if (ctx->bmd_mode == bmdModeUnknown)
         return -1;
     if (direction == DIRECTION_IN) {
-        if (ctx->dli->DoesSupportVideoMode(ctx->bmd_mode, bmdFormat8BitYUV,
+        if (ctx->dli->DoesSupportVideoMode(ctx->bmd_mode, (BMDPixelFormat) cctx->raw_format,
                                            bmdVideoOutputFlagDefault,
                                            &support, NULL) != S_OK)
             return -1;

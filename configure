@@ -1268,15 +1268,18 @@ check_lib_cpp(){
 
 check_pkg_config(){
     log check_pkg_config "$@"
-    pkg_version="$1"
-    pkg="${1%% *}"
-    headers="$2"
-    funcs="$3"
-    shift 3
+    name="$1"
+    pkg_version="$2"
+    pkg="${2%% *}"
+    headers="$3"
+    funcs="$4"
+    shift 4
+    disable $name
     check_cmd $pkg_config --exists --print-errors $pkg_version || return
     pkg_cflags=$($pkg_config --cflags $pkg_config_flags $pkg)
     pkg_libs=$($pkg_config --libs $pkg_config_flags $pkg)
     check_func_headers "$headers" "$funcs" $pkg_cflags $pkg_libs "$@" &&
+        enable $name &&
         set_safe "${pkg}_cflags"    $pkg_cflags &&
         set_safe "${pkg}_extralibs" $pkg_libs
 }
@@ -1391,17 +1394,15 @@ require_cpp_condition(){
 
 use_pkg_config(){
     log use_pkg_config "$@"
-    name="$1"
-    shift
-    pkg_version="$1"
-    pkg="${1%% *}"
-    test "$name" = "" && name=$pkg
+    pkg="${2%% *}"
     check_pkg_config "$@" || return 1
     add_cflags    $(get_safe "${pkg}_cflags")
     add_extralibs $(get_safe "${pkg}_extralibs")
 }
 
 require_pkg_config(){
+    log require_pkg_config "$@"
+    pkg_version="$2"
     use_pkg_config "$@" || die "ERROR: $pkg_version not found using pkg-config$pkg_config_fail_message"
 }
 
@@ -2003,7 +2004,6 @@ SYSTEM_FUNCS="
     CommandLineToArgvW
     CoTaskMemFree
     CryptGenRandom
-    dlopen
     fcntl
     flt_lim
     fork
@@ -2080,6 +2080,7 @@ TOOLCHAIN_FEATURES="
 
 TYPES_LIST="
     CONDITION_VARIABLE_Ptr
+    kCMVideoCodecType_HEVC
     socklen_t
     struct_addrinfo
     struct_group_source_req
@@ -2643,7 +2644,7 @@ zmbv_encoder_select="zlib"
 
 # hardware accelerators
 crystalhd_deps="libcrystalhd_libcrystalhd_if_h"
-cuda_deps_any="dlopen LoadLibrary"
+cuda_deps_any="libdl LoadLibrary"
 cuvid_deps="cuda"
 d3d11va_deps="d3d11_h dxva_h ID3D11VideoDecoder ID3D11VideoContext"
 dxva2_deps="dxva2api_h DXVA2_ConfigPictureDecode ole32"
@@ -2695,6 +2696,8 @@ hevc_vaapi_hwaccel_deps="vaapi VAPictureParameterBufferHEVC"
 hevc_vaapi_hwaccel_select="hevc_decoder"
 hevc_vdpau_hwaccel_deps="vdpau VdpPictureInfoHEVC"
 hevc_vdpau_hwaccel_select="hevc_decoder"
+hevc_videotoolbox_hwaccel_deps="videotoolbox"
+hevc_videotoolbox_hwaccel_select="hevc_decoder"
 mjpeg_cuvid_hwaccel_deps="cuda cuvid"
 mjpeg_cuvid_hwaccel_select="mjpeg_cuvid_decoder"
 mpeg_xvmc_hwaccel_deps="xvmc"
@@ -2774,8 +2777,7 @@ wmv3_vaapi_hwaccel_select="vc1_vaapi_hwaccel"
 wmv3_vdpau_hwaccel_select="vc1_vdpau_hwaccel"
 
 # hardware-accelerated codecs
-omx_deps="dlopen pthreads"
-omx_extralibs='$ldl'
+omx_deps="libdl pthreads"
 omx_rpi_select="omx"
 qsvdec_select="qsv"
 qsvenc_select="qsv"
@@ -2788,7 +2790,7 @@ scale_cuda_filter_deps="cuda_sdk"
 thumbnail_cuda_filter_deps="cuda_sdk"
 
 nvenc_deps="cuda"
-nvenc_deps_any="dlopen LoadLibrary"
+nvenc_deps_any="libdl LoadLibrary"
 nvenc_encoder_deps="nvenc"
 
 h263_v4l2m2m_decoder_deps="v4l2_m2m h263_v4l2_m2m"
@@ -2904,7 +2906,7 @@ ac3_at_decoder_select="ac3_parser"
 adpcm_ima_qt_at_decoder_deps="audiotoolbox"
 alac_at_decoder_deps="audiotoolbox"
 amr_nb_at_decoder_deps="audiotoolbox"
-avisynth_deps_any="dlopen LoadLibrary"
+avisynth_deps_any="libdl LoadLibrary"
 avisynth_demuxer_deps="avisynth"
 avisynth_demuxer_select="riffdec"
 eac3_at_decoder_deps="audiotoolbox"
@@ -2932,7 +2934,8 @@ pcm_alaw_at_encoder_select="audio_frame_queue"
 pcm_mulaw_at_encoder_deps="audiotoolbox"
 pcm_mulaw_at_encoder_select="audio_frame_queue"
 chromaprint_muxer_deps="chromaprint"
-h264_videotoolbox_encoder_deps="videotoolbox_encoder pthreads"
+h264_videotoolbox_encoder_deps="pthreads"
+h264_videotoolbox_encoder_select="videotoolbox_encoder"
 libcelt_decoder_deps="libcelt"
 libfdk_aac_decoder_deps="libfdk_aac"
 libfdk_aac_encoder_deps="libfdk_aac"
@@ -3079,13 +3082,13 @@ avfoundation_indev_deps="avfoundation pthreads"
 avfoundation_indev_extralibs="-framework Foundation -framework CoreVideo -framework CoreMedia"
 bktr_indev_deps_any="dev_bktr_ioctl_bt848_h machine_ioctl_bt848_h dev_video_bktr_ioctl_bt848_h dev_ic_bt8xx_h"
 caca_outdev_deps="libcaca"
-decklink_indev_deps="decklink threads"
+decklink_indev_deps="decklink threads libdl"
 decklink_indev_extralibs="-lstdc++"
-decklink_outdev_deps="decklink threads"
+decklink_outdev_deps="decklink threads libdl"
 decklink_outdev_extralibs="-lstdc++"
-libndi_newtek_indev_deps="libndi_newtek"
+libndi_newtek_indev_deps="libndi_newtek libdl"
 libndi_newtek_indev_extralibs="-lndi"
-libndi_newtek_outdev_deps="libndi_newtek"
+libndi_newtek_outdev_deps="libndi_newtek libdl"
 libndi_newtek_outdev_extralibs="-lndi"
 dshow_indev_deps="IBaseFilter"
 dshow_indev_extralibs="-lpsapi -lole32 -lstrmiids -luuid -loleaut32 -lshlwapi"
@@ -3205,15 +3208,15 @@ firequalizer_filter_deps="avcodec"
 firequalizer_filter_select="rdft"
 flite_filter_deps="libflite"
 framerate_filter_select="pixelutils"
-frei0r_filter_deps="frei0r dlopen"
-frei0r_src_filter_deps="frei0r dlopen"
+frei0r_filter_deps="frei0r libdl"
+frei0r_src_filter_deps="frei0r libdl"
 fspp_filter_deps="gpl"
 geq_filter_deps="gpl"
 histeq_filter_deps="gpl"
 hqdn3d_filter_deps="gpl"
 interlace_filter_deps="gpl"
 kerndeint_filter_deps="gpl"
-ladspa_filter_deps="ladspa dlopen"
+ladspa_filter_deps="ladspa libdl"
 mcdeint_filter_deps="avcodec gpl"
 movie_filter_deps="avcodec avformat"
 mpdecimate_filter_deps="gpl"
@@ -4829,7 +4832,7 @@ check_cxxflags -std=c++11 || check_cxxflags -std=c++0x
 
 # some compilers silently accept -std=c11, so we also need to check that the
 # version macro is defined properly
-check_cpp_condition ctype.h  "__STDC_VERSION__ >= 201112L" -std=c11 &&
+test_cflags_cc -std=c11 ctype.h "__STDC_VERSION__ >= 201112L" &&
     add_cflags -std=c11 ||
     check_cflags -std=c99
 
@@ -5636,23 +5639,6 @@ check_code cc arm_neon.h "int16x8_t test = vdupq_n_s16(0)" && enable intrinsics_
 check_ldflags -Wl,--as-needed
 check_ldflags -Wl,-z,noexecstack
 
-if check_func dlopen && check_func dlsym; then
-    ldl=
-elif check_func dlopen -ldl && check_func dlsym -ldl; then
-    ldl=-ldl
-fi
-
-avisynth_demuxer_extralibs='$ldl'
-cuda_extralibs='$ldl'
-decklink_outdev_extralibs="$decklink_outdev_extralibs $ldl"
-decklink_indev_extralibs="$decklink_indev_extralibs $ldl"
-libndi_newtek_outdev_extralibs="$libndi_newtek_outdev_extralibs $ldl"
-libndi_newtek_indev_extralibs="$libndi_newtek_indev_extralibs $ldl"
-frei0r_filter_extralibs='$ldl'
-frei0r_src_filter_extralibs='$ldl'
-ladspa_filter_extralibs='$ldl'
-nvenc_extralibs='$ldl'
-
 if ! disabled network; then
     check_func getaddrinfo $network_extralibs
     check_func inet_aton $network_extralibs
@@ -5709,7 +5695,7 @@ case "$custom_allocator" in
         require libjemalloc jemalloc/jemalloc.h malloc -ljemalloc
     ;;
     tcmalloc)
-        require_pkg_config "" libtcmalloc gperftools/tcmalloc.h tc_malloc
+        require_pkg_config libtcmalloc libtcmalloc gperftools/tcmalloc.h tc_malloc
         malloc_prefix=tc_
     ;;
 esac
@@ -5813,8 +5799,10 @@ enabled avfoundation && {
     check_lib avfoundation CoreGraphics/CoreGraphics.h               CGGetActiveDisplayList "-framework CoreGraphics" ||
     check_lib avfoundation ApplicationServices/ApplicationServices.h CGGetActiveDisplayList "-framework ApplicationServices"; }
 
-enabled videotoolbox &&
+enabled videotoolbox && {
     check_lib coreservices CoreServices/CoreServices.h UTGetOSTypeFromString "-framework CoreServices"
+    check_func_headers CoreMedia/CMFormatDescription.h kCMVideoCodecType_HEVC "-framework CoreMedia"
+}
 
 check_struct "sys/time.h sys/resource.h" "struct rusage" ru_maxrss
 
@@ -5883,6 +5871,9 @@ enabled  zlib && check_lib zlib   zlib.h      zlibVersion    -lz
 enabled bzlib && check_lib bzlib bzlib.h BZ2_bzlibVersion    -lbz2
 enabled  lzma && check_lib lzma   lzma.h lzma_version_number -llzma
 
+# On some systems dynamic loading requires no extra linker flags
+check_lib libdl dlfcn.h "dlopen dlsym" || check_lib libdl dlfcn.h "dlopen dlsym" -ldl
+
 check_lib libm math.h sin -lm && LIBM="-lm"
 
 atan2f_args=2
@@ -5909,19 +5900,19 @@ enabled decklink          && { require_header DeckLinkAPI.h &&
 enabled libndi_newtek     && require_header Processing.NDI.Lib.h
 enabled frei0r            && require_header frei0r.h
 enabled gmp               && require gmp gmp.h mpz_export -lgmp
-enabled gnutls            && require_pkg_config "" gnutls gnutls/gnutls.h gnutls_global_init
+enabled gnutls            && require_pkg_config gnutls gnutls gnutls/gnutls.h gnutls_global_init
 enabled jni               && { [ $target_os = "android" ] && check_header jni.h && enabled pthreads || die "ERROR: jni not found"; }
 enabled ladspa            && require_header ladspa.h
 enabled libiec61883       && require libiec61883 libiec61883/iec61883.h iec61883_cmp_connect -lraw1394 -lavc1394 -lrom1394 -liec61883
-enabled libass            && require_pkg_config "" libass ass/ass.h ass_library_init
-enabled libbluray         && require_pkg_config "" libbluray libbluray/bluray.h bd_open
-enabled libbs2b           && require_pkg_config "" libbs2b bs2b.h bs2b_open
+enabled libass            && require_pkg_config libass libass ass/ass.h ass_library_init
+enabled libbluray         && require_pkg_config libbluray libbluray libbluray/bluray.h bd_open
+enabled libbs2b           && require_pkg_config libbs2b libbs2b bs2b.h bs2b_open
 enabled libcelt           && require libcelt celt/celt.h celt_decode -lcelt0 &&
                              { check_lib libcelt celt/celt.h celt_decoder_create_custom -lcelt0 ||
                                die "ERROR: libcelt must be installed and version must be >= 0.11.0."; }
 enabled libcaca           && require_pkg_config libcaca caca caca.h caca_create_canvas
 enabled libdc1394         && require_pkg_config libdc1394 libdc1394-2 dc1394/dc1394.h dc1394_new
-enabled libdrm            && require_pkg_config "" libdrm xf86drm.h drmGetVersion
+enabled libdrm            && require_pkg_config libdrm libdrm xf86drm.h drmGetVersion
 enabled libfdk_aac        && { use_pkg_config libfdk_aac fdk-aac "fdk-aac/aacenc_lib.h" aacEncOpen ||
                                { require libfdk_aac fdk-aac/aacenc_lib.h aacEncOpen -lfdk-aac &&
                                  warn "using libfdk without pkg-config"; } }
@@ -5931,7 +5922,7 @@ enabled fontconfig        && enable libfontconfig
 enabled libfontconfig     && require_pkg_config libfontconfig fontconfig "fontconfig/fontconfig.h" FcInit
 enabled libfreetype       && require_pkg_config libfreetype2 freetype2 "ft2build.h FT_FREETYPE_H" FT_Init_FreeType
 enabled libfribidi        && require_pkg_config libfribidi fribidi fribidi.h fribidi_version_info
-enabled libgme            && { use_pkg_config "" libgme gme/gme.h gme_new_emu ||
+enabled libgme            && { use_pkg_config libgme libgme gme/gme.h gme_new_emu ||
                                require libgme gme/gme.h gme_new_emu -lgme -lstdc++; }
 enabled libgsm            && { for gsm_hdr in "gsm.h" "gsm/gsm.h"; do
                                    check_lib libgsm "${gsm_hdr}" gsm_create -lgsm && break;
@@ -5944,9 +5935,9 @@ enabled libkvazaar        && require_pkg_config libkvazaar "kvazaar >= 0.8.1" kv
 # Media SDK or Intel Media Server Studio, these don't come with
 # pkg-config support.  Instead, users should make sure that the build
 # can find the libraries and headers through other means.
-enabled libmfx            && { use_pkg_config "" libmfx "mfx/mfxvideo.h" MFXInit ||
+enabled libmfx            && { use_pkg_config libmfx libmfx "mfx/mfxvideo.h" MFXInit ||
                                { require libmfx "mfx/mfxvideo.h" MFXInit -llibmfx && warn "using libmfx without pkg-config"; } }
-enabled libmodplug        && require_pkg_config "" libmodplug libmodplug/modplug.h ModPlug_Load
+enabled libmodplug        && require_pkg_config libmodplug libmodplug libmodplug/modplug.h ModPlug_Load
 enabled libmp3lame        && require "libmp3lame >= 3.98.3" lame/lame.h lame_set_VBR_quality -lmp3lame
 enabled libmysofa         && require libmysofa "mysofa.h" mysofa_load -lmysofa
 enabled libnpp            && { check_lib libnpp npp.h nppGetLibVersion -lnppig -lnppicc -lnppc ||
@@ -5976,46 +5967,46 @@ enabled libopus           && {
         require_pkg_config libopus opus opus_multistream.h opus_multistream_surround_encoder_create
     }
 }
-enabled libpulse          && require_pkg_config "" libpulse pulse/pulseaudio.h pa_context_new
+enabled libpulse          && require_pkg_config libpulse libpulse pulse/pulseaudio.h pa_context_new
 enabled librsvg           && require_pkg_config librsvg librsvg-2.0 librsvg-2.0/librsvg/rsvg.h rsvg_handle_render_cairo
-enabled librtmp           && require_pkg_config "" librtmp librtmp/rtmp.h RTMP_Socket
+enabled librtmp           && require_pkg_config librtmp librtmp librtmp/rtmp.h RTMP_Socket
 enabled librubberband     && require_pkg_config librubberband "rubberband >= 1.8.1" rubberband/rubberband-c.h rubberband_new
 enabled libshine          && require_pkg_config libshine shine shine/layer3.h shine_encode_buffer
 enabled libsmbclient      && { use_pkg_config libsmbclient smbclient libsmbclient.h smbc_init ||
                                require smbclient libsmbclient.h smbc_init -lsmbclient; }
 enabled libsnappy         && require libsnappy snappy-c.h snappy_compress -lsnappy
 enabled libsoxr           && require libsoxr soxr.h soxr_create -lsoxr && LIBSOXR="-lsoxr"
-enabled libssh            && require_pkg_config "" libssh libssh/sftp.h sftp_init
+enabled libssh            && require_pkg_config libssh libssh libssh/sftp.h sftp_init
 enabled libspeex          && require_pkg_config libspeex speex speex/speex.h speex_decoder_init -lspeex
 enabled libtesseract      && require_pkg_config libtesseract tesseract tesseract/capi.h TessBaseAPICreate
 enabled libtheora         && require libtheora theora/theoraenc.h th_info_init -ltheoraenc -ltheoradec -logg
 enabled libtwolame        && require libtwolame twolame.h twolame_init -ltwolame &&
                              { check_lib libtwolame twolame.h twolame_encode_buffer_float32_interleaved -ltwolame ||
                                die "ERROR: libtwolame must be installed and version must be >= 0.3.10"; }
-enabled libv4l2           && require_pkg_config "" libv4l2 libv4l2.h v4l2_ioctl
+enabled libv4l2           && require_pkg_config libv4l2 libv4l2 libv4l2.h v4l2_ioctl
 enabled libvidstab        && require_pkg_config libvidstab "vidstab >= 0.98" vid.stab/libvidstab.h vsMotionDetectInit
-enabled libvmaf           && require_pkg_config "" libvmaf libvmaf.h compute_vmaf
+enabled libvmaf           && require_pkg_config libvmaf libvmaf libvmaf.h compute_vmaf
 enabled libvo_amrwbenc    && require libvo_amrwbenc vo-amrwbenc/enc_if.h E_IF_init -lvo-amrwbenc
 enabled libvorbis         && require_pkg_config libvorbis vorbis vorbis/codec.h vorbis_info_init &&
                              require_pkg_config libvorbisenc vorbisenc vorbis/vorbisenc.h vorbis_encode_init
 
 enabled libvpx            && {
     enabled libvpx_vp8_decoder && {
-        use_pkg_config libvpx "vpx >= 0.9.1" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp8_dx ||
+        use_pkg_config libvpx_vp8_decoder "vpx >= 0.9.1" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp8_dx ||
             check_lib libvpx_vp8_decoder "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_dec_init_ver -lvpx ||
                 die "ERROR: libvpx decoder version must be >=0.9.1";
     }
     enabled libvpx_vp8_encoder && {
-        use_pkg_config libvpx "vpx >= 0.9.7" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp8_cx ||
+        use_pkg_config libvpx_vp8_encoder "vpx >= 0.9.7" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp8_cx ||
             check_lib libvpx_vp8_encoder "vpx/vpx_encoder.h vpx/vp8cx.h" "vpx_codec_enc_init_ver VP8E_SET_MAX_INTRA_BITRATE_PCT" -lvpx ||
                 die "ERROR: libvpx encoder version must be >=0.9.7";
     }
     enabled libvpx_vp9_decoder && {
-        use_pkg_config libvpx "vpx >= 1.3.0" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp9_dx ||
+        use_pkg_config libvpx_vp9_decoder "vpx >= 1.3.0" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp9_dx ||
             check_lib libvpx_vp9_decoder "vpx/vpx_decoder.h vpx/vp8dx.h" "vpx_codec_vp9_dx" -lvpx
     }
     enabled libvpx_vp9_encoder && {
-        use_pkg_config libvpx "vpx >= 1.3.0" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp9_cx ||
+        use_pkg_config libvpx_vp9_encoder "vpx >= 1.3.0" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp9_cx ||
             check_lib libvpx_vp9_encoder "vpx/vpx_encoder.h vpx/vp8cx.h" "vpx_codec_vp9_cx VP9E_SET_AQ_MODE" -lvpx
     }
     if disabled_all libvpx_vp8_decoder libvpx_vp9_decoder libvpx_vp8_encoder libvpx_vp9_encoder; then
@@ -6026,7 +6017,7 @@ enabled libvpx            && {
 enabled libwavpack        && require libwavpack wavpack/wavpack.h WavpackOpenFileOutput  -lwavpack
 enabled libwebp           && {
     enabled libwebp_encoder      && require_pkg_config libwebp "libwebp >= 0.2.0" webp/encode.h WebPGetEncoderVersion
-    enabled libwebp_anim_encoder && { use_pkg_config libwebpmux "libwebpmux >= 0.4.0" webp/mux.h WebPAnimEncoderOptionsInit || disable libwebp_anim_encoder; } }
+    enabled libwebp_anim_encoder && use_pkg_config libwebp_anim_encoder "libwebpmux >= 0.4.0" webp/mux.h WebPAnimEncoderOptionsInit; }
 enabled libx264           && { use_pkg_config libx264 x264 "stdint.h x264.h" x264_encoder_encode ||
                                { require libx264 "stdint.h x264.h" x264_encoder_encode -lx264 &&
                                  warn "using libx264 without pkg-config"; } } &&
@@ -6038,7 +6029,7 @@ enabled libx265           && require_pkg_config libx265 x265 x265.h x265_api_get
 enabled libxavs           && require libxavs "stdint.h xavs.h" xavs_encoder_encode -lxavs
 enabled libxvid           && require libxvid xvid.h xvid_global -lxvidcore
 enabled libzimg           && require_pkg_config libzimg "zimg >= 2.3.0" zimg.h zimg_get_api_version
-enabled libzmq            && require_pkg_config "" libzmq zmq.h zmq_ctx_new
+enabled libzmq            && require_pkg_config libzmq libzmq zmq.h zmq_ctx_new
 enabled libzvbi           && require libzvbi libzvbi.h vbi_decoder_new -lzvbi &&
                              { check_cpp_condition libzvbi.h "VBI_VERSION_MAJOR > 0 || VBI_VERSION_MINOR > 2 || VBI_VERSION_MINOR == 2 && VBI_VERSION_MICRO >= 28" ||
                                enabled gpl || die "ERROR: libzvbi requires version 0.2.28 or --enable-gpl."; }
@@ -6072,8 +6063,8 @@ enabled omx_rpi           && { check_header OMX_Core.h ||
                                { ! enabled cross_compile && add_cflags -isystem/opt/vc/include/IL && check_header OMX_Core.h ; } ||
                                die "ERROR: OpenMAX IL headers not found"; }
 enabled omx               && require_header OMX_Core.h
-enabled openssl           && { use_pkg_config "" openssl openssl/ssl.h OPENSSL_init_ssl ||
-                               use_pkg_config "" openssl openssl/ssl.h SSL_library_init ||
+enabled openssl           && { use_pkg_config openssl openssl openssl/ssl.h OPENSSL_init_ssl ||
+                               use_pkg_config openssl openssl openssl/ssl.h SSL_library_init ||
                                check_lib openssl openssl/ssl.h SSL_library_init -lssl -lcrypto ||
                                check_lib openssl openssl/ssl.h SSL_library_init -lssl32 -leay32 ||
                                check_lib openssl openssl/ssl.h SSL_library_init -lssl -lcrypto -lws2_32 -lgdi32 ||
@@ -6101,7 +6092,7 @@ fi
 
 if enabled sdl2; then
     SDL2_CONFIG="${cross_prefix}sdl2-config"
-    if check_pkg_config "sdl2 >= 2.0.1 sdl2 < 2.1.0" SDL_events.h SDL_PollEvent; then
+    if check_pkg_config sdl2 "sdl2 >= 2.0.1 sdl2 < 2.1.0" SDL_events.h SDL_PollEvent; then
         check_func SDL_Init $sdl2_extralibs $sdl2_cflags ||
             disable sdl2
     elif "${SDL2_CONFIG}" --version > /dev/null 2>&1; then
@@ -6109,10 +6100,8 @@ if enabled sdl2; then
         sdl2_extralibs=$("${SDL2_CONFIG}" --libs)
         check_cpp_condition SDL.h "(SDL_MAJOR_VERSION<<16 | SDL_MINOR_VERSION<<8 | SDL_PATCHLEVEL) >= 0x020001" $sdl2_cflags &&
         check_cpp_condition SDL.h "(SDL_MAJOR_VERSION<<16 | SDL_MINOR_VERSION<<8 | SDL_PATCHLEVEL) < 0x020100" $sdl2_cflags &&
-        check_func SDL_Init $sdl2_extralibs $sdl2_cflags ||
-            disable sdl2
-    else
-        disable sdl2
+        check_func SDL_Init $sdl2_extralibs $sdl2_cflags &&
+            enable sdl2
     fi
     if test $target_os = "mingw32"; then
         sdl2_extralibs="$sdl2_extralibs -mconsole"
@@ -6207,13 +6196,12 @@ if enabled libcdio; then
     die "ERROR: No usable libcdio/cdparanoia found"
 fi
 
-enabled libxcb && check_pkg_config "xcb >= 1.4" xcb/xcb.h xcb_connect || disable libxcb
+enabled libxcb && check_pkg_config libxcb "xcb >= 1.4" xcb/xcb.h xcb_connect
 
 if enabled libxcb; then
-
-    enabled libxcb_shm    && check_pkg_config xcb-shm    xcb/shm.h    xcb_shm_attach              || disable libxcb_shm
-    enabled libxcb_shape  && check_pkg_config xcb-shape  xcb/shape.h  xcb_shape_get_rectangles    || disable libxcb_shape
-    enabled libxcb_xfixes && check_pkg_config xcb-xfixes xcb/xfixes.h xcb_xfixes_get_cursor_image || disable libxcb_xfixes
+    enabled libxcb_shm    && check_pkg_config libxcb_shm    xcb-shm    xcb/shm.h    xcb_shm_attach
+    enabled libxcb_shape  && check_pkg_config libxcb_shape  xcb-shape  xcb/shape.h  xcb_shape_get_rectangles
+    enabled libxcb_xfixes && check_pkg_config libxcb_xfixes xcb-xfixes xcb/xfixes.h xcb_xfixes_get_cursor_image
 
     add_cflags $xcb_cflags $xcb_shm_cflags $xcb_xfixes_cflags $xcb_shape_cflags
     add_extralibs $xcb_extralibs $xcb_shm_extralibs $xcb_xfixes_extralibs $xcb_shape_extralibs
