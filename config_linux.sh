@@ -8,6 +8,7 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 
 ./configure                          \
 --prefix=/usr/local                  \
+--pkg-config-flags="--static"        \
 --disable-doc                        \
 --disable-htmlpages                  \
 --disable-manpages                   \
@@ -24,7 +25,6 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --disable-encoders                   \
 --disable-decoders                   \
 --disable-parsers                    \
---disable-vda                        \
 --disable-cuvid                      \
 --enable-openssl                     \
 --enable-libopus                     \

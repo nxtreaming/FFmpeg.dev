@@ -483,7 +483,7 @@ static av_cold int X264_init(AVCodecContext *avctx)
             return AVERROR(EINVAL);
         }
 
-    x4->params.b_deblocking_filter        = avctx->flags & CODEC_FLAG_LOOP_FILTER;
+    x4->params.b_deblocking_filter        = avctx->flags & AV_CODEC_FLAG_LOOP_FILTER;
 
     if (avctx->level > 0)
         x4->params.i_level_idc = avctx->level;
