@@ -2685,8 +2685,13 @@ static int process_input_packet(InputStream *ist, const AVPacket *pkt, int no_eo
                     ist->next_dts = AV_NOPTS_VALUE;
             }
 
-            if (got_output)
-                ist->next_pts += av_rescale_q(duration_pts, ist->st->time_base, AV_TIME_BASE_Q);
+            if (got_output) {
+                if (duration_pts > 0) {
+                    ist->next_pts += av_rescale_q(duration_pts, ist->st->time_base, AV_TIME_BASE_Q);
+                } else {
+                    ist->next_pts += duration_dts;
+                }
+            }
             break;
         case AVMEDIA_TYPE_SUBTITLE:
             if (repeating)
@@ -2929,6 +2934,9 @@ static int init_input_stream(int ist_index, char *error, int error_len)
 
         if (!av_dict_get(ist->decoder_opts, "threads", NULL, 0))
             av_dict_set(&ist->decoder_opts, "threads", "auto", 0);
+        /* Attached pics are sparse, therefore we would not want to delay their decoding till EOF. */
+        if (ist->st->disposition & AV_DISPOSITION_ATTACHED_PIC)
+            av_dict_set(&ist->decoder_opts, "threads", "1", 0);
 
         ret = hw_device_setup_for_decode(ist);
         if (ret < 0) {
@@ -4557,6 +4565,15 @@ static int transcode_step(void)
     }
 
     if (ost->filter && ost->filter->graph->graph) {
+        if (!ost->initialized) {
+            char error[1024] = {0};
+            ret = init_output_stream(ost, error, sizeof(error));
+            if (ret < 0) {
+                av_log(NULL, AV_LOG_ERROR, "Error initializing output stream %d:%d -- %s\n",
+                       ost->file_index, ost->index, error);
+                exit_program(1);
+            }
+        }
         if ((ret = transcode_from_filter(ost->filter->graph, &ist)) < 0)
             return ret;
         if (!ist)

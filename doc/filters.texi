@@ -4512,7 +4512,7 @@ Synthesize a voice utterance using the libflite library.
 To enable compilation of this filter you need to configure FFmpeg with
 @code{--enable-libflite}.
 
-Note that the flite library is not thread-safe.
+Note that versions of the flite library prior to 2.0 are not thread-safe.
 
 The filter accepts the following options:
 
@@ -4567,7 +4567,7 @@ ffplay -f lavfi flite=text='No more be grieved for which that thou hast done.'
 @end itemize
 
 For more information about libflite, check:
-@url{http://www.speech.cs.cmu.edu/flite/}
+@url{http://www.festvox.org/flite/}
 
 @section anoisesrc
 
@@ -11711,7 +11711,8 @@ can be used to test the monowhite pixel format descriptor definition.
 
 @section pixscope
 
-Display sample values of color channels. Mainly useful for checking color and levels.
+Display sample values of color channels. Mainly useful for checking color
+and levels. Minimum supported resolution is 640x480.
 
 The filters accept the following options:
 
@@ -17678,7 +17679,7 @@ with AV_LOG_INFO loglevel.
 
 @itemize
 @item
-Print all metadata values for frames with key @code{lavfi.singnalstats.YDIF} with values
+Print all metadata values for frames with key @code{lavfi.signalstats.YDIF} with values
 between 0 and 1.
 @example
 signalstats,metadata=print:key=lavfi.signalstats.YDIF:value=0:function=expr:expr='between(VALUE1,0,1)'
@@ -17806,7 +17807,7 @@ The PTS of the previously filtered video frame. It's NAN if undefined.
 The PTS of the last previously filtered video frame. It's NAN if undefined.
 
 @item prev_selected_t
-The PTS of the last previously selected video frame. It's NAN if undefined.
+The PTS of the last previously selected video frame, expressed in seconds. It's NAN if undefined.
 
 @item start_pts
 The PTS of the first video frame in the video. It's NAN if undefined.
