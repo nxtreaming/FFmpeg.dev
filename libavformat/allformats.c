@@ -69,6 +69,7 @@ static void register_all(void)
     REGISTER_DEMUXER (APC,              apc);
     REGISTER_DEMUXER (APE,              ape);
     REGISTER_MUXDEMUX(APNG,             apng);
+    REGISTER_MUXDEMUX(APTX,             aptx);
     REGISTER_DEMUXER (AQTITLE,          aqtitle);
     REGISTER_MUXDEMUX(ASF,              asf);
     REGISTER_DEMUXER (ASF_O,            asf_o);
@@ -322,6 +323,7 @@ static void register_all(void)
     REGISTER_MUXDEMUX(TTA,              tta);
     REGISTER_DEMUXER (TXD,              txd);
     REGISTER_DEMUXER (TTY,              tty);
+    REGISTER_DEMUXER (TY,               ty);
     REGISTER_MUXER   (UNCODEDFRAMECRC,  uncodedframecrc);
     REGISTER_DEMUXER (V210,             v210);
     REGISTER_DEMUXER (V210X,            v210x);

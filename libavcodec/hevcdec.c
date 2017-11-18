@@ -354,6 +354,7 @@ static enum AVPixelFormat get_format(HEVCContext *s, const HEVCSPS *sps)
 {
 #define HWACCEL_MAX (CONFIG_HEVC_DXVA2_HWACCEL + \
                      CONFIG_HEVC_D3D11VA_HWACCEL * 2 + \
+                     CONFIG_HEVC_NVDEC_HWACCEL + \
                      CONFIG_HEVC_VAAPI_HWACCEL + \
                      CONFIG_HEVC_VIDEOTOOLBOX_HWACCEL + \
                      CONFIG_HEVC_VDPAU_HWACCEL)
@@ -375,6 +376,9 @@ static enum AVPixelFormat get_format(HEVCContext *s, const HEVCSPS *sps)
 #if CONFIG_HEVC_VDPAU_HWACCEL
         *fmt++ = AV_PIX_FMT_VDPAU;
 #endif
+#if CONFIG_HEVC_NVDEC_HWACCEL
+        *fmt++ = AV_PIX_FMT_CUDA;
+#endif
 #if CONFIG_HEVC_VIDEOTOOLBOX_HWACCEL
         *fmt++ = AV_PIX_FMT_VIDEOTOOLBOX;
 #endif
@@ -392,6 +396,9 @@ static enum AVPixelFormat get_format(HEVCContext *s, const HEVCSPS *sps)
 #endif
 #if CONFIG_HEVC_VIDEOTOOLBOX_HWACCEL
         *fmt++ = AV_PIX_FMT_VIDEOTOOLBOX;
+#endif
+#if CONFIG_HEVC_NVDEC_HWACCEL
+        *fmt++ = AV_PIX_FMT_CUDA;
 #endif
         break;
     }
@@ -503,13 +510,14 @@ static int hls_slice_header(HEVCContext *s)
         }
         ff_hevc_clear_refs(s);
 
+        ret = set_sps(s, sps, sps->pix_fmt);
+        if (ret < 0)
+            return ret;
+
         pix_fmt = get_format(s, sps);
         if (pix_fmt < 0)
             return pix_fmt;
-
-        ret = set_sps(s, sps, pix_fmt);
-        if (ret < 0)
-            return ret;
+        s->avctx->pix_fmt = pix_fmt;
 
         s->seq_decode = (s->seq_decode + 1) & 0xff;
         s->max_ra     = INT_MAX;
@@ -2816,23 +2824,55 @@ static int decode_nal_unit(HEVCContext *s, const H2645NAL *nal)
 
     switch (s->nal_unit_type) {
     case HEVC_NAL_VPS:
+        if (s->avctx->hwaccel && s->avctx->hwaccel->decode_params) {
+            ret = s->avctx->hwaccel->decode_params(s->avctx,
+                                                   nal->type,
+                                                   nal->raw_data,
+                                                   nal->raw_size);
+            if (ret < 0)
+                goto fail;
+        }
         ret = ff_hevc_decode_nal_vps(gb, s->avctx, &s->ps);
         if (ret < 0)
             goto fail;
         break;
     case HEVC_NAL_SPS:
+        if (s->avctx->hwaccel && s->avctx->hwaccel->decode_params) {
+            ret = s->avctx->hwaccel->decode_params(s->avctx,
+                                                   nal->type,
+                                                   nal->raw_data,
+                                                   nal->raw_size);
+            if (ret < 0)
+                goto fail;
+        }
         ret = ff_hevc_decode_nal_sps(gb, s->avctx, &s->ps,
                                      s->apply_defdispwin);
         if (ret < 0)
             goto fail;
         break;
     case HEVC_NAL_PPS:
+        if (s->avctx->hwaccel && s->avctx->hwaccel->decode_params) {
+            ret = s->avctx->hwaccel->decode_params(s->avctx,
+                                                   nal->type,
+                                                   nal->raw_data,
+                                                   nal->raw_size);
+            if (ret < 0)
+                goto fail;
+        }
         ret = ff_hevc_decode_nal_pps(gb, s->avctx, &s->ps);
         if (ret < 0)
             goto fail;
         break;
     case HEVC_NAL_SEI_PREFIX:
     case HEVC_NAL_SEI_SUFFIX:
+        if (s->avctx->hwaccel && s->avctx->hwaccel->decode_params) {
+            ret = s->avctx->hwaccel->decode_params(s->avctx,
+                                                   nal->type,
+                                                   nal->raw_data,
+                                                   nal->raw_size);
+            if (ret < 0)
+                goto fail;
+        }
         ret = ff_hevc_decode_nal_sei(gb, s->avctx, &s->sei, &s->ps, s->nal_unit_type);
         if (ret < 0)
             goto fail;
