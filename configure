@@ -289,7 +289,7 @@ External library support:
   --enable-mediacodec      enable Android MediaCodec support [no]
   --enable-libmysofa       enable libmysofa, needed for sofalizer filter [no]
   --enable-openal          enable OpenAL 1.1 capture support [no]
-  --enable-opencl          enable OpenCL code
+  --enable-opencl          enable OpenCL processing [no]
   --enable-opengl          enable OpenGL rendering [no]
   --enable-openssl         enable openssl, needed for https support
                            if gnutls is not used [no]
@@ -1633,7 +1633,6 @@ EXTERNAL_LIBRARY_LIST="
     libzvbi
     mediacodec
     openal
-    opencl
     opengl
 "
 
@@ -1669,6 +1668,7 @@ HWACCEL_LIBRARY_LIST="
     libmfx
     mmal
     omx
+    opencl
 "
 
 DOCUMENT_LIST="
@@ -2120,6 +2120,11 @@ HAVE_LIST="
     $TYPES_LIST
     makeinfo
     makeinfo_html
+    opencl_d3d11
+    opencl_drm_arm
+    opencl_dxva2
+    opencl_vaapi_beignet
+    opencl_vaapi_intel_media
     perl
     pod2man
     texi2html
@@ -2437,8 +2442,11 @@ amrwb_decoder_select="lsp"
 amv_decoder_select="sp5x_decoder exif"
 amv_encoder_select="aandcttables jpegtables mpegvideoenc"
 ape_decoder_select="bswapdsp llauddsp"
-apng_decoder_select="zlib"
-apng_encoder_select="llvidencdsp zlib"
+apng_decoder_deps="zlib"
+apng_encoder_deps="zlib"
+apng_encoder_select="llvidencdsp"
+aptx_decoder_select="audio_frame_queue"
+aptx_encoder_select="audio_frame_queue"
 asv1_decoder_select="blockdsp bswapdsp idctdsp"
 asv1_encoder_select="bswapdsp fdctdsp pixblockdsp"
 asv2_decoder_select="blockdsp bswapdsp idctdsp"
@@ -2465,14 +2473,14 @@ dnxhd_encoder_select="aandcttables blockdsp fdctdsp idctdsp mpegvideoenc pixbloc
 dolby_e_decoder_select="mdct"
 dvvideo_decoder_select="dvprofile idctdsp"
 dvvideo_encoder_select="dvprofile fdctdsp me_cmp pixblockdsp"
-dxa_decoder_select="zlib"
+dxa_decoder_deps="zlib"
 dxv_decoder_select="lzf texturedsp"
 eac3_decoder_select="ac3_decoder"
 eac3_encoder_select="ac3_encoder"
 eamad_decoder_select="aandcttables blockdsp bswapdsp idctdsp mpegvideo"
 eatgq_decoder_select="aandcttables"
 eatqi_decoder_select="aandcttables blockdsp bswapdsp idctdsp"
-exr_decoder_select="zlib"
+exr_decoder_deps="zlib"
 ffv1_decoder_select="rangecoder"
 ffv1_encoder_select="rangecoder"
 ffvhuff_decoder_select="huffyuv_decoder"
@@ -2480,15 +2488,16 @@ ffvhuff_encoder_select="huffyuv_encoder"
 fic_decoder_select="golomb"
 flac_decoder_select="flacdsp"
 flac_encoder_select="bswapdsp flacdsp lpc"
-flashsv2_decoder_select="zlib"
-flashsv2_encoder_select="zlib"
-flashsv_decoder_select="zlib"
-flashsv_encoder_select="zlib"
+flashsv2_decoder_deps="zlib"
+flashsv2_encoder_deps="zlib"
+flashsv_decoder_deps="zlib"
+flashsv_encoder_deps="zlib"
 flv_decoder_select="h263_decoder"
 flv_encoder_select="h263_encoder"
 fourxm_decoder_select="blockdsp bswapdsp"
 fraps_decoder_select="bswapdsp huffman"
-g2m_decoder_select="blockdsp idctdsp jpegtables zlib"
+g2m_decoder_deps="zlib"
+g2m_decoder_select="blockdsp idctdsp jpegtables"
 g729_decoder_select="audiodsp"
 h261_decoder_select="mpegvideo"
 h261_encoder_select="aandcttables mpegvideoenc"
@@ -2546,7 +2555,7 @@ mpeg2video_encoder_select="aandcttables mpegvideoenc h263dsp"
 mpeg4_decoder_select="h263_decoder mpeg4video_parser"
 mpeg4_encoder_select="h263_encoder"
 msa1_decoder_select="mss34dsp"
-mscc_decoder_select="zlib"
+mscc_decoder_deps="zlib"
 msmpeg4v1_decoder_select="h263_decoder"
 msmpeg4v2_decoder_select="h263_decoder"
 msmpeg4v2_encoder_select="h263_encoder"
@@ -2562,8 +2571,9 @@ on2avc_decoder_select="mdct"
 opus_decoder_deps="swresample"
 opus_decoder_select="mdct15"
 opus_encoder_select="audio_frame_queue mdct15"
-png_decoder_select="zlib"
-png_encoder_select="llvidencdsp zlib"
+png_decoder_deps="zlib"
+png_encoder_deps="zlib"
+png_encoder_select="llvidencdsp"
 prores_decoder_select="blockdsp idctdsp"
 prores_encoder_select="fdctdsp"
 qcelp_decoder_select="lsp"
@@ -2572,7 +2582,7 @@ ra_144_decoder_select="audiodsp"
 ra_144_encoder_select="audio_frame_queue lpc audiodsp"
 ralf_decoder_select="golomb"
 rawvideo_decoder_select="bswapdsp"
-rscc_decoder_select="zlib"
+rscc_decoder_deps="zlib"
 rtjpeg_decoder_select="me_cmp"
 rv10_decoder_select="h263_decoder"
 rv10_encoder_select="h263_encoder"
@@ -2580,7 +2590,7 @@ rv20_decoder_select="h263_decoder"
 rv20_encoder_select="h263_encoder"
 rv30_decoder_select="golomb h264pred h264qpel mpegvideo rv34dsp"
 rv40_decoder_select="golomb h264pred h264qpel mpegvideo rv34dsp"
-screenpresso_decoder_select="zlib"
+screenpresso_decoder_deps="zlib"
 shorten_decoder_select="bswapdsp"
 sipr_decoder_select="lsp"
 snow_decoder_select="dwt h264qpel hpeldsp me_cmp rangecoder videodsp"
@@ -2589,13 +2599,14 @@ sonic_decoder_select="golomb rangecoder"
 sonic_encoder_select="golomb rangecoder"
 sonic_ls_encoder_select="golomb rangecoder"
 sp5x_decoder_select="mjpeg_decoder"
-srgc_decoder_select="zlib"
+srgc_decoder_deps="zlib"
 svq1_decoder_select="hpeldsp"
 svq1_encoder_select="aandcttables hpeldsp me_cmp mpegvideoenc"
 svq3_decoder_select="golomb h264dsp h264parse h264pred hpeldsp tpeldsp videodsp"
 svq3_decoder_suggest="zlib"
 tak_decoder_select="audiodsp"
-tdsc_decoder_select="zlib mjpeg_decoder"
+tdsc_decoder_deps="zlib"
+tdsc_decoder_select="mjpeg_decoder"
 theora_decoder_select="vp3_decoder"
 thp_decoder_select="mjpeg_decoder"
 tiff_decoder_suggest="zlib lzma"
@@ -2604,7 +2615,7 @@ truehd_decoder_select="mlp_parser"
 truehd_encoder_select="lpc"
 truemotion2_decoder_select="bswapdsp"
 truespeech_decoder_select="bswapdsp"
-tscc_decoder_select="zlib"
+tscc_decoder_deps="zlib"
 twinvq_decoder_select="mdct lsp sinewin"
 txd_decoder_select="texturedsp"
 utvideo_decoder_select="bswapdsp llviddsp"
@@ -2638,11 +2649,11 @@ wmv3_decoder_select="vc1_decoder"
 wmv3image_decoder_select="wmv3_decoder"
 xma1_decoder_select="wmapro_decoder"
 xma2_decoder_select="wmapro_decoder"
-zerocodec_decoder_select="zlib"
-zlib_decoder_select="zlib"
-zlib_encoder_select="zlib"
-zmbv_decoder_select="zlib"
-zmbv_encoder_select="zlib"
+zerocodec_decoder_deps="zlib"
+zlib_decoder_deps="zlib"
+zlib_encoder_deps="zlib"
+zmbv_decoder_deps="zlib"
+zmbv_encoder_deps="zlib"
 
 # hardware accelerators
 crystalhd_deps="libcrystalhd_libcrystalhd_if_h"
@@ -2698,6 +2709,8 @@ mjpeg_cuvid_hwaccel_select="mjpeg_cuvid_decoder"
 mpeg_xvmc_hwaccel_deps="xvmc"
 mpeg_xvmc_hwaccel_select="mpeg2video_decoder"
 mpeg1_cuvid_hwaccel_select="mpeg1_cuvid_decoder"
+mpeg1_nvdec_hwaccel_deps="nvdec"
+mpeg1_nvdec_hwaccel_select="mpeg1video_decoder"
 mpeg1_vdpau_hwaccel_deps="vdpau"
 mpeg1_vdpau_hwaccel_select="mpeg1video_decoder"
 mpeg1_videotoolbox_hwaccel_deps="videotoolbox"
@@ -2713,6 +2726,8 @@ mpeg2_dxva2_hwaccel_deps="dxva2"
 mpeg2_dxva2_hwaccel_select="mpeg2video_decoder"
 mpeg2_mediacodec_hwaccel_deps="mediacodec"
 mpeg2_mmal_hwaccel_deps="mmal"
+mpeg2_nvdec_hwaccel_deps="nvdec"
+mpeg2_nvdec_hwaccel_select="mpeg2video_decoder"
 mpeg2_qsv_hwaccel_deps="libmfx"
 mpeg2_vaapi_hwaccel_deps="vaapi"
 mpeg2_vaapi_hwaccel_select="mpeg2video_decoder"
@@ -2725,6 +2740,8 @@ mpeg2_xvmc_hwaccel_select="mpeg2video_decoder"
 mpeg4_cuvid_hwaccel_select="mpeg4_cuvid_decoder"
 mpeg4_mediacodec_hwaccel_deps="mediacodec"
 mpeg4_mmal_hwaccel_deps="mmal"
+mpeg4_nvdec_hwaccel_deps="nvdec"
+mpeg4_nvdec_hwaccel_select="mpeg4_decoder"
 mpeg4_vaapi_hwaccel_deps="vaapi"
 mpeg4_vaapi_hwaccel_select="mpeg4_decoder"
 mpeg4_vdpau_hwaccel_deps="vdpau"
@@ -3192,7 +3209,6 @@ deinterlace_qsv_filter_deps="libmfx"
 deinterlace_vaapi_filter_deps="vaapi"
 delogo_filter_deps="gpl"
 deshake_filter_select="pixelutils"
-deshake_filter_suggest="opencl"
 drawtext_filter_deps="libfreetype"
 drawtext_filter_suggest="libfontconfig libfribidi"
 elbg_filter_deps="avcodec"
@@ -3222,6 +3238,7 @@ negate_filter_deps="lut_filter"
 nnedi_filter_deps="gpl"
 ocr_filter_deps="libtesseract"
 ocv_filter_deps="libopencv"
+overlay_opencl_filter_deps="opencl"
 overlay_qsv_filter_deps="libmfx"
 overlay_qsv_filter_select="qsvvpp"
 owdenoise_filter_deps="gpl"
@@ -3265,8 +3282,8 @@ tinterlace_filter_deps="gpl"
 tinterlace_merge_test_deps="tinterlace_filter"
 tinterlace_pad_test_deps="tinterlace_filter"
 tonemap_filter_deps="const_nan"
+unsharp_opencl_filter_deps="opencl"
 uspp_filter_deps="gpl avcodec"
-unsharp_filter_suggest="opencl"
 vaguedenoiser_filter_deps="gpl"
 vidstabdetect_filter_deps="libvidstab"
 vidstabtransform_filter_deps="libvidstab"
@@ -4949,7 +4966,7 @@ case $target_os in
     mingw32*|mingw64*)
         target_os=mingw32
         if enabled shared; then
-            # Cannot build both shared and static libs when using dllexport.
+            # Cannot build both shared and static libs when using dllimport.
             disable static
         fi
         enabled shared && ! enabled small && check_cmd $windres --version && enable gnu_windres
@@ -5895,22 +5912,22 @@ enabled libvorbis         && require_pkg_config libvorbis vorbis vorbis/codec.h 
 
 enabled libvpx            && {
     enabled libvpx_vp8_decoder && {
-        check_pkg_config libvpx_vp8_decoder "vpx >= 0.9.1" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp8_dx ||
-            check_lib libvpx_vp8_decoder "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_dec_init_ver -lvpx ||
-                die "ERROR: libvpx decoder version must be >=0.9.1";
+        check_pkg_config libvpx_vp8_decoder "vpx >= 1.4.0" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp8_dx ||
+            check_lib libvpx_vp8_decoder "vpx/vpx_decoder.h vpx/vp8dx.h" "vpx_codec_dec_init_ver VPX_IMG_FMT_HIGHBITDEPTH" -lvpx ||
+                die "ERROR: libvpx decoder version must be >=1.4.0";
     }
     enabled libvpx_vp8_encoder && {
-        check_pkg_config libvpx_vp8_encoder "vpx >= 0.9.7" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp8_cx ||
-            check_lib libvpx_vp8_encoder "vpx/vpx_encoder.h vpx/vp8cx.h" "vpx_codec_enc_init_ver VP8E_SET_MAX_INTRA_BITRATE_PCT" -lvpx ||
-                die "ERROR: libvpx encoder version must be >=0.9.7";
+        check_pkg_config libvpx_vp8_encoder "vpx >= 1.4.0" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp8_cx ||
+            check_lib libvpx_vp8_encoder "vpx/vpx_encoder.h vpx/vp8cx.h" "vpx_codec_enc_init_ver VPX_IMG_FMT_HIGHBITDEPTH" -lvpx ||
+                die "ERROR: libvpx encoder version must be >=1.4.0";
     }
     enabled libvpx_vp9_decoder && {
-        check_pkg_config libvpx_vp9_decoder "vpx >= 1.3.0" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp9_dx ||
-            check_lib libvpx_vp9_decoder "vpx/vpx_decoder.h vpx/vp8dx.h" "vpx_codec_vp9_dx" -lvpx
+        check_pkg_config libvpx_vp9_decoder "vpx >= 1.4.0" "vpx/vpx_decoder.h vpx/vp8dx.h" vpx_codec_vp9_dx ||
+            check_lib libvpx_vp9_decoder "vpx/vpx_decoder.h vpx/vp8dx.h" "vpx_codec_vp9_dx VPX_IMG_FMT_HIGHBITDEPTH" -lvpx
     }
     enabled libvpx_vp9_encoder && {
-        check_pkg_config libvpx_vp9_encoder "vpx >= 1.3.0" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp9_cx ||
-            check_lib libvpx_vp9_encoder "vpx/vpx_encoder.h vpx/vp8cx.h" "vpx_codec_vp9_cx VP9E_SET_AQ_MODE" -lvpx
+        check_pkg_config libvpx_vp9_encoder "vpx >= 1.4.0" "vpx/vpx_encoder.h vpx/vp8cx.h" vpx_codec_vp9_cx ||
+            check_lib libvpx_vp9_encoder "vpx/vpx_encoder.h vpx/vp8cx.h" "vpx_codec_vp9_cx VPX_IMG_FMT_HIGHBITDEPTH" -lvpx
     }
     if disabled_all libvpx_vp8_decoder libvpx_vp9_decoder libvpx_vp8_encoder libvpx_vp9_encoder; then
         die "libvpx enabled but no supported decoders found"
@@ -6142,6 +6159,30 @@ enabled vaapi &&
 enabled vaapi &&
     check_cpp_condition "va/va.h" "VA_CHECK_VERSION(1, 0, 0)" &&
     enable vaapi_1
+
+if enabled_all opencl vaapi ; then
+    check_type "CL/cl_intel.h" "clCreateImageFromFdINTEL_fn" &&
+        enable opencl_vaapi_beignet
+    if enabled libmfx ; then
+        check_type "CL/cl.h CL/va_ext.h" "clCreateFromVA_APIMediaSurfaceINTEL_fn" &&
+            enable opencl_vaapi_intel_media
+    fi
+fi
+
+if enabled_all opencl dxva2 ; then
+    check_type "CL/cl_dx9_media_sharing.h" cl_dx9_surface_info_khr &&
+        enable opencl_dxva2
+fi
+
+if enabled_all opencl d3d11va ; then
+    check_type "CL/cl_d3d11.h" clGetDeviceIDsFromD3D11KHR_fn &&
+        enable opencl_d3d11
+fi
+
+if enabled_all opencl libdrm ; then
+    check_func_headers "CL/cl_ext.h" clImportMemoryARM &&
+        enable opencl_drm_arm
+fi
 
 enabled vdpau &&
     check_cpp_condition vdpau/vdpau.h "defined VDP_DECODER_PROFILE_MPEG4_PART2_ASP" ||
