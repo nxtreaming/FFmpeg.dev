@@ -51,7 +51,6 @@
 #include "mathops.h"
 #include "me_cmp.h"
 #include "mpegutils.h"
-#include "mpeg4video.h"
 #include "profiles.h"
 #include "rectangle.h"
 #include "thread.h"
@@ -319,7 +318,7 @@ static int h264_init_context(AVCodecContext *avctx, H264Context *h)
     h->x264_build            = -1;
     h->frame_recovered       = 0;
     h->poc.prev_frame_num    = -1;
-    h->sei.frame_packing.frame_packing_arrangement_cancel_flag = -1;
+    h->sei.frame_packing.arrangement_cancel_flag = -1;
     h->sei.unregistered.x264_build = -1;
 
     h->next_outputed_poc = INT_MIN;

@@ -82,14 +82,14 @@ void ff_hls_write_init_file(AVIOContext *out, char *filename,
     avio_printf(out, "\n");
 }
 
-void ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
+int ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
                              int byterange_mode,
                              double duration, int round_duration,
                              int64_t size, int64_t pos, //Used only if HLS_SINGLE_FILE flag is set
                              char *baseurl, //Ignored if NULL
                              char *filename, double *prog_date_time) {
     if (!out || !filename)
-        return;
+        return AVERROR(EINVAL);
 
     if (insert_discont) {
         avio_printf(out, "#EXT-X-DISCONTINUITY\n");
@@ -109,7 +109,10 @@ void ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
         tt = (int64_t)*prog_date_time;
         milli = av_clip(lrint(1000*(*prog_date_time - tt)), 0, 999);
         tm = localtime_r(&tt, &tmpbuf);
-        strftime(buf0, sizeof(buf0), "%Y-%m-%dT%H:%M:%S", tm);
+        if (!strftime(buf0, sizeof(buf0), "%Y-%m-%dT%H:%M:%S", tm)) {
+            av_log(NULL, AV_LOG_DEBUG, "strftime error in ff_hls_write_file_entry\n");
+            return AVERROR_UNKNOWN;
+        }
         if (!strftime(buf1, sizeof(buf1), "%z", tm) || buf1[1]<'0' ||buf1[1]>'2') {
             int tz_min, dst = tm->tm_isdst;
             tm = gmtime_r(&tt, &tmpbuf);
@@ -128,6 +131,8 @@ void ff_hls_write_file_entry(AVIOContext *out, int insert_discont,
     if (baseurl)
         avio_printf(out, "%s", baseurl);
     avio_printf(out, "%s\n", filename);
+
+    return 0;
 }
 
 void ff_hls_write_end_list (AVIOContext *out) {

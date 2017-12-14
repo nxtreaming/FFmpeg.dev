@@ -202,6 +202,7 @@ static void register_all(void)
     REGISTER_FILTER(FIELDHINT,      fieldhint,      vf);
     REGISTER_FILTER(FIELDMATCH,     fieldmatch,     vf);
     REGISTER_FILTER(FIELDORDER,     fieldorder,     vf);
+    REGISTER_FILTER(FILLBORDERS,    fillborders,    vf);
     REGISTER_FILTER(FIND_RECT,      find_rect,      vf);
     REGISTER_FILTER(FLOODFILL,      floodfill,      vf);
     REGISTER_FILTER(FORMAT,         format,         vf);
@@ -308,6 +309,7 @@ static void register_all(void)
     REGISTER_FILTER(SETDAR,         setdar,         vf);
     REGISTER_FILTER(SETFIELD,       setfield,       vf);
     REGISTER_FILTER(SETPTS,         setpts,         vf);
+    REGISTER_FILTER(SETRANGE,       setrange,       vf);
     REGISTER_FILTER(SETSAR,         setsar,         vf);
     REGISTER_FILTER(SETTB,          settb,          vf);
     REGISTER_FILTER(SHOWINFO,       showinfo,       vf);

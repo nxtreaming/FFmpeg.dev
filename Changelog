@@ -23,6 +23,9 @@ version <next>:
 - audio lv2 wrapper filter
 - VAAPI VP8 decoding
 - AMD AMF H.264 and HEVC encoders
+- video fillborders filter
+- video setrange filter
+- nsp demuxer
 
 
 version 3.4:
