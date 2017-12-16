@@ -287,6 +287,12 @@ static int select_rc_mode(AVCodecContext *avctx, QSVEncContext *q)
         return AVERROR(EINVAL);
     }
 
+    if (!want_qscale && avctx->global_quality > 0 && !QSV_HAVE_ICQ){
+        av_log(avctx, AV_LOG_ERROR,
+               "ICQ ratecontrol mode requested, but is not supported by this SDK version\n");
+        return AVERROR(ENOSYS);
+    }
+
     if (want_qscale) {
         rc_mode = MFX_RATECONTROL_CQP;
         rc_desc = "constant quantization parameter (CQP)";
@@ -495,6 +501,7 @@ static int init_video_param(AVCodecContext *avctx, QSVEncContext *q)
 #if QSV_HAVE_VCM
     case MFX_RATECONTROL_VCM:
 #endif
+        q->param.mfx.BufferSizeInKB   = avctx->rc_buffer_size / 8000;
         q->param.mfx.InitialDelayInKB = avctx->rc_initial_buffer_occupancy / 1000;
         q->param.mfx.TargetKbps       = avctx->bit_rate / 1000;
         q->param.mfx.MaxKbps          = avctx->rc_max_rate / 1000;
@@ -592,6 +599,10 @@ FF_ENABLE_DEPRECATION_WARNINGS
             q->extco2.Trellis = q->trellis;
 #endif
 
+#if QSV_HAVE_LA_DS
+            q->extco2.LookAheadDS = q->look_ahead_downsampling;
+#endif
+
 #if QSV_HAVE_BREF_TYPE
 #if FF_API_PRIVATE_OPT
 FF_DISABLE_DEPRECATION_WARNINGS
@@ -608,10 +619,6 @@ FF_ENABLE_DEPRECATION_WARNINGS
 #endif
 
             q->extparam_internal[q->nb_extparam_internal++] = (mfxExtBuffer *)&q->extco2;
-
-#if QSV_HAVE_LA_DS
-            q->extco2.LookAheadDS           = q->look_ahead_downsampling;
-#endif
         }
 #endif
     }

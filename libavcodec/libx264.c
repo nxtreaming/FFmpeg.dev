@@ -1028,6 +1028,7 @@ AVCodec ff_libx264_encoder = {
     .init_static_data = X264_init_static,
     .caps_internal    = FF_CODEC_CAP_INIT_THREADSAFE |
                         FF_CODEC_CAP_INIT_CLEANUP,
+    .wrapper_name     = "libx264",
 };
 #endif
 
@@ -1052,6 +1053,7 @@ AVCodec ff_libx264rgb_encoder = {
     .priv_class     = &rgbclass,
     .defaults       = x264_defaults,
     .pix_fmts       = pix_fmts_8bit_rgb,
+    .wrapper_name   = "libx264",
 };
 #endif
 
@@ -1078,5 +1080,6 @@ AVCodec ff_libx262_encoder = {
     .pix_fmts         = pix_fmts_8bit,
     .caps_internal    = FF_CODEC_CAP_INIT_THREADSAFE |
                         FF_CODEC_CAP_INIT_CLEANUP,
+    .wrapper_name     = "libx264",
 };
 #endif
