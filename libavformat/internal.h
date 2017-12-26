@@ -541,8 +541,11 @@ static inline int ff_rename(const char *oldpath, const char *newpath, void *logc
     int ret = 0;
     if (rename(oldpath, newpath) == -1) {
         ret = AVERROR(errno);
-        if (logctx)
-            av_log(logctx, AV_LOG_ERROR, "failed to rename file %s to %s\n", oldpath, newpath);
+        if (logctx) {
+            char err[AV_ERROR_MAX_STRING_SIZE] = {0};
+            av_make_error_string(err, AV_ERROR_MAX_STRING_SIZE, ret);
+            av_log(logctx, AV_LOG_ERROR, "failed to rename file %s to %s: %s\n", oldpath, newpath, err);
+        }
     }
     return ret;
 }
@@ -680,5 +683,9 @@ int ff_bprint_to_codecpar_extradata(AVCodecParameters *par, struct AVBPrint *buf
  */
 int ff_interleaved_peek(AVFormatContext *s, int stream,
                         AVPacket *pkt, int add_offset);
+
+
+int ff_lock_avformat(void);
+int ff_unlock_avformat(void);
 
 #endif /* AVFORMAT_INTERNAL_H */
