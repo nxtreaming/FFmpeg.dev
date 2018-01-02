@@ -612,6 +612,9 @@ static void update_options(char **dest, const char *name, void *src)
 static int open_url_keepalive(AVFormatContext *s, AVIOContext **pb,
                               const char *url)
 {
+#if !CONFIG_HTTP_PROTOCOL
+    return AVERROR_PROTOCOL_NOT_FOUND;
+#else
     int ret;
     URLContext *uc = ffio_geturlcontext(*pb);
     av_assert0(uc);
@@ -621,15 +624,17 @@ static int open_url_keepalive(AVFormatContext *s, AVIOContext **pb,
         ff_format_io_close(s, pb);
     }
     return ret;
+#endif
 }
 
 static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
-                    AVDictionary *opts, AVDictionary *opts2, int *is_http)
+                    AVDictionary *opts, AVDictionary *opts2, int *is_http_out)
 {
     HLSContext *c = s->priv_data;
     AVDictionary *tmp = NULL;
     const char *proto_name = NULL;
     int ret;
+    int is_http = 0;
 
     av_dict_copy(&tmp, opts, 0);
     av_dict_copy(&tmp, opts2, 0);
@@ -655,7 +660,7 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
             return AVERROR_INVALIDDATA;
         }
     } else if (av_strstart(proto_name, "http", NULL)) {
-        ;
+        is_http = 1;
     } else
         return AVERROR_INVALIDDATA;
 
@@ -666,7 +671,7 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
     else if (strcmp(proto_name, "file") || !strncmp(url, "file,", 5))
         return AVERROR_INVALIDDATA;
 
-    if (c->http_persistent && *pb && av_strstart(proto_name, "http", NULL)) {
+    if (is_http && c->http_persistent && *pb) {
         ret = open_url_keepalive(c->ctx, pb, url);
         if (ret == AVERROR_EXIT) {
             return ret;
@@ -697,8 +702,8 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
 
     av_dict_free(&tmp);
 
-    if (is_http)
-        *is_http = av_strstart(proto_name, "http", NULL);
+    if (is_http_out)
+        *is_http_out = is_http;
 
     return ret;
 }
@@ -721,8 +726,9 @@ static int parse_playlist(HLSContext *c, const char *url,
     struct variant_info variant_info;
     char tmp_str[MAX_URL_SIZE];
     struct segment *cur_init_section = NULL;
+    int is_http = av_strstart(url, "http", NULL);
 
-    if (!in && c->http_persistent && c->playlist_pb) {
+    if (is_http && !in && c->http_persistent && c->playlist_pb) {
         in = c->playlist_pb;
         ret = open_url_keepalive(c->ctx, &c->playlist_pb, url);
         if (ret == AVERROR_EXIT) {
@@ -756,7 +762,7 @@ static int parse_playlist(HLSContext *c, const char *url,
         if (ret < 0)
             return ret;
 
-        if (c->http_persistent)
+        if (is_http && c->http_persistent)
             c->playlist_pb = in;
         else
             close_in = 1;
@@ -1449,7 +1455,7 @@ reload:
         if (ret)
             return ret;
 
-        if (c->http_multiple && av_strstart(seg->url, "http", NULL) && v->input_next_requested) {
+        if (c->http_multiple == 1 && v->input_next_requested) {
             FFSWAP(AVIOContext *, v->input, v->input_next);
             v->input_next_requested = 0;
             ret = 0;
@@ -1468,8 +1474,18 @@ reload:
         just_opened = 1;
     }
 
+    if (c->http_multiple == -1) {
+        uint8_t *http_version_opt = NULL;
+        int r = av_opt_get(v->input, "http_version", AV_OPT_SEARCH_CHILDREN, &http_version_opt);
+        if (r >= 0) {
+            c->http_multiple = strncmp((const char *)http_version_opt, "1.1", 3) == 0;
+            av_freep(&http_version_opt);
+        }
+    }
+
     seg = next_segment(v);
-    if (c->http_multiple && !v->input_next_requested && seg) {
+    if (c->http_multiple == 1 && !v->input_next_requested &&
+        seg && seg->key_type == KEY_NONE && av_strstart(seg->url, "http", NULL)) {
         ret = open_input(c, v, seg, &v->input_next);
         if (ret < 0) {
             if (ff_check_interrupt(c->interrupt_callback))
@@ -1501,7 +1517,8 @@ reload:
 
         return ret;
     }
-    if (c->http_persistent && av_strstart(seg->url, "http", NULL)) {
+    if (c->http_persistent &&
+        seg->key_type == KEY_NONE && av_strstart(seg->url, "http", NULL)) {
         v->input_read_done = 1;
     } else {
         ff_format_io_close(v->parent, &v->input);
@@ -2305,7 +2322,7 @@ static const AVOption hls_options[] = {
     {"http_persistent", "Use persistent HTTP connections",
         OFFSET(http_persistent), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, FLAGS },
     {"http_multiple", "Use multiple HTTP connections for fetching segments",
-        OFFSET(http_multiple), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, FLAGS},
+        OFFSET(http_multiple), AV_OPT_TYPE_BOOL, {.i64 = -1}, -1, 1, FLAGS},
     {NULL}
 };
 
