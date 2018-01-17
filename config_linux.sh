@@ -17,7 +17,6 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-gpl                         \
 --enable-nonfree                     \
 --disable-ffplay                     \
---disable-ffserver                   \
 --disable-postproc                   \
 --disable-avdevice                   \
 --disable-indevs                     \
