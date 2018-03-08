@@ -336,6 +336,8 @@ static int mov_read_udta_string(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     case MKTAG( 'l','d','e','s'): key = "synopsis";  break;
     case MKTAG( 'l','o','c','i'):
         return mov_metadata_loci(c, pb, atom.size);
+    case MKTAG( 'm','a','n','u'): key = "make"; break;
+    case MKTAG( 'm','o','d','l'): key = "model"; break;
     case MKTAG( 'p','c','s','t'): key = "podcast";
         parse = mov_metadata_int8_no_padding; break;
     case MKTAG( 'p','g','a','p'): key = "gapless_playback";
@@ -2643,7 +2645,7 @@ static inline int mov_stsc_index_valid(unsigned int index, unsigned int count)
 }
 
 /* Compute the samples value for the stsc entry at the given index. */
-static inline int mov_get_stsc_samples(MOVStreamContext *sc, unsigned int index)
+static inline int64_t mov_get_stsc_samples(MOVStreamContext *sc, unsigned int index)
 {
     int chunk_count;
 
@@ -2652,7 +2654,7 @@ static inline int mov_get_stsc_samples(MOVStreamContext *sc, unsigned int index)
     else
         chunk_count = sc->chunk_count - (sc->stsc_data[index].first - 1);
 
-    return sc->stsc_data[index].count * chunk_count;
+    return sc->stsc_data[index].count * (int64_t)chunk_count;
 }
 
 static int mov_read_stps(MOVContext *c, AVIOContext *pb, MOVAtom atom)
@@ -3745,6 +3747,9 @@ static void mov_build_index(MOVContext *mov, AVStream *st)
                 av_free(ctts_data_old);
                 return;
             }
+
+            memset((uint8_t*)(sc->ctts_data), 0, sc->ctts_allocated_size);
+
             for (i = 0; i < ctts_count_old &&
                         sc->ctts_count < sc->sample_count; i++)
                 for (j = 0; j < ctts_data_old[i].count &&
@@ -7185,12 +7190,13 @@ static int mov_seek_stream(AVFormatContext *s, AVStream *st, int64_t timestamp, 
     /* adjust stsd index */
     time_sample = 0;
     for (i = 0; i < sc->stsc_count; i++) {
-        int next = time_sample + mov_get_stsc_samples(sc, i);
+        int64_t next = time_sample + mov_get_stsc_samples(sc, i);
         if (next > sc->current_sample) {
             sc->stsc_index = i;
             sc->stsc_sample = sc->current_sample - time_sample;
             break;
         }
+        av_assert0(next == (int)next);
         time_sample = next;
     }
 

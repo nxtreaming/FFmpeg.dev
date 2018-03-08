@@ -178,11 +178,12 @@ static void mediacodec_buffer_release(void *opaque, uint8_t *data)
     MediaCodecDecContext *ctx = buffer->ctx;
     int released = atomic_load(&buffer->released);
 
-    if (!released) {
+    if (!released && (ctx->delay_flush || buffer->serial == atomic_load(&ctx->serial))) {
         ff_AMediaCodec_releaseOutputBuffer(ctx->codec, buffer->index, 0);
     }
 
-    ff_mediacodec_dec_unref(ctx);
+    if (ctx->delay_flush)
+        ff_mediacodec_dec_unref(ctx);
     av_freep(&buffer);
 }
 
@@ -236,7 +237,9 @@ FF_ENABLE_DEPRECATION_WARNINGS
     }
 
     buffer->ctx = s;
-    ff_mediacodec_dec_ref(s);
+    buffer->serial = atomic_load(&s->serial);
+    if (s->delay_flush)
+        ff_mediacodec_dec_ref(s);
 
     buffer->index = index;
     buffer->pts = info->presentationTimeUs;
@@ -297,7 +300,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
 #endif
     frame->pkt_dts = AV_NOPTS_VALUE;
 
-    av_log(avctx, AV_LOG_DEBUG,
+    av_log(avctx, AV_LOG_TRACE,
             "Frame: width=%d stride=%d height=%d slice-height=%d "
             "crop-top=%d crop-bottom=%d crop-left=%d crop-right=%d encoder=%s\n"
             "destination linesizes=%d,%d,%d\n" ,
@@ -339,11 +342,22 @@ done:
     return ret;
 }
 
+#define AMEDIAFORMAT_GET_INT32(name, key, mandatory) do {                              \
+    int32_t value = 0;                                                                 \
+    if (ff_AMediaFormat_getInt32(s->format, key, &value)) {                            \
+        (name) = value;                                                                \
+    } else if (mandatory) {                                                            \
+        av_log(avctx, AV_LOG_ERROR, "Could not get %s from format %s\n", key, format); \
+        ret = AVERROR_EXTERNAL;                                                        \
+        goto fail;                                                                     \
+    }                                                                                  \
+} while (0)                                                                            \
+
 static int mediacodec_dec_parse_format(AVCodecContext *avctx, MediaCodecDecContext *s)
 {
+    int ret = 0;
     int width = 0;
     int height = 0;
-    int32_t value = 0;
     char *format = NULL;
 
     if (!s->format) {
@@ -356,40 +370,16 @@ static int mediacodec_dec_parse_format(AVCodecContext *avctx, MediaCodecDecConte
         return AVERROR_EXTERNAL;
     }
     av_log(avctx, AV_LOG_DEBUG, "Parsing MediaFormat %s\n", format);
-    av_freep(&format);
 
     /* Mandatory fields */
-    if (!ff_AMediaFormat_getInt32(s->format, "width", &value)) {
-        format = ff_AMediaFormat_toString(s->format);
-        av_log(avctx, AV_LOG_ERROR, "Could not get %s from format %s\n", "width", format);
-        av_freep(&format);
-        return AVERROR_EXTERNAL;
-    }
-    s->width = value;
+    AMEDIAFORMAT_GET_INT32(s->width,  "width", 1);
+    AMEDIAFORMAT_GET_INT32(s->height, "height", 1);
 
-    if (!ff_AMediaFormat_getInt32(s->format, "height", &value)) {
-        format = ff_AMediaFormat_toString(s->format);
-        av_log(avctx, AV_LOG_ERROR, "Could not get %s from format %s\n", "height", format);
-        av_freep(&format);
-        return AVERROR_EXTERNAL;
-    }
-    s->height = value;
+    AMEDIAFORMAT_GET_INT32(s->stride, "stride", 1);
+    s->stride = s->stride > 0 ? s->stride : s->width;
 
-    if (!ff_AMediaFormat_getInt32(s->format, "stride", &value)) {
-        format = ff_AMediaFormat_toString(s->format);
-        av_log(avctx, AV_LOG_ERROR, "Could not get %s from format %s\n", "stride", format);
-        av_freep(&format);
-        return AVERROR_EXTERNAL;
-    }
-    s->stride = value > 0 ? value : s->width;
-
-    if (!ff_AMediaFormat_getInt32(s->format, "slice-height", &value)) {
-        format = ff_AMediaFormat_toString(s->format);
-        av_log(avctx, AV_LOG_ERROR, "Could not get %s from format %s\n", "slice-height", format);
-        av_freep(&format);
-        return AVERROR_EXTERNAL;
-    }
-    s->slice_height = value > 0 ? value : s->height;
+    AMEDIAFORMAT_GET_INT32(s->slice_height, "slice-height", 1);
+    s->slice_height = s->slice_height > 0 ? s->slice_height : s->height;
 
     if (strstr(s->codec_name, "OMX.Nvidia.")) {
         s->slice_height = FFALIGN(s->height, 16);
@@ -398,32 +388,19 @@ static int mediacodec_dec_parse_format(AVCodecContext *avctx, MediaCodecDecConte
         s->stride = avctx->width;
     }
 
-    if (!ff_AMediaFormat_getInt32(s->format, "color-format", &value)) {
-        format = ff_AMediaFormat_toString(s->format);
-        av_log(avctx, AV_LOG_ERROR, "Could not get %s from format %s\n", "color-format", format);
-        av_freep(&format);
-        return AVERROR_EXTERNAL;
-    }
-    s->color_format = value;
-
-    s->pix_fmt = avctx->pix_fmt = mcdec_map_color_format(avctx, s, value);
+    AMEDIAFORMAT_GET_INT32(s->color_format, "color-format", 1);
+    avctx->pix_fmt = mcdec_map_color_format(avctx, s, s->color_format);
     if (avctx->pix_fmt == AV_PIX_FMT_NONE) {
         av_log(avctx, AV_LOG_ERROR, "Output color format is not supported\n");
-        return AVERROR(EINVAL);
+        ret = AVERROR(EINVAL);
+        goto fail;
     }
 
     /* Optional fields */
-    if (ff_AMediaFormat_getInt32(s->format, "crop-top", &value))
-        s->crop_top = value;
-
-    if (ff_AMediaFormat_getInt32(s->format, "crop-bottom", &value))
-        s->crop_bottom = value;
-
-    if (ff_AMediaFormat_getInt32(s->format, "crop-left", &value))
-        s->crop_left = value;
-
-    if (ff_AMediaFormat_getInt32(s->format, "crop-right", &value))
-        s->crop_right = value;
+    AMEDIAFORMAT_GET_INT32(s->crop_top,    "crop-top",    0);
+    AMEDIAFORMAT_GET_INT32(s->crop_bottom, "crop-bottom", 0);
+    AMEDIAFORMAT_GET_INT32(s->crop_left,   "crop-left",   0);
+    AMEDIAFORMAT_GET_INT32(s->crop_right,  "crop-right",  0);
 
     width = s->crop_right + 1 - s->crop_left;
     height = s->crop_bottom + 1 - s->crop_top;
@@ -434,9 +411,12 @@ static int mediacodec_dec_parse_format(AVCodecContext *avctx, MediaCodecDecConte
         s->crop_top, s->crop_bottom, s->crop_left, s->crop_right,
         width, height);
 
+    av_freep(&format);
     return ff_set_dimensions(avctx, width, height);
+fail:
+    av_freep(&format);
+    return ret;
 }
-
 
 static int mediacodec_dec_flush_codec(AVCodecContext *avctx, MediaCodecDecContext *s)
 {
@@ -448,6 +428,7 @@ static int mediacodec_dec_flush_codec(AVCodecContext *avctx, MediaCodecDecContex
     s->draining = 0;
     s->flushing = 0;
     s->eos = 0;
+    atomic_fetch_add(&s->serial, 1);
 
     status = ff_AMediaCodec_flush(codec);
     if (status < 0) {
@@ -471,7 +452,9 @@ int ff_mediacodec_dec_init(AVCodecContext *avctx, MediaCodecDecContext *s,
         AV_PIX_FMT_NONE,
     };
 
+    s->avctx = avctx;
     atomic_init(&s->refcount, 1);
+    atomic_init(&s->serial, 1);
 
     pix_fmt = ff_get_format(avctx, pix_fmts);
     if (pix_fmt == AV_PIX_FMT_MEDIACODEC) {
@@ -616,8 +599,8 @@ int ff_mediacodec_dec_send(AVCodecContext *avctx, MediaCodecDecContext *s,
                 return AVERROR_EXTERNAL;
             }
 
-            av_log(avctx, AV_LOG_TRACE, "Queued input buffer %zd"
-                    " size=%zd ts=%" PRIi64 "\n", index, size, pts);
+            av_log(avctx, AV_LOG_TRACE,
+                   "Queued input buffer %zd size=%zd ts=%"PRIi64"\n", index, size, pts);
 
             s->draining = 1;
             break;
@@ -637,6 +620,9 @@ int ff_mediacodec_dec_send(AVCodecContext *avctx, MediaCodecDecContext *s,
                 av_log(avctx, AV_LOG_ERROR, "Failed to queue input buffer (status = %d)\n", status);
                 return AVERROR_EXTERNAL;
             }
+
+            av_log(avctx, AV_LOG_TRACE,
+                   "Queued input buffer %zd size=%zd ts=%"PRIi64"\n", index, size, pts);
         }
     }
 
