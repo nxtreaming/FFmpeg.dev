@@ -40,15 +40,13 @@
 #include "buffer.h"
 #include "common.h"
 #include "hwcontext.h"
+#include "hwcontext_drm.h"
 #include "hwcontext_internal.h"
 #include "hwcontext_vaapi.h"
 #include "mem.h"
 #include "pixdesc.h"
 #include "pixfmt.h"
 
-#if CONFIG_LIBDRM
-#   include "hwcontext_drm.h"
-#endif
 
 typedef struct VAAPIDevicePriv {
 #if HAVE_VAAPI_X11
@@ -1324,7 +1322,7 @@ static int vaapi_device_create(AVHWDeviceContext *ctx, const char *device,
 static int vaapi_device_derive(AVHWDeviceContext *ctx,
                                AVHWDeviceContext *src_ctx, int flags)
 {
-#if CONFIG_LIBDRM
+#if HAVE_VAAPI_DRM
     if (src_ctx->type == AV_HWDEVICE_TYPE_DRM) {
         AVDRMDeviceContext *src_hwctx = src_ctx->hwctx;
         VADisplay *display;
