@@ -149,6 +149,7 @@ static void register_all(void)
     REGISTER_FILTER(ASS,            ass,            vf);
     REGISTER_FILTER(ATADENOISE,     atadenoise,     vf);
     REGISTER_FILTER(AVGBLUR,        avgblur,        vf);
+    REGISTER_FILTER(AVGBLUR_OPENCL, avgblur_opencl, vf);
     REGISTER_FILTER(BBOX,           bbox,           vf);
     REGISTER_FILTER(BENCH,          bench,          vf);
     REGISTER_FILTER(BITPLANENOISE,  bitplanenoise,  vf);
@@ -167,6 +168,7 @@ static void register_all(void)
     REGISTER_FILTER(COLORMATRIX,    colormatrix,    vf);
     REGISTER_FILTER(COLORSPACE,     colorspace,     vf);
     REGISTER_FILTER(CONVOLUTION,    convolution,    vf);
+    REGISTER_FILTER(CONVOLUTION_OPENCL, convolution_opencl, vf);
     REGISTER_FILTER(CONVOLVE,       convolve,       vf);
     REGISTER_FILTER(COPY,           copy,           vf);
     REGISTER_FILTER(COREIMAGE,      coreimage,      vf);

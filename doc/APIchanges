@@ -15,6 +15,16 @@ libavutil:     2017-10-21
 
 API changes, most recent first:
 
+2018-03-xx - xxxxxxx - lavc 58.16.100 - avcodec.h
+  Add FF_SUB_CHARENC_MODE_IGNORE.
+
+2018-03-23 - xxxxxxx - lavu 56.12.100 - encryption_info.h
+  Add AVEncryptionInitInfo and AVEncryptionInfo structures to hold new side-data
+  for encryption info.
+
+2018-03-21 - xxxxxxx - lavc 58.15.100 - avcodec.h
+  Add av_packet_make_writable().
+
 2018-03-18 - xxxxxxx - lavu 56.11.100 - frame.h
   Add AV_FRAME_DATA_QP_TABLE_PROPERTIES and AV_FRAME_DATA_QP_TABLE_DATA.
 

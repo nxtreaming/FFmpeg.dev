@@ -509,7 +509,7 @@ An Anti-Aliasing setting is able to produce "softer" crushing sounds.
 Another feature of this filter is the logarithmic mode.
 This setting switches from linear distances between bits to logarithmic ones.
 The result is a much more "natural" sounding crusher which doesn't gate low
-signals for example. The human ear has a logarithmic perception, too
+signals for example. The human ear has a logarithmic perception,
 so this kind of crushing is much more pleasant.
 Logarithmic crushing is also able to get anti-aliased.
 
@@ -2188,6 +2188,10 @@ The channel layout of the output stream.
 If no mapping is present, the filter will implicitly map input channels to
 output channels, preserving indices.
 
+@subsection Examples
+
+@itemize
+@item
 For example, assuming a 5.1+downmix input MOV file,
 @example
 ffmpeg -i in.mov -filter 'channelmap=map=DL-FL|DR-FR' out.wav
@@ -2195,10 +2199,12 @@ ffmpeg -i in.mov -filter 'channelmap=map=DL-FL|DR-FR' out.wav
 will create an output WAV file tagged as stereo from the downmix channels of
 the input.
 
+@item
 To fix a 5.1 WAV improperly encoded in AAC's native channel order
 @example
 ffmpeg -i in.wav -filter 'channelmap=1|2|0|5|3|4:5.1' out.wav
 @end example
+@end itemize
 
 @section channelsplit
 
@@ -2208,8 +2214,17 @@ It accepts the following parameters:
 @table @option
 @item channel_layout
 The channel layout of the input stream. The default is "stereo".
+@item channels
+A channel layout describing the channels to be extracted as separate output streams
+or "all" to extract each input channel as a separate stream. The default is "all".
+
+Choosing channels not present in channel layout in the input will result in an error.
 @end table
 
+@subsection Examples
+
+@itemize
+@item
 For example, assuming a stereo input MP3 file,
 @example
 ffmpeg -i in.mp3 -filter_complex channelsplit out.mkv
@@ -2217,6 +2232,7 @@ ffmpeg -i in.mp3 -filter_complex channelsplit out.mkv
 will create an output Matroska file with two audio streams, one containing only
 the left channel and the other the right channel.
 
+@item
 Split a 5.1 WAV file into per-channel files:
 @example
 ffmpeg -i in.wav -filter_complex
@@ -2225,6 +2241,14 @@ ffmpeg -i in.wav -filter_complex
 front_center.wav -map '[LFE]' lfe.wav -map '[SL]' side_left.wav -map '[SR]'
 side_right.wav
 @end example
+
+@item
+Extract only LFE from a 5.1 WAV file:
+@example
+ffmpeg -i in.wav -filter_complex 'channelsplit=channel_layout=5.1:channels=LFE[LFE]'
+-map '[LFE]' lfe.wav
+@end example
+@end itemize
 
 @section chorus
 Add a chorus effect to the audio.
@@ -3582,7 +3606,7 @@ lv2=p=http\\\\://calf.sourceforge.net/plugins/BassEnhancer:c=amount=2
 @end example
 
 @item
-Apply bass vinyl plugin from Calf:
+Apply vinyl plugin from Calf:
 @example
 lv2=p=http\\\\://calf.sourceforge.net/plugins/Vinyl:c=drone=0.2|aging=0.5
 @end example
@@ -16491,6 +16515,9 @@ Luma and chroma combined together.
 @item aflat
 Similar as above, but shows difference between blue and red chroma.
 
+@item xflat
+Similar as above, but use different colors.
+
 @item chroma
 Displays only chroma.
 
@@ -16510,6 +16537,9 @@ Do not display graticule.
 
 @item green
 Display green graticule showing legal broadcast ranges.
+
+@item orange
+Display orange graticule showing legal broadcast ranges.
 @end table
 
 @item opacity, o
@@ -19935,8 +19965,15 @@ Set orientation, can be @code{horizontal} or @code{vertical},
 default is @code{horizontal}.
 
 @item s
-Set step size, allowed range s [0, 5]. Default is 0, which means
+Set step size, allowed range is [0, 5]. Default is 0, which means
 step is disabled.
+
+@item p
+Set background opacity, allowed range is [0, 1]. Default is 0.
+
+@item m
+Set metering mode, can be peak: @code{p} or rms: @code{r},
+default is @code{p}.
 @end table
 
 @section showwaves
@@ -20006,6 +20043,20 @@ Cubic root.
 @end table
 
 Default is linear.
+
+@item draw
+Set the draw mode. This is mostly useful to set for high @var{n}.
+
+Available values are:
+@table @samp
+@item scale
+Scale pixel values for each drawn sample.
+
+@item full
+Draw every sample directly.
+@end table
+
+Default value is @code{scale}.
 @end table
 
 @subsection Examples
