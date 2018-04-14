@@ -173,6 +173,7 @@ typedef struct HLSContext {
     float time;            // Set by a private option.
     float init_time;       // Set by a private option.
     int max_nb_segments;   // Set by a private option.
+    int hls_delete_threshold; // Set by a private option.
 #if FF_API_HLS_WRAP
     int  wrap;             // Set by a private option.
 #endif
@@ -445,6 +446,7 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
     HLSSegment *segment, *previous_segment = NULL;
     float playlist_duration = 0.0f;
     int ret = 0, path_size, sub_path_size;
+    int segment_cnt = 0;
     char *dirname = NULL, *p, *sub_path;
     char *path = NULL;
     AVDictionary *options = NULL;
@@ -458,11 +460,17 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
     }
 
     segment = vs->old_segments;
+    segment_cnt = 0;
     while (segment) {
         playlist_duration -= segment->duration;
         previous_segment = segment;
         segment = previous_segment->next;
+        segment_cnt++;
         if (playlist_duration <= -previous_segment->duration) {
+            previous_segment->next = NULL;
+            break;
+        }
+        if (segment_cnt >= hls->hls_delete_threshold) {
             previous_segment->next = NULL;
             break;
         }
@@ -694,14 +702,6 @@ static int hls_encryption_start(AVFormatContext *s)
     ff_data_to_hex(hls->key_string, key, sizeof(key), 0);
 
     return 0;
-}
-
-static int read_chomp_line(AVIOContext *s, char *buf, int maxlen)
-{
-    int len = ff_get_line(s, buf, maxlen);
-    while (len > 0 && av_isspace(buf[len - 1]))
-        buf[--len] = '\0';
-    return len;
 }
 
 static int hls_mux_init(AVFormatContext *s, VariantStream *vs)
@@ -1072,7 +1072,7 @@ static int parse_playlist(AVFormatContext *s, const char *url, VariantStream *vs
                                    s->protocol_whitelist, s->protocol_blacklist)) < 0)
         return ret;
 
-    read_chomp_line(in, line, sizeof(line));
+    ff_get_chomp_line(in, line, sizeof(line));
     if (strcmp(line, "#EXTM3U")) {
         ret = AVERROR_INVALIDDATA;
         goto fail;
@@ -1080,7 +1080,7 @@ static int parse_playlist(AVFormatContext *s, const char *url, VariantStream *vs
 
     vs->discontinuity = 0;
     while (!avio_feof(in)) {
-        read_chomp_line(in, line, sizeof(line));
+        ff_get_chomp_line(in, line, sizeof(line));
         if (av_strstart(line, "#EXT-X-MEDIA-SEQUENCE:", &ptr)) {
             int64_t tmp_sequence = strtoll(ptr, NULL, 10);
             if (tmp_sequence < vs->sequence)
@@ -2799,6 +2799,7 @@ static const AVOption options[] = {
     {"hls_time",      "set segment length in seconds",           OFFSET(time),    AV_OPT_TYPE_FLOAT,  {.dbl = 2},     0, FLT_MAX, E},
     {"hls_init_time", "set segment length in seconds at init list",           OFFSET(init_time),    AV_OPT_TYPE_FLOAT,  {.dbl = 0},     0, FLT_MAX, E},
     {"hls_list_size", "set maximum number of playlist entries",  OFFSET(max_nb_segments),    AV_OPT_TYPE_INT,    {.i64 = 5},     0, INT_MAX, E},
+    {"hls_delete_threshold", "set number of unreferenced segments to keep before deleting",  OFFSET(hls_delete_threshold),    AV_OPT_TYPE_INT,    {.i64 = 1},     1, INT_MAX, E},
     {"hls_ts_options","set hls mpegts list of options for the container format used for hls", OFFSET(format_options_str), AV_OPT_TYPE_STRING, {.str = NULL},  0, 0,    E},
     {"hls_vtt_options","set hls vtt list of options for the container format used for hls", OFFSET(vtt_format_options_str), AV_OPT_TYPE_STRING, {.str = NULL},  0, 0,    E},
 #if FF_API_HLS_WRAP

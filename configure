@@ -5009,6 +5009,7 @@ case $target_os in
         add_cppflags '-I\$(SRC_PATH)/compat/aix'
         enabled shared && add_ldflags -Wl,-brtl
         arflags='-Xany -r -c'
+        striptype=""
         ;;
     android)
         disable symver
@@ -5047,6 +5048,7 @@ case $target_os in
         ;;
     openbsd|bitrig)
         disable symver
+        striptype=""
         SHFLAGS='-shared'
         SLIB_INSTALL_NAME='$(SLIBNAME).$(LIBMAJOR).$(LIBMINOR)'
         SLIB_INSTALL_LINKS=
@@ -5823,7 +5825,7 @@ check_header asm/types.h
 # it seems there are versions of clang in some distros that try to use the
 # gcc headers, which explodes for stdatomic
 # so we also check that atomics actually work here
-check_builtin stdatomic stdatomic.h "atomic_int foo, bar = ATOMIC_VAR_INIT(-1); atomic_store(&foo, 0)"
+check_builtin stdatomic stdatomic.h "atomic_int foo, bar = ATOMIC_VAR_INIT(-1); atomic_store(&foo, 0); foo += bar"
 
 check_lib advapi32 "windows.h"            RegCloseKey          -ladvapi32
 check_lib ole32    "windows.h"            CoTaskMemFree        -lole32

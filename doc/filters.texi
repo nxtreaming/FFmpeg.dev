@@ -3175,6 +3175,10 @@ Default is @var{freq}.
 
 @item lfe
 Set custom gain for LFE channels. Value is in dB. Default is 0.
+
+@item size
+Set size of frame in number of samples which will be processed at once.
+Default value is @var{1024}. Allowed range is from 1024 to 96000.
 @end table
 
 @subsection Examples
@@ -10373,15 +10377,17 @@ The filter accepts the following options:
 @item cx
 Relative x-coordinate of the focal point of the image, and thereby the center of the
 distortion. This value has a range [0,1] and is expressed as fractions of the image
-width.
+width. Default is 0.5.
 @item cy
 Relative y-coordinate of the focal point of the image, and thereby the center of the
 distortion. This value has a range [0,1] and is expressed as fractions of the image
-height.
+height. Default is 0.5.
 @item k1
-Coefficient of the quadratic correction term. 0.5 means no correction.
+Coefficient of the quadratic correction term. This value has a range [-1,1]. 0 means
+no correction. Default is 0.
 @item k2
-Coefficient of the double quadratic correction term. 0.5 means no correction.
+Coefficient of the double quadratic correction term. This value has a range [-1,1].
+0 means no correction. Default is 0.
 @end table
 
 The formula that generates the correction is:
@@ -16245,6 +16251,17 @@ For example, to vertically flip a video with @command{ffmpeg}:
 @example
 ffmpeg -i in.avi -vf "vflip" out.avi
 @end example
+
+@section vfrdet
+
+Detect variable frame rate video.
+
+This filter tries to detect if the input is variable or constant frame rate.
+
+At end it will output number of frames detected as having variable delta pts,
+and ones with constant delta pts.
+If there was frames with variable delta, than it will also show min and max delta
+encountered.
 
 @anchor{vignette}
 @section vignette
