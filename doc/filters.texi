@@ -959,6 +959,10 @@ Set Impulse Response filter length. Default is 1, which means whole IR is proces
 
 @item again
 Enable applying gain measured from power of IR.
+
+@item maxir
+Set max allowed Impulse Response filter duration in seconds. Default is 30 seconds.
+Allowed range is 0.1 to 60 seconds.
 @end table
 
 @subsection Examples
@@ -2053,7 +2057,7 @@ Change bandreject width.
 Syntax for the command is : "@var{width}"
 @end table
 
-@section bass
+@section bass, lowshelf
 
 Boost or cut the bass (lower) frequencies of the audio using a two-pole
 shelving filter with a response similar to that of a standard
@@ -3179,6 +3183,17 @@ Set custom gain for LFE channels. Value is in dB. Default is 0.
 @item size
 Set size of frame in number of samples which will be processed at once.
 Default value is @var{1024}. Allowed range is from 1024 to 96000.
+
+@item hrir
+Set format of hrir stream.
+Default value is @var{stereo}. Alternative value is @var{multich}.
+If value is set to @var{stereo}, number of additional streams should
+be greater or equal to number of input channels in first input stream.
+Also each additional stream should have stereo number of channels.
+If value is set to @var{multich}, number of additional streams should
+be exactly one. Also number of input channels of additional stream
+should be equal or greater than twice number of channels of first input
+stream.
 @end table
 
 @subsection Examples
@@ -3190,6 +3205,14 @@ each amovie filter use stereo file with IR coefficients as input.
 The files give coefficients for each position of virtual loudspeaker:
 @example
 ffmpeg -i input.wav -lavfi-complex "amovie=azi_270_ele_0_DFC.wav[sr],amovie=azi_90_ele_0_DFC.wav[sl],amovie=azi_225_ele_0_DFC.wav[br],amovie=azi_135_ele_0_DFC.wav[bl],amovie=azi_0_ele_0_DFC.wav,asplit[fc][lfe],amovie=azi_35_ele_0_DFC.wav[fl],amovie=azi_325_ele_0_DFC.wav[fr],[a:0][fl][fr][fc][lfe][bl][br][sl][sr]headphone=FL|FR|FC|LFE|BL|BR|SL|SR"
+output.wav
+@end example
+
+@item
+Full example using wav files as coefficients with amovie filters for 7.1 downmix,
+but now in @var{multich} @var{hrir} format.
+@example
+ffmpeg -i input.wav -lavfi-complex "amovie=minp.wav[hrirs],[a:0][hrirs]headphone=map=FL|FR|FC|LFE|BL|BR|SL|SR:hrir=multich"
 output.wav
 @end example
 @end itemize
@@ -4409,7 +4432,7 @@ Set LFE input volume. By default, this is @var{1}.
 Set LFE output volume. By default, this is @var{1}.
 @end table
 
-@section treble
+@section treble, highshelf
 
 Boost or cut treble (upper) frequencies of the audio using a two-pole
 shelving filter with a response similar to that of a standard
@@ -19995,6 +20018,20 @@ Set background opacity, allowed range is [0, 1]. Default is 0.
 @item m
 Set metering mode, can be peak: @code{p} or rms: @code{r},
 default is @code{p}.
+
+@item ds
+Set display scale, can be linear: @code{lin} or log: @code{log},
+default is @code{lin}.
+
+@item dm
+In second.
+If set to > 0., display a line for the max level
+in the previous seconds.
+default is disabled: @code{0.}
+
+@item dmc
+The color of the max line. Use when @code{dm} option is set to > 0.
+default is: @code{orange}
 @end table
 
 @section showwaves
