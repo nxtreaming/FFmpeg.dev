@@ -1,6 +1,10 @@
 #!/bin/bash
 
 #
+# Note for libsrt
+# Please add  "-lstdc++ -lm" to /usr/local/lib/x86_64-linux-gnu/pkgconfig/srt.pc
+# 
+#
 # Note: the Native rtmp protocol will cause VLC and iPhone break on audio playback
 # Please add -ldl to: /usr/local/ssl/lib/pkgconfig/libcrypto.pc firstly
 #
@@ -27,6 +31,7 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --disable-cuvid                      \
 --enable-openssl                     \
 --enable-libopus                     \
+--enable-libsrt                      \
 --enable-decoder=libopus             \
 --enable-encoder=libopus             \
 --enable-parser=opus                 \
