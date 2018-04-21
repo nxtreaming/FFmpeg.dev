@@ -34,6 +34,8 @@
 #include "os_support.h"
 #include "url.h"
 
+#define UDP_MAX_PKT_SIZE 65536
+
 enum SRTMode {
     SRT_MODE_CALLER = 0,
     SRT_MODE_LISTENER = 1,
@@ -48,6 +50,7 @@ typedef struct SRTContext {
     int64_t listen_timeout;
     int recv_buffer_size;
     int send_buffer_size;
+    int pkt_size;
 
     int64_t maxbw;
     int pbkeylen;
@@ -73,6 +76,7 @@ static const AVOption libsrt_options[] = {
     { "listen_timeout", "Connection awaiting timeout",                                          OFFSET(listen_timeout),   AV_OPT_TYPE_INT64, { .i64 = -1 }, -1, INT64_MAX, .flags = D|E },
     { "send_buffer_size", "Socket send buffer size (in bytes)",                                 OFFSET(send_buffer_size), AV_OPT_TYPE_INT,      { .i64 = -1 }, -1, INT_MAX,   .flags = D|E },
     { "recv_buffer_size", "Socket receive buffer size (in bytes)",                              OFFSET(recv_buffer_size), AV_OPT_TYPE_INT,      { .i64 = -1 }, -1, INT_MAX,   .flags = D|E },
+    { "pkt_size",       "Maximum UDP packet size",                                              OFFSET(pkt_size),         AV_OPT_TYPE_INT,      { .i64 = 1316 }, -1, INT_MAX, .flags = D|E },
     { "maxbw",          "Maximum bandwidth (bytes per second) that the connection can use",     OFFSET(maxbw),            AV_OPT_TYPE_INT64,    { .i64 = -1 }, -1, INT64_MAX, .flags = D|E },
     { "pbkeylen",       "Crypto key len in bytes {16,24,32} Default: 16 (128-bit)",             OFFSET(pbkeylen),         AV_OPT_TYPE_INT,      { .i64 = -1 }, -1, 32,        .flags = D|E },
     { "passphrase",     "Crypto PBKDF2 Passphrase size[0,10..64] 0:disable crypto",             OFFSET(passphrase),       AV_OPT_TYPE_STRING,   { .str = NULL },              .flags = D|E },
@@ -301,6 +305,9 @@ static int libsrt_setup(URLContext *h, const char *uri, int flags)
         return libsrt_neterrno(h);
     s->eid = eid;
 
+    if (s->pkt_size > 0)
+        h->max_packet_size = s->pkt_size;
+
     av_url_split(proto, sizeof(proto), NULL, 0, hostname, sizeof(hostname),
         &port, path, sizeof(path), uri);
     if (strcmp(proto, "srt"))
@@ -316,6 +323,9 @@ static int libsrt_setup(URLContext *h, const char *uri, int flags)
         }
         if (av_find_info_tag(buf, sizeof(buf), "listen_timeout", p)) {
             s->listen_timeout = strtol(buf, NULL, 10);
+        }
+        if (av_find_info_tag(buf, sizeof(buf), "pkt_size", 0)) {
+            s->pkt_size = strtol(buf, NULL, 10);
         }
     }
     if (s->rw_timeout >= 0) {
@@ -380,6 +390,11 @@ static int libsrt_setup(URLContext *h, const char *uri, int flags)
         goto fail;
     }
 
+    if (flags & AVIO_FLAG_WRITE) {
+        h->max_packet_size = s->pkt_size;
+    } else {
+        h->max_packet_size = UDP_MAX_PKT_SIZE;
+    }
     h->is_streamed = 1;
     s->fd = fd;
 
