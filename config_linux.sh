@@ -3,7 +3,7 @@
 #
 # Note for libsrt
 # Please add  "-lstdc++ -lm" to /usr/local/lib/x86_64-linux-gnu/pkgconfig/srt.pc
-# 
+#
 #
 # Note: the Native rtmp protocol will cause VLC and iPhone break on audio playback
 # Please add -ldl to: /usr/local/ssl/lib/pkgconfig/libcrypto.pc firstly
