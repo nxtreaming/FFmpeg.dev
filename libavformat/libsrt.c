@@ -327,6 +327,9 @@ static int libsrt_setup(URLContext *h, const char *uri, int flags)
         if (av_find_info_tag(buf, sizeof(buf), "pkt_size", p)) {
             s->pkt_size = strtol(buf, NULL, 10);
         }
+        if (av_find_info_tag(buf, sizeof(buf), "buffer_size", p)) {
+            s->send_buffer_size = strtol(buf, NULL, 10);
+        }
     }
     if (s->rw_timeout >= 0) {
         open_timeout = h->rw_timeout = s->rw_timeout;
