@@ -19,7 +19,12 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#ifndef AVCODEC_ATRAC9TAB_H
+#define AVCODEC_ATRAC9TAB_H
+
 #include <stdint.h>
+
+#include "libavutil/channel_layout.h"
 
 enum ATRAC9BlockType {
     ATRAC9_BLOCK_TYPE_SCE, /* Single channel */
@@ -1624,3 +1629,5 @@ static const HuffmanCodebook at9_huffman_coeffs[][8][4] = {
         },
     },
 };
+
+#endif /* AVCODEC_ATRAC9TAB_H */
