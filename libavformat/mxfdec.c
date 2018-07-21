@@ -423,7 +423,7 @@ static int mxf_get_stream_index(AVFormatContext *s, KLVPacket *klv, int body_sid
             return i;
     }
     /* return 0 if only one stream, for OP Atom files with 0 as track number */
-    return s->nb_streams == 1 ? 0 : -1;
+    return s->nb_streams == 1 && s->streams[0]->priv_data ? 0 : -1;
 }
 
 static int find_body_sid_by_offset(MXFContext *mxf, int64_t offset)
@@ -2631,7 +2631,8 @@ static int mxf_read_local_tags(MXFContext *mxf, KLVPacket *klv, MXFMetadataReadF
         if (ctx_size && tag == 0x3C0A) {
             avio_read(pb, ctx->uid, 16);
         } else if ((ret = read_child(ctx, pb, tag, size, uid, -1)) < 0) {
-            mxf_free_metadataset(&ctx, !!ctx_size);
+            if (ctx_size)
+                mxf_free_metadataset(&ctx, 1);
             return ret;
         }
 
@@ -2640,7 +2641,7 @@ static int mxf_read_local_tags(MXFContext *mxf, KLVPacket *klv, MXFMetadataReadF
         if (avio_tell(pb) > klv_end) {
             if (ctx_size) {
                 ctx->type = type;
-                mxf_free_metadataset(&ctx, !!ctx_size);
+                mxf_free_metadataset(&ctx, 1);
             }
 
             av_log(mxf->fc, AV_LOG_ERROR,

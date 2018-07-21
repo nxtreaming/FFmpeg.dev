@@ -765,7 +765,8 @@ static int mov_read_hdlr(MOVContext *c, AVIOContext *pb, MOVAtom atom)
         title_str[title_size] = 0;
         if (title_str[0]) {
             int off = (!c->isom && title_str[0] == title_size - 1);
-            av_dict_set(&st->metadata, "handler_name", title_str + off, 0);
+            // flag added so as to not set stream handler name if already set from mdia->hdlr
+            av_dict_set(&st->metadata, "handler_name", title_str + off, AV_DICT_DONT_OVERWRITE);
         }
         av_freep(&title_str);
     }
@@ -3301,22 +3302,21 @@ static void mov_estimate_video_delay(MOVContext *c, AVStream* st) {
     int ctts_sample = 0;
     int64_t pts_buf[MAX_REORDER_DELAY + 1]; // Circular buffer to sort pts.
     int buf_start = 0;
-    int buf_size = 0;
     int j, r, num_swaps;
+
+    for (j = 0; j < MAX_REORDER_DELAY + 1; j++)
+        pts_buf[j] = INT64_MIN;
 
     if (st->codecpar->video_delay <= 0 && msc->ctts_data &&
         st->codecpar->codec_id == AV_CODEC_ID_H264) {
         st->codecpar->video_delay = 0;
         for(ind = 0; ind < st->nb_index_entries && ctts_ind < msc->ctts_count; ++ind) {
-            if (buf_size == (MAX_REORDER_DELAY + 1)) {
-                // If circular buffer is full, then move the first element forward.
-                buf_start = (buf_start + 1) % buf_size;
-            } else {
-                ++buf_size;
-            }
-
             // Point j to the last elem of the buffer and insert the current pts there.
-            j = (buf_start + buf_size - 1) % buf_size;
+            j = buf_start;
+            buf_start = (buf_start + 1);
+            if (buf_start == MAX_REORDER_DELAY + 1)
+                buf_start = 0;
+
             pts_buf[j] = st->index_entries[ind].timestamp + msc->ctts_data[ctts_ind].duration;
 
             // The timestamps that are already in the sorted buffer, and are greater than the
@@ -3327,10 +3327,13 @@ static void mov_estimate_video_delay(MOVContext *c, AVStream* st) {
             // go through, to keep this buffer in sorted order.
             num_swaps = 0;
             while (j != buf_start) {
-                r = (j - 1 + buf_size) % buf_size;
+                r = j - 1;
+                if (r < 0) r = MAX_REORDER_DELAY;
                 if (pts_buf[j] < pts_buf[r]) {
                     FFSWAP(int64_t, pts_buf[j], pts_buf[r]);
                     ++num_swaps;
+                } else {
+                    break;
                 }
                 j = r;
             }
@@ -5182,6 +5185,36 @@ static int mov_read_tmcd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     return 0;
 }
 
+static int mov_read_av1c(MOVContext *c, AVIOContext *pb, MOVAtom atom)
+{
+    AVStream *st;
+    int ret, version;
+
+    if (c->fc->nb_streams < 1)
+        return 0;
+    st = c->fc->streams[c->fc->nb_streams - 1];
+
+    if (atom.size < 5) {
+        av_log(c->fc, AV_LOG_ERROR, "Empty AV1 Codec Configuration Box\n");
+        return AVERROR_INVALIDDATA;
+    }
+
+    version = avio_r8(pb);
+    if (version != 0) {
+        av_log(c->fc, AV_LOG_WARNING, "Unknown AV1 Codec Configuration Box version %d\n", version);
+        return 0;
+    }
+    avio_skip(pb, 3); /* flags */
+
+    avio_skip(pb, 1); /* reserved, initial_presentation_delay_present, initial_presentation_delay_minus_one */
+
+    ret = ff_get_extradata(c->fc, st->codecpar, pb, atom.size - 5);
+    if (ret < 0)
+        return ret;
+
+    return 0;
+}
+
 static int mov_read_vpcc(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     AVStream *st;
@@ -6619,6 +6652,7 @@ static const MOVParseTableEntry mov_default_parse_table[] = {
 { MKTAG('A','A','L','P'), mov_read_avid },
 { MKTAG('A','R','E','S'), mov_read_ares },
 { MKTAG('a','v','s','s'), mov_read_avss },
+{ MKTAG('a','v','1','C'), mov_read_av1c },
 { MKTAG('c','h','p','l'), mov_read_chpl },
 { MKTAG('c','o','6','4'), mov_read_stco },
 { MKTAG('c','o','l','r'), mov_read_colr },
