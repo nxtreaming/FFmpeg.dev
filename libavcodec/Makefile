@@ -946,6 +946,7 @@ OBJS-$(CONFIG_LIBAOM_AV1_ENCODER)         += libaomenc.o
 OBJS-$(CONFIG_LIBCELT_DECODER)            += libcelt_dec.o
 OBJS-$(CONFIG_LIBCODEC2_DECODER)          += libcodec2.o codec2utils.o
 OBJS-$(CONFIG_LIBCODEC2_ENCODER)          += libcodec2.o codec2utils.o
+OBJS-$(CONFIG_LIBDAVS2_DECODER)           += libdavs2.o
 OBJS-$(CONFIG_LIBFDK_AAC_DECODER)         += libfdk-aacdec.o
 OBJS-$(CONFIG_LIBFDK_AAC_ENCODER)         += libfdk-aacenc.o
 OBJS-$(CONFIG_LIBGSM_DECODER)             += libgsmdec.o
@@ -996,6 +997,7 @@ OBJS-$(CONFIG_AAC_PARSER)              += aac_parser.o aac_ac3_parser.o \
                                           mpeg4audio.o
 OBJS-$(CONFIG_AC3_PARSER)              += ac3tab.o aac_ac3_parser.o
 OBJS-$(CONFIG_ADX_PARSER)              += adx_parser.o adx.o
+OBJS-$(CONFIG_AVS2_PARSER)             += avs2_parser.o
 OBJS-$(CONFIG_BMP_PARSER)              += bmp_parser.o
 OBJS-$(CONFIG_CAVSVIDEO_PARSER)        += cavs_parser.o
 OBJS-$(CONFIG_COOK_PARSER)             += cook_parser.o
