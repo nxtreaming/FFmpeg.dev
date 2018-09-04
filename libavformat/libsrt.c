@@ -58,7 +58,6 @@ typedef struct SRTContext {
     int64_t listen_timeout;
     int recv_buffer_size;
     int send_buffer_size;
-    int pkt_size;
 
     int64_t maxbw;
     int pbkeylen;
@@ -336,9 +335,6 @@ static int libsrt_setup(URLContext *h, const char *uri, int flags)
         return libsrt_neterrno(h);
     s->eid = eid;
 
-    if (s->pkt_size > 0)
-        h->max_packet_size = s->pkt_size;
-
     av_url_split(proto, sizeof(proto), NULL, 0, hostname, sizeof(hostname),
         &port, path, sizeof(path), uri);
     if (strcmp(proto, "srt"))
@@ -354,9 +350,6 @@ static int libsrt_setup(URLContext *h, const char *uri, int flags)
         }
         if (av_find_info_tag(buf, sizeof(buf), "listen_timeout", p)) {
             s->listen_timeout = strtol(buf, NULL, 10);
-        }
-        if (av_find_info_tag(buf, sizeof(buf), "pkt_size", p)) {
-            s->pkt_size = strtol(buf, NULL, 10);
         }
         if (av_find_info_tag(buf, sizeof(buf), "buffer_size", p)) {
             s->send_buffer_size = strtol(buf, NULL, 10);
