@@ -1296,7 +1296,7 @@ static int64_t calc_cur_seg_no(AVFormatContext *s, struct representation *pls)
             if (pls->presentation_timeoffset) {
                 num = pls->presentation_timeoffset * pls->fragment_timescale / pls->fragment_duration;
             } else if (c->publish_time > 0 && !c->availability_start_time) {
-                num = pls->first_seq_no + (((c->publish_time - c->availability_start_time) - c->suggested_presentation_delay) * pls->fragment_timescale) / pls->fragment_duration;
+                num = pls->first_seq_no + (((c->publish_time - c->time_shift_buffer_depth + pls->fragment_duration) - c->suggested_presentation_delay) * pls->fragment_timescale) / pls->fragment_duration;
             } else {
                 num = pls->first_seq_no + (((get_current_time_in_sec() - c->availability_start_time) - c->suggested_presentation_delay) * pls->fragment_timescale) / pls->fragment_duration;
             }
@@ -1777,6 +1777,12 @@ static int reopen_demux_for_component(AVFormatContext *s, struct representation 
     if (pls->ctx) {
         close_demux_for_component(pls);
     }
+
+    if (ff_check_interrupt(&s->interrupt_callback)) {
+        ret = AVERROR_EXIT;
+        goto fail;
+    }
+
     if (!(pls->ctx = avformat_alloc_context())) {
         ret = AVERROR(ENOMEM);
         goto fail;

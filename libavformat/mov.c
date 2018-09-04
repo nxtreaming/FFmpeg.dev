@@ -2558,7 +2558,8 @@ static int mov_read_stsd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     avio_rb24(pb); /* flags */
     entries = avio_rb32(pb);
 
-    if (entries <= 0) {
+    /* Each entry contains a size (4 bytes) and format (4 bytes). */
+    if (entries <= 0 || entries > atom.size / 8) {
         av_log(c->fc, AV_LOG_ERROR, "invalid STSD entries %d\n", entries);
         return AVERROR_INVALIDDATA;
     }
@@ -5845,6 +5846,9 @@ static int get_current_encryption_info(MOVContext *c, MOVEncryptionIndex **encry
         *sc = st->priv_data;
 
         if (!frag_stream_info->encryption_index) {
+            // If this stream isn't encrypted, don't create the index.
+            if (!(*sc)->cenc.default_encrypted_sample)
+                return 0;
             frag_stream_info->encryption_index = av_mallocz(sizeof(*frag_stream_info->encryption_index));
             if (!frag_stream_info->encryption_index)
                 return AVERROR(ENOMEM);
@@ -5860,6 +5864,9 @@ static int get_current_encryption_info(MOVContext *c, MOVEncryptionIndex **encry
         *sc = st->priv_data;
 
         if (!(*sc)->cenc.encryption_index) {
+            // If this stream isn't encrypted, don't create the index.
+            if (!(*sc)->cenc.default_encrypted_sample)
+                return 0;
             (*sc)->cenc.encryption_index = av_mallocz(sizeof(*frag_stream_info->encryption_index));
             if (!(*sc)->cenc.encryption_index)
                 return AVERROR(ENOMEM);
@@ -6608,7 +6615,7 @@ static int mov_read_dops(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     const int OPUS_SEEK_PREROLL_MS = 80;
     AVStream *st;
     size_t size;
-    int16_t pre_skip;
+    uint16_t pre_skip;
 
     if (c->fc->nb_streams < 1)
         return 0;

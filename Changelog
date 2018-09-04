@@ -18,6 +18,9 @@ version <next>:
 - colorconstancy filter
 - AVS2 video decoder via libdavs2
 - IMM4 video decoder
+- Brooktree ProSumer video decoder
+- MatchWare Screen Capture Codec decoder
+- WinCam Motion Video decoder
 
 
 version 4.0:
