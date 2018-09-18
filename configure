@@ -239,6 +239,7 @@ External library support:
   --enable-libiec61883     enable iec61883 via libiec61883 [no]
   --enable-libilbc         enable iLBC de/encoding via libilbc [no]
   --enable-libjack         enable JACK audio sound server [no]
+  --enable-libklvanc       enable Kernel Labs VANC processing [no]
   --enable-libkvazaar      enable HEVC encoding via libkvazaar [no]
   --enable-liblensfun      enable lensfun lens correction [no]
   --enable-libmodplug      enable ModPlug via libmodplug [no]
@@ -280,6 +281,7 @@ External library support:
   --enable-libx264         enable H.264 encoding via x264 [no]
   --enable-libx265         enable HEVC encoding via x265 [no]
   --enable-libxavs         enable AVS encoding via xavs [no]
+  --enable-libxavs2        enable AVS2 encoding via xavs2 [no]
   --enable-libxcb          enable X11 grabbing using XCB [autodetect]
   --enable-libxcb-shm      enable X11 grabbing shm communication [autodetect]
   --enable-libxcb-xfixes   enable X11 grabbing mouse rendering [autodetect]
@@ -1666,6 +1668,7 @@ EXTERNAL_LIBRARY_GPL_LIST="
     libx264
     libx265
     libxavs
+    libxavs2
     libxvid
 "
 
@@ -1720,6 +1723,7 @@ EXTERNAL_LIBRARY_LIST="
     libiec61883
     libilbc
     libjack
+    libklvanc
     libkvazaar
     libmodplug
     libmp3lame
@@ -2719,6 +2723,7 @@ qdm2_decoder_select="mdct rdft mpegaudiodsp"
 ra_144_decoder_select="audiodsp"
 ra_144_encoder_select="audio_frame_queue lpc audiodsp"
 ralf_decoder_select="golomb"
+rasc_decoder_deps="zlib"
 rawvideo_decoder_select="bswapdsp"
 rscc_decoder_deps="zlib"
 rtjpeg_decoder_select="me_cmp"
@@ -2737,6 +2742,7 @@ sonic_decoder_select="golomb rangecoder"
 sonic_encoder_select="golomb rangecoder"
 sonic_ls_encoder_select="golomb rangecoder"
 sp5x_decoder_select="mjpeg_decoder"
+speedhq_decoder_select="mpegvideo"
 srgc_decoder_deps="zlib"
 svq1_decoder_select="hpeldsp"
 svq1_encoder_select="hpeldsp me_cmp mpegvideoenc"
@@ -2923,6 +2929,7 @@ hwupload_cuda_filter_deps="ffnvcodec"
 scale_npp_filter_deps="ffnvcodec libnpp"
 scale_cuda_filter_deps="cuda_sdk"
 thumbnail_cuda_filter_deps="cuda_sdk"
+transpose_npp_filter_deps="ffnvcodec libnpp"
 
 amf_deps_any="libdl LoadLibrary"
 nvenc_deps="ffnvcodec"
@@ -3131,6 +3138,7 @@ libx264rgb_encoder_deps="libx264 x264_csp_bgr"
 libx264rgb_encoder_select="libx264_encoder"
 libx265_encoder_deps="libx265"
 libxavs_encoder_deps="libxavs"
+libxavs2_encoder_deps="libxavs2"
 libxvid_encoder_deps="libxvid"
 libzvbi_teletext_decoder_deps="libzvbi"
 vapoursynth_demuxer_deps="vapoursynth"
@@ -3233,6 +3241,7 @@ decklink_deps_any="libdl LoadLibrary"
 decklink_indev_deps="decklink threads"
 decklink_indev_extralibs="-lstdc++"
 decklink_outdev_deps="decklink threads"
+decklink_outdev_suggest="libklvanc"
 decklink_outdev_extralibs="-lstdc++"
 libndi_newtek_indev_deps="libndi_newtek"
 libndi_newtek_indev_extralibs="-lndi"
@@ -3342,6 +3351,8 @@ atempo_filter_select="rdft"
 avgblur_opencl_filter_deps="opencl"
 azmq_filter_deps="libzmq"
 blackframe_filter_deps="gpl"
+bm3d_filter_deps="avcodec"
+bm3d_filter_select="dct"
 boxblur_filter_deps="gpl"
 boxblur_opencl_filter_deps="opencl gpl"
 bs2b_filter_deps="libbs2b"
@@ -6068,6 +6079,7 @@ enabled libgsm            && { for gsm_hdr in "gsm.h" "gsm/gsm.h"; do
                                    check_lib libgsm "${gsm_hdr}" gsm_create -lgsm && break;
                                done || die "ERROR: libgsm not found"; }
 enabled libilbc           && require libilbc ilbc.h WebRtcIlbcfix_InitDecode -lilbc $pthreads_extralibs
+enabled libklvanc         && require libklvanc libklvanc/vanc.h klvanc_context_create -lklvanc
 enabled libkvazaar        && require_pkg_config libkvazaar "kvazaar >= 0.8.1" kvazaar.h kvz_api_get
 enabled liblensfun        && require_pkg_config liblensfun lensfun lensfun.h lf_db_new
 # While it may appear that require is being used as a pkg-config
@@ -6082,8 +6094,8 @@ enabled libmodplug        && require_pkg_config libmodplug libmodplug libmodplug
 enabled libmp3lame        && require "libmp3lame >= 3.98.3" lame/lame.h lame_set_VBR_quality -lmp3lame $libm_extralibs
 enabled libmysofa         && { check_pkg_config libmysofa libmysofa mysofa.h mysofa_load ||
                                require libmysofa mysofa.h mysofa_load -lmysofa $zlib_extralibs; }
-enabled libnpp            && { check_lib libnpp npp.h nppGetLibVersion -lnppig -lnppicc -lnppc ||
-                               check_lib libnpp npp.h nppGetLibVersion -lnppi -lnppc ||
+enabled libnpp            && { check_lib libnpp npp.h nppGetLibVersion -lnppig -lnppicc -lnppc -lnppidei ||
+                               check_lib libnpp npp.h nppGetLibVersion -lnppi -lnppc -lnppidei ||
                                die "ERROR: libnpp not found"; }
 enabled libopencore_amrnb && require libopencore_amrnb opencore-amrnb/interf_dec.h Decoder_Interface_init -lopencore-amrnb
 enabled libopencore_amrwb && require libopencore_amrwb opencore-amrwb/dec_if.h D_IF_init -lopencore-amrwb
@@ -6165,6 +6177,7 @@ enabled libx264           && { check_pkg_config libx264 x264 "stdint.h x264.h" x
 enabled libx265           && require_pkg_config libx265 x265 x265.h x265_api_get &&
                              require_cpp_condition libx265 x265.h "X265_BUILD >= 68"
 enabled libxavs           && require libxavs "stdint.h xavs.h" xavs_encoder_encode "-lxavs $pthreads_extralibs $libm_extralibs"
+enabled libxavs2          && require_pkg_config libxavs2 "xavs2 >= 1.2.77" "stdint.h xavs2.h" xavs2_api_get
 enabled libxvid           && require libxvid xvid.h xvid_global -lxvidcore
 enabled libzimg           && require_pkg_config libzimg "zimg >= 2.7.0" zimg.h zimg_get_api_version
 enabled libzmq            && require_pkg_config libzmq libzmq zmq.h zmq_ctx_new
@@ -6854,6 +6867,7 @@ enabled afir_filter         && prepend avfilter_deps "avcodec"
 enabled amovie_filter       && prepend avfilter_deps "avformat avcodec"
 enabled aresample_filter    && prepend avfilter_deps "swresample"
 enabled atempo_filter       && prepend avfilter_deps "avcodec"
+enabled bm3d_filter         && prepend avfilter_deps "avcodec"
 enabled cover_rect_filter   && prepend avfilter_deps "avformat avcodec"
 enabled convolve_filter     && prepend avfilter_deps "avcodec"
 enabled deconvolve_filter   && prepend avfilter_deps "avcodec"
