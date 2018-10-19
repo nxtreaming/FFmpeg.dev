@@ -30,6 +30,10 @@ version <next>:
 - amultiply filter
 - Block-Matching 3d (bm3d) denoising filter
 - acrossover filter
+- ilbc decoder
+- audio denoiser as afftdn filter
+- AV1 parser
+- SER demuxer
 
 
 version 4.0:

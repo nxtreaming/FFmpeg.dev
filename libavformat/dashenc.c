@@ -247,7 +247,9 @@ static void set_codec_str(AVFormatContext *s, AVCodecParameters *par,
     else
         return;
 
-    tag = av_codec_get_tag(tags, par->codec_id);
+    tag = par->codec_tag;
+    if (!tag)
+        tag = av_codec_get_tag(tags, par->codec_id);
     if (!tag)
         return;
     if (size < 5)
@@ -911,8 +913,10 @@ static int write_manifest(AVFormatContext *s, int final)
             OutputStream *os = &c->streams[i];
             char *agroup = NULL;
             int stream_bitrate = st->codecpar->bit_rate + os->muxer_overhead;
+            if (st->codecpar->codec_type != AVMEDIA_TYPE_VIDEO)
+                continue;
             av_strlcpy(codec_str, os->codec_str, sizeof(codec_str));
-            if ((st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) && max_audio_bitrate) {
+            if (max_audio_bitrate) {
                 agroup = (char *)audio_group;
                 stream_bitrate += max_audio_bitrate;
                 av_strlcat(codec_str, ",", sizeof(codec_str));
@@ -1065,7 +1069,7 @@ static int dash_init(AVFormatContext *s)
 
         if (c->segment_type == SEGMENT_TYPE_MP4) {
             if (c->streaming)
-                av_dict_set(&opts, "movflags", "frag_every_frame+dash+delay_moov", 0);
+                av_dict_set(&opts, "movflags", "frag_every_frame+dash+delay_moov+global_sidx", 0);
             else
                 av_dict_set(&opts, "movflags", "frag_custom+dash+delay_moov", 0);
         } else {
