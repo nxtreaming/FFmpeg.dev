@@ -34,6 +34,14 @@ version <next>:
 - audio denoiser as afftdn filter
 - AV1 parser
 - SER demuxer
+- sinc audio filter source
+- chromahold filter
+- setparams filter
+- vibrance filter
+- decoding S12M timecode in h264
+- xstack filter
+- pcm vidc decoder and encoder
+- (a)graphmonitor filter
 
 
 version 4.0:
