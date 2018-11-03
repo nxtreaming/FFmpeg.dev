@@ -16755,6 +16755,46 @@ embedded peak information in display metadata is not reliable or when tone
 mapping from a lower range to a higher range.
 @end table
 
+@section tpad
+
+Temporarily pad video frames.
+
+The filter accepts the following options:
+
+@table @option
+@item start
+Specify number of delay frames before input video stream.
+
+@item stop
+Specify number of padding frames after input video stream.
+Set to -1 to pad indefinitely.
+
+@item start_mode
+Set kind of frames added to beginning of stream.
+Can be either @var{add} or @var{clone}.
+With @var{add} frames of solid-color are added.
+With @var{clone} frames are clones of first frame.
+
+@item stop_mode
+Set kind of frames added to end of stream.
+Can be either @var{add} or @var{clone}.
+With @var{add} frames of solid-color are added.
+With @var{clone} frames are clones of last frame.
+
+@item start_duration, stop_duration
+Specify the duration of the start/stop delay. See
+@ref{time duration syntax,,the Time duration section in the ffmpeg-utils(1) manual,ffmpeg-utils}
+for the accepted syntax.
+These options override @var{start} and @var{stop}.
+
+@item color
+Specify the color of the padded area. For the syntax of this option,
+check the @ref{color syntax,,"Color" section in the ffmpeg-utils
+manual,ffmpeg-utils}.
+
+The default value of @var{color} is "black".
+@end table
+
 @anchor{transpose}
 @section transpose
 
@@ -17939,6 +17979,64 @@ xstack=inputs=9:layout=w3_0|w3_h0+h2|w3_h0|0_h4|0_0|w3+w1_0|0_h1+h2|w3+w1_h0|w3+
 
 Deinterlace the input video ("yadif" means "yet another deinterlacing
 filter").
+
+It accepts the following parameters:
+
+
+@table @option
+
+@item mode
+The interlacing mode to adopt. It accepts one of the following values:
+
+@table @option
+@item 0, send_frame
+Output one frame for each frame.
+@item 1, send_field
+Output one frame for each field.
+@item 2, send_frame_nospatial
+Like @code{send_frame}, but it skips the spatial interlacing check.
+@item 3, send_field_nospatial
+Like @code{send_field}, but it skips the spatial interlacing check.
+@end table
+
+The default value is @code{send_frame}.
+
+@item parity
+The picture field parity assumed for the input interlaced video. It accepts one
+of the following values:
+
+@table @option
+@item 0, tff
+Assume the top field is first.
+@item 1, bff
+Assume the bottom field is first.
+@item -1, auto
+Enable automatic detection of field parity.
+@end table
+
+The default value is @code{auto}.
+If the interlacing is unknown or the decoder does not export this information,
+top field first will be assumed.
+
+@item deint
+Specify which frames to deinterlace. Accept one of the following
+values:
+
+@table @option
+@item 0, all
+Deinterlace all frames.
+@item 1, interlaced
+Only deinterlace frames marked as interlaced.
+@end table
+
+The default value is @code{all}.
+@end table
+
+@section yadif_cuda
+
+Deinterlace the input video using the @ref{yadif} algorithm, but implemented
+in CUDA so that it can work as part of a GPU accelerated pipeline with nvdec
+and/or nvenc.
 
 It accepts the following parameters:
 
