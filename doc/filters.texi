@@ -1082,7 +1082,7 @@ Set frequency domain imaginary expression for each separate channel
 separated by '|'. If not set, @var{real} option is used.
 
 Each expression in @var{real} and @var{imag} can contain the following
-constants:
+constants and functions:
 
 @table @option
 @item sr
@@ -1102,6 +1102,18 @@ number of channels
 
 @item pts
 current frame pts
+
+@item re
+current real part of frequency bin
+
+@item im
+current imaginary part of frequency bin
+
+@item real(b, ch)
+Return the value of real part of frequency bin at location (@var{bin},@var{channel})
+
+@item imag(b, ch)
+Return the value of imaginary part of frequency bin at location (@var{bin},@var{channel})
 @end table
 
 @item win_size
@@ -1139,7 +1151,7 @@ window function will be picked. Default is @code{0.75}.
 @item
 Leave almost only low frequencies in audio:
 @example
-afftfilt="1-clip((b/nb)*b,0,1)"
+afftfilt="'real=re * (1-clip((b/nb)*b,0,1))':imag='im * (1-clip((b/nb)*b,0,1))'"
 @end example
 @end itemize
 
@@ -1214,6 +1226,19 @@ displayed. This option is used only when @var{response} is enabled.
 
 @item size
 Set video stream size. This option is used only when @var{response} is enabled.
+
+@item rate
+Set video stream frame rate. This option is used only when @var{response} is enabled.
+
+@item minp
+Set minimal partition size used for convolution. Default is @var{16}.
+Allowed range is from @var{16} to @var{65536}.
+Lower values decreases latency at cost of higher CPU usage.
+
+@item maxp
+Set maximal partition size used for convolution. Default is @var{65536}.
+Allowed range is from @var{16} to @var{65536}.
+Lower values decreases latency at cost of higher CPU usage.
 @end table
 
 @subsection Examples
@@ -11429,8 +11454,12 @@ Available values are:
 Use values from the nearest defined point.
 @item linear
 Interpolate values using the linear interpolation.
+@item cosine
+Interpolate values using the cosine interpolation.
 @item cubic
 Interpolate values using the cubic interpolation.
+@item spline
+Interpolate values using the spline interpolation.
 @end table
 @end table
 
@@ -21715,6 +21744,14 @@ each channel is displayed using the cool color scheme
 each channel is displayed using the magma color scheme
 @item green
 each channel is displayed using the green color scheme
+@item viridis
+each channel is displayed using the viridis color scheme
+@item plasma
+each channel is displayed using the plasma color scheme
+@item cividis
+each channel is displayed using the cividis color scheme
+@item terrain
+each channel is displayed using the terrain color scheme
 @end table
 
 Default value is @samp{channel}.
@@ -21881,6 +21918,14 @@ each channel is displayed using the cool color scheme
 each channel is displayed using the magma color scheme
 @item green
 each channel is displayed using the green color scheme
+@item viridis
+each channel is displayed using the viridis color scheme
+@item plasma
+each channel is displayed using the plasma color scheme
+@item cividis
+each channel is displayed using the cividis color scheme
+@item terrain
+each channel is displayed using the terrain color scheme
 @end table
 Default value is @samp{intensity}.
 

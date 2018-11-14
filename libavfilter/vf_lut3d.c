@@ -384,7 +384,7 @@ static int parse_cube(AVFilterContext *ctx, FILE *f)
     float max[3] = {1.0, 1.0, 1.0};
 
     while (fgets(line, sizeof(line), f)) {
-        if (!strncmp(line, "LUT_3D_SIZE ", 12)) {
+        if (!strncmp(line, "LUT_3D_SIZE", 11)) {
             int i, j, k;
             const int size = strtol(line + 12, NULL, 0);
 
@@ -985,6 +985,8 @@ enum interp_1d_mode {
     INTERPOLATE_1D_NEAREST,
     INTERPOLATE_1D_LINEAR,
     INTERPOLATE_1D_CUBIC,
+    INTERPOLATE_1D_COSINE,
+    INTERPOLATE_1D_SPLINE,
     NB_INTERP_1D_MODE
 };
 
@@ -1025,7 +1027,7 @@ static int parse_cube_1d(AVFilterContext *ctx, FILE *f)
     float max[3] = {1.0, 1.0, 1.0};
 
     while (fgets(line, sizeof(line), f)) {
-        if (!strncmp(line, "LUT_1D_SIZE ", 12)) {
+        if (!strncmp(line, "LUT_1D_SIZE", 11)) {
             const int size = strtol(line + 12, NULL, 0);
             int i;
 
@@ -1074,7 +1076,9 @@ static const AVOption lut1d_options[] = {
     { "interp", "select interpolation mode", OFFSET(interpolation),    AV_OPT_TYPE_INT, {.i64=INTERPOLATE_1D_LINEAR}, 0, NB_INTERP_1D_MODE-1, FLAGS, "interp_mode" },
         { "nearest", "use values from the nearest defined points", 0, AV_OPT_TYPE_CONST, {.i64=INTERPOLATE_1D_NEAREST},   INT_MIN, INT_MAX, FLAGS, "interp_mode" },
         { "linear",  "use values from the linear interpolation",   0, AV_OPT_TYPE_CONST, {.i64=INTERPOLATE_1D_LINEAR},    INT_MIN, INT_MAX, FLAGS, "interp_mode" },
+        { "cosine",  "use values from the cosine interpolation",   0, AV_OPT_TYPE_CONST, {.i64=INTERPOLATE_1D_COSINE},    INT_MIN, INT_MAX, FLAGS, "interp_mode" },
         { "cubic",   "use values from the cubic interpolation",    0, AV_OPT_TYPE_CONST, {.i64=INTERPOLATE_1D_CUBIC},     INT_MIN, INT_MAX, FLAGS, "interp_mode" },
+        { "spline",  "use values from the spline interpolation",   0, AV_OPT_TYPE_CONST, {.i64=INTERPOLATE_1D_SPLINE},    INT_MIN, INT_MAX, FLAGS, "interp_mode" },
     { NULL }
 };
 
@@ -1100,6 +1104,19 @@ static inline float interp_1d_linear(const LUT1DContext *lut1d,
     return lerpf(p, n, d);
 }
 
+static inline float interp_1d_cosine(const LUT1DContext *lut1d,
+                                     int idx, const float s)
+{
+    const int prev = PREV(s);
+    const int next = NEXT1D(s);
+    const float d = s - prev;
+    const float p = lut1d->lut[idx][prev];
+    const float n = lut1d->lut[idx][next];
+    const float m = (1.f - cosf(d * M_PI)) * .5f;
+
+    return lerpf(p, n, m);
+}
+
 static inline float interp_1d_cubic(const LUT1DContext *lut1d,
                                     int idx, const float s)
 {
@@ -1121,6 +1138,27 @@ static inline float interp_1d_cubic(const LUT1DContext *lut1d,
     a3 = y1;
 
     return a0 * mu * mu2 + a1 * mu2 + a2 * mu + a3;
+}
+
+static inline float interp_1d_spline(const LUT1DContext *lut1d,
+                                     int idx, const float s)
+{
+    const int prev = PREV(s);
+    const int next = NEXT1D(s);
+    const float x = s - prev;
+    float c0, c1, c2, c3;
+
+    float y0 = lut1d->lut[idx][FFMAX(prev - 1, 0)];
+    float y1 = lut1d->lut[idx][prev];
+    float y2 = lut1d->lut[idx][next];
+    float y3 = lut1d->lut[idx][FFMIN(next + 1, lut1d->lutsize - 1)];
+
+    c0 = y1;
+    c1 = .5f * (y2 - y0);
+    c2 = y0 - 2.5f * y1 + 2.f * y2 - .5f * y3;
+    c3 = .5f * (y3 - y0) + 1.5f * (y1 - y2);
+
+    return ((c3 * x + c2) * x + c1) * x + c0;
 }
 
 #define DEFINE_INTERP_FUNC_PLANAR_1D(name, nbits, depth)                     \
@@ -1183,27 +1221,39 @@ static int interp_1d_##nbits##_##name##_p##depth(AVFilterContext *ctx,       \
 
 DEFINE_INTERP_FUNC_PLANAR_1D(nearest,     8, 8)
 DEFINE_INTERP_FUNC_PLANAR_1D(linear,      8, 8)
+DEFINE_INTERP_FUNC_PLANAR_1D(cosine,      8, 8)
 DEFINE_INTERP_FUNC_PLANAR_1D(cubic,       8, 8)
+DEFINE_INTERP_FUNC_PLANAR_1D(spline,      8, 8)
 
 DEFINE_INTERP_FUNC_PLANAR_1D(nearest,     16, 9)
 DEFINE_INTERP_FUNC_PLANAR_1D(linear,      16, 9)
+DEFINE_INTERP_FUNC_PLANAR_1D(cosine,      16, 9)
 DEFINE_INTERP_FUNC_PLANAR_1D(cubic,       16, 9)
+DEFINE_INTERP_FUNC_PLANAR_1D(spline,      16, 9)
 
 DEFINE_INTERP_FUNC_PLANAR_1D(nearest,     16, 10)
 DEFINE_INTERP_FUNC_PLANAR_1D(linear,      16, 10)
+DEFINE_INTERP_FUNC_PLANAR_1D(cosine,      16, 10)
 DEFINE_INTERP_FUNC_PLANAR_1D(cubic,       16, 10)
+DEFINE_INTERP_FUNC_PLANAR_1D(spline,      16, 10)
 
 DEFINE_INTERP_FUNC_PLANAR_1D(nearest,     16, 12)
 DEFINE_INTERP_FUNC_PLANAR_1D(linear,      16, 12)
+DEFINE_INTERP_FUNC_PLANAR_1D(cosine,      16, 12)
 DEFINE_INTERP_FUNC_PLANAR_1D(cubic,       16, 12)
+DEFINE_INTERP_FUNC_PLANAR_1D(spline,      16, 12)
 
 DEFINE_INTERP_FUNC_PLANAR_1D(nearest,     16, 14)
 DEFINE_INTERP_FUNC_PLANAR_1D(linear,      16, 14)
+DEFINE_INTERP_FUNC_PLANAR_1D(cosine,      16, 14)
 DEFINE_INTERP_FUNC_PLANAR_1D(cubic,       16, 14)
+DEFINE_INTERP_FUNC_PLANAR_1D(spline,      16, 14)
 
 DEFINE_INTERP_FUNC_PLANAR_1D(nearest,     16, 16)
 DEFINE_INTERP_FUNC_PLANAR_1D(linear,      16, 16)
+DEFINE_INTERP_FUNC_PLANAR_1D(cosine,      16, 16)
 DEFINE_INTERP_FUNC_PLANAR_1D(cubic,       16, 16)
+DEFINE_INTERP_FUNC_PLANAR_1D(spline,      16, 16)
 
 #define DEFINE_INTERP_FUNC_1D(name, nbits)                                   \
 static int interp_1d_##nbits##_##name(AVFilterContext *ctx, void *arg,       \
@@ -1251,11 +1301,15 @@ static int interp_1d_##nbits##_##name(AVFilterContext *ctx, void *arg,       \
 
 DEFINE_INTERP_FUNC_1D(nearest,     8)
 DEFINE_INTERP_FUNC_1D(linear,      8)
+DEFINE_INTERP_FUNC_1D(cosine,      8)
 DEFINE_INTERP_FUNC_1D(cubic,       8)
+DEFINE_INTERP_FUNC_1D(spline,      8)
 
 DEFINE_INTERP_FUNC_1D(nearest,     16)
 DEFINE_INTERP_FUNC_1D(linear,      16)
+DEFINE_INTERP_FUNC_1D(cosine,      16)
 DEFINE_INTERP_FUNC_1D(cubic,       16)
+DEFINE_INTERP_FUNC_1D(spline,      16)
 
 static int config_input_1d(AVFilterLink *inlink)
 {
@@ -1307,7 +1361,9 @@ static int config_input_1d(AVFilterLink *inlink)
     switch (lut1d->interpolation) {
     case INTERPOLATE_1D_NEAREST:     SET_FUNC_1D(nearest);  break;
     case INTERPOLATE_1D_LINEAR:      SET_FUNC_1D(linear);   break;
+    case INTERPOLATE_1D_COSINE:      SET_FUNC_1D(cosine);   break;
     case INTERPOLATE_1D_CUBIC:       SET_FUNC_1D(cubic);    break;
+    case INTERPOLATE_1D_SPLINE:      SET_FUNC_1D(spline);   break;
     default:
         av_assert0(0);
     }

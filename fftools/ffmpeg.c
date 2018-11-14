@@ -1213,33 +1213,27 @@ static void do_video_out(OutputFile *of,
     }
     ost->last_dropped = nb_frames == nb0_frames && next_picture;
 
-  /* duplicates frame if needed */
-  for (i = 0; i < nb_frames; i++) {
-    AVFrame *in_picture;
-    av_init_packet(&pkt);
-    pkt.data = NULL;
-    pkt.size = 0;
-
-    if (i < nb0_frames && ost->last_frame) {
-        in_picture = ost->last_frame;
-    } else
-        in_picture = next_picture;
-
-    if (!in_picture)
-        return;
-
-    in_picture->pts = ost->sync_opts;
-
-#if 1
-    if (!check_recording_time(ost))
-#else
-    if (ost->frame_number >= ost->max_frames)
-#endif
-        return;
-
-    {
+    /* duplicates frame if needed */
+    for (i = 0; i < nb_frames; i++) {
+        AVFrame *in_picture;
         int forced_keyframe = 0;
         double pts_time;
+        av_init_packet(&pkt);
+        pkt.data = NULL;
+        pkt.size = 0;
+
+        if (i < nb0_frames && ost->last_frame) {
+            in_picture = ost->last_frame;
+        } else
+            in_picture = next_picture;
+
+        if (!in_picture)
+            return;
+
+        in_picture->pts = ost->sync_opts;
+
+        if (!check_recording_time(ost))
+            return;
 
         if (enc->flags & (AV_CODEC_FLAG_INTERLACED_DCT | AV_CODEC_FLAG_INTERLACED_ME) &&
             ost->top_field_first >= 0)
@@ -1348,18 +1342,17 @@ static void do_video_out(OutputFile *of,
                 fprintf(ost->logfile, "%s", enc->stats_out);
             }
         }
-    }
-    ost->sync_opts++;
-    /*
-     * For video, number of frames in == number of packets out.
-     * But there may be reordering, so we can't throw away frames on encoder
-     * flush, we need to limit them here, before they go into encoder.
-     */
-    ost->frame_number++;
+        ost->sync_opts++;
+        /*
+         * For video, number of frames in == number of packets out.
+         * But there may be reordering, so we can't throw away frames on encoder
+         * flush, we need to limit them here, before they go into encoder.
+         */
+        ost->frame_number++;
 
-    if (vstats_filename && frame_size)
-        do_video_stats(ost, frame_size);
-  }
+        if (vstats_filename && frame_size)
+            do_video_stats(ost, frame_size);
+    }
 
     if (!ost->last_frame)
         ost->last_frame = av_frame_alloc();
@@ -1844,7 +1837,7 @@ static void print_report(int is_last_report, int64_t timer_start, int64_t cur_ti
         } else
             av_log(NULL, AV_LOG_INFO, "%s    %c", buf.str, end);
 
-    fflush(stderr);
+        fflush(stderr);
     }
     av_bprint_finalize(&buf, NULL);
 
@@ -1951,46 +1944,46 @@ static void flush_encoders(void)
                 av_assert0(0);
             }
 
-                av_init_packet(&pkt);
-                pkt.data = NULL;
-                pkt.size = 0;
+            av_init_packet(&pkt);
+            pkt.data = NULL;
+            pkt.size = 0;
 
-                update_benchmark(NULL);
+            update_benchmark(NULL);
 
-                while ((ret = avcodec_receive_packet(enc, &pkt)) == AVERROR(EAGAIN)) {
-                    ret = avcodec_send_frame(enc, NULL);
-                    if (ret < 0) {
-                        av_log(NULL, AV_LOG_FATAL, "%s encoding failed: %s\n",
-                               desc,
-                               av_err2str(ret));
-                        exit_program(1);
-                    }
-                }
-
-                update_benchmark("flush_%s %d.%d", desc, ost->file_index, ost->index);
-                if (ret < 0 && ret != AVERROR_EOF) {
+            while ((ret = avcodec_receive_packet(enc, &pkt)) == AVERROR(EAGAIN)) {
+                ret = avcodec_send_frame(enc, NULL);
+                if (ret < 0) {
                     av_log(NULL, AV_LOG_FATAL, "%s encoding failed: %s\n",
                            desc,
                            av_err2str(ret));
                     exit_program(1);
                 }
-                if (ost->logfile && enc->stats_out) {
-                    fprintf(ost->logfile, "%s", enc->stats_out);
-                }
-                if (ret == AVERROR_EOF) {
-                    output_packet(of, &pkt, ost, 1);
-                    break;
-                }
-                if (ost->finished & MUXER_FINISHED) {
-                    av_packet_unref(&pkt);
-                    continue;
-                }
-                av_packet_rescale_ts(&pkt, enc->time_base, ost->mux_timebase);
-                pkt_size = pkt.size;
-                output_packet(of, &pkt, ost, 0);
-                if (ost->enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO && vstats_filename) {
-                    do_video_stats(ost, pkt_size);
-                }
+            }
+
+            update_benchmark("flush_%s %d.%d", desc, ost->file_index, ost->index);
+            if (ret < 0 && ret != AVERROR_EOF) {
+                av_log(NULL, AV_LOG_FATAL, "%s encoding failed: %s\n",
+                       desc,
+                       av_err2str(ret));
+                exit_program(1);
+            }
+            if (ost->logfile && enc->stats_out) {
+                fprintf(ost->logfile, "%s", enc->stats_out);
+            }
+            if (ret == AVERROR_EOF) {
+                output_packet(of, &pkt, ost, 1);
+                break;
+            }
+            if (ost->finished & MUXER_FINISHED) {
+                av_packet_unref(&pkt);
+                continue;
+            }
+            av_packet_rescale_ts(&pkt, enc->time_base, ost->mux_timebase);
+            pkt_size = pkt.size;
+            output_packet(of, &pkt, ost, 0);
+            if (ost->enc_ctx->codec_type == AVMEDIA_TYPE_VIDEO && vstats_filename) {
+                do_video_stats(ost, pkt_size);
+            }
         }
     }
 }
@@ -2335,14 +2328,12 @@ static int decode_audio(InputStream *ist, AVPacket *pkt, int *got_output,
     ist->samples_decoded += decoded_frame->nb_samples;
     ist->frames_decoded++;
 
-#if 1
     /* increment next_dts to use for the case where the input stream does not
        have timestamps or there are multiple frames in the packet */
     ist->next_pts += ((int64_t)AV_TIME_BASE * decoded_frame->nb_samples) /
                      avctx->sample_rate;
     ist->next_dts += ((int64_t)AV_TIME_BASE * decoded_frame->nb_samples) /
                      avctx->sample_rate;
-#endif
 
     if (decoded_frame->pts != AV_NOPTS_VALUE) {
         decoded_frame_tb   = ist->st->time_base;
@@ -3448,8 +3439,8 @@ static int init_output_stream_encode(OutputStream *ost)
                 ost->forced_keyframes_expr_const_values[FKF_PREV_FORCED_N] = NAN;
                 ost->forced_keyframes_expr_const_values[FKF_PREV_FORCED_T] = NAN;
 
-            // Don't parse the 'forced_keyframes' in case of 'keep-source-keyframes',
-            // parse it only for static kf timings
+                // Don't parse the 'forced_keyframes' in case of 'keep-source-keyframes',
+                // parse it only for static kf timings
             } else if(strncmp(ost->forced_keyframes, "source", 6)) {
                 parse_forced_key_frames(ost->forced_keyframes, ost, ost->enc_ctx);
             }
@@ -4192,7 +4183,7 @@ static void reset_eagain(void)
 
 // set duration to max(tmp, duration) in a proper time base and return duration's time_base
 static AVRational duration_max(int64_t tmp, int64_t *duration, AVRational tmp_time_base,
-                                AVRational time_base)
+                               AVRational time_base)
 {
     int ret;
 
