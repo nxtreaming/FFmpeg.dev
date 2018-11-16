@@ -198,6 +198,7 @@ typedef struct HLSContext {
 
     int cur_seq_no;
     int force_end_list;
+    int min_segment_num;
     int live_start_index;
     int first_packet;
     int64_t first_timestamp;
@@ -1863,6 +1864,15 @@ static int hls_read_header(AVFormatContext *s)
         if (pls->n_segments == 0)
             continue;
 
+        if (pls->n_segments < c->min_segment_num) {
+            av_log(s, AV_LOG_ERROR, "Need cache more segments(current:%d, target:%d).\n", pls->n_segments, c->min_segment_num);
+            goto fail;
+        } else if (c->min_segment_num > 0) {
+            /* we try to cache min_segment_num segments*/
+            c->live_start_index = pls->n_segments - c->min_segment_num;
+            av_log(s, AV_LOG_INFO, "start_index: %d, segments status(current:%d, target:%d).\n", c->live_start_index, pls->n_segments, c->min_segment_num);
+        }
+
         pls->cur_seq_no = select_cur_seq_no(c, pls);
         highest_cur_seq_no = FFMAX(highest_cur_seq_no, pls->cur_seq_no);
     }
@@ -2306,6 +2316,8 @@ static int hls_probe(AVProbeData *p)
 static const AVOption hls_options[] = {
     {"force_end_list", "make the stream finished even if it misses EXT-X-ENDLIST tag in the end of file",
         OFFSET(force_end_list), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, FLAGS},
+    {"min_segment_num", "the min cached segments number",
+        OFFSET(min_segment_num), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, FLAGS},
     {"live_start_index", "segment index to start live streams at (negative values are from the end)",
         OFFSET(live_start_index), AV_OPT_TYPE_INT, {.i64 = -3}, INT_MIN, INT_MAX, FLAGS},
     {"allowed_extensions", "List of file extensions that hls is allowed to access",
