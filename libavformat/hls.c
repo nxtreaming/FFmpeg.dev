@@ -69,6 +69,8 @@ struct segment {
     int64_t duration;
     int64_t url_offset;
     int64_t size;
+    int discontinuty;
+    int last_mtime;
     char *url;
     char *key;
     enum KeyType key_type;
@@ -197,8 +199,10 @@ typedef struct HLSContext {
     struct rendition **renditions;
 
     int cur_seq_no;
+    int delay_time;
+    char *local_index_file;
+    char local_segment_folder[MAX_URL_SIZE];
     int force_end_list;
-    int min_segment_num;
     int live_start_index;
     int first_packet;
     int64_t first_timestamp;
@@ -291,6 +295,52 @@ static void free_rendition_list(HLSContext *c)
         av_freep(&c->renditions[i]);
     av_freep(&c->renditions);
     c->n_renditions = 0;
+}
+
+static int init_delayed_segment(AVFormatContext *s)
+{
+    HLSContext *c = s->priv_data;
+
+    if (c->local_index_file) {
+        char *ch;
+
+        snprintf(c->local_segment_folder, sizeof(c->local_segment_folder), "%s", c->local_index_file);
+        ch = strrchr(c->local_segment_folder, '/');
+        if (ch)
+            ch[1] = '\0';
+    }
+
+    return 0;
+}
+
+static int gen_segment_time(HLSContext *c, char *line)
+{
+    int last_mtime = 0;
+
+    if (c->local_index_file) {
+        char cmd[256] = { 0 };
+        FILE *fp;
+
+        if (line)
+            snprintf(cmd, sizeof(cmd), "stat -c %%Y %s%s", c->local_segment_folder, line);
+        else
+            snprintf(cmd, sizeof(cmd), "stat -c %%Y %s", c->local_index_file);
+        fp = popen(cmd, "r");
+        if (fp) {
+            char buffer[128] = { 0 };
+
+            if (fgets(buffer, sizeof(buffer) -1, fp)) {
+                int len = strlen(buffer);
+
+                // Remove '\n'
+                buffer[len - 1] = '\0';
+                last_mtime = atoi(buffer);
+            }
+            fclose(fp);
+        }
+    }
+
+    return last_mtime;
 }
 
 /*
@@ -689,7 +739,7 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
 static int parse_playlist(HLSContext *c, const char *url,
                           struct playlist *pls, AVIOContext *in)
 {
-    int ret = 0, is_segment = 0, is_variant = 0;
+    int ret = 0, is_segment = 0, is_variant = 0, is_discontinuty = 0;
     int64_t duration = 0;
     enum KeyType key_type = KEY_NONE;
     uint8_t iv[16] = "";
@@ -845,6 +895,9 @@ static int parse_playlist(HLSContext *c, const char *url,
             ptr = strchr(ptr, '@');
             if (ptr)
                 seg_offset = strtoll(ptr+1, NULL, 10);
+        } else if (av_strstart(line, "#EXT-X-DISCONTINUITY", &ptr)) {
+            is_discontinuty = 1;
+            continue;
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {
@@ -871,6 +924,9 @@ static int parse_playlist(HLSContext *c, const char *url,
                 }
                 seg->duration = duration;
                 seg->key_type = key_type;
+                seg->last_mtime = gen_segment_time(c, line);
+                seg->discontinuty = is_discontinuty;
+                is_discontinuty = 0;
                 if (has_iv) {
                     memcpy(seg->iv, iv, sizeof(iv));
                 } else {
@@ -1508,6 +1564,11 @@ reload:
             intercept_id3(v, buf, buf_size, &ret);
         }
 
+        if (seg->discontinuty && c->local_index_file) {
+            av_log(v->parent, AV_LOG_WARNING, "find segment discontinuty, last_mtime:%d exit\n", seg->last_mtime);
+            /* We must terminate current playback to compensate the delay logical */
+            ret = AVERROR_EXIT;
+        }
         return ret;
     }
     if (c->http_persistent &&
@@ -1801,6 +1862,8 @@ static int hls_read_header(AVFormatContext *s)
     /* Some HLS servers don't like being sent the range header */
     av_dict_set(&c->avio_opts, "seekable", "0", 0);
 
+    init_delayed_segment(s);
+
     if ((ret = parse_playlist(c, s->url, NULL, s->pb)) < 0)
         goto fail;
 
@@ -1864,13 +1927,25 @@ static int hls_read_header(AVFormatContext *s)
         if (pls->n_segments == 0)
             continue;
 
-        if (pls->n_segments < c->min_segment_num) {
-            av_log(s, AV_LOG_ERROR, "Need cache more segments(current:%d, target:%d).\n", pls->n_segments, c->min_segment_num);
-            goto fail;
-        } else if (c->min_segment_num > 0) {
-            /* we try to cache min_segment_num segments*/
-            c->live_start_index = pls->n_segments - c->min_segment_num;
-            av_log(s, AV_LOG_INFO, "start_index: %d, segments status(current:%d, target:%d).\n", c->live_start_index, pls->n_segments, c->min_segment_num);
+        /* We try to delay specified time segments */
+        if (c->delay_time) {
+            struct segment *seg = pls->segments[0];
+            int last_mtime = gen_segment_time(c, NULL);
+            int seg_index = 0;
+
+            c->live_start_index = 0;
+            if (seg->last_mtime + c->delay_time > last_mtime) {
+                av_log(c, AV_LOG_INFO, "start_segment time: %d, latest segment time: %d\n", seg->last_mtime, last_mtime);
+                goto fail;
+            }
+            while (seg_index < pls->n_segments) {
+                seg = pls->segments[seg_index];
+                if (seg->last_mtime + c->delay_time >= last_mtime) {
+                    c->live_start_index = seg_index;
+                    break;
+                }
+                seg_index++;
+            }
         }
 
         pls->cur_seq_no = select_cur_seq_no(c, pls);
@@ -2316,8 +2391,10 @@ static int hls_probe(AVProbeData *p)
 static const AVOption hls_options[] = {
     {"force_end_list", "make the stream finished even if it misses EXT-X-ENDLIST tag in the end of file",
         OFFSET(force_end_list), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, FLAGS},
-    {"min_segment_num", "the min cached segments number",
-        OFFSET(min_segment_num), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, FLAGS},
+    {"delay_time", "the delay time in millisecond from the latest segment",
+        OFFSET(delay_time), AV_OPT_TYPE_INT, {.i64 = 0}, INT_MIN, INT_MAX, FLAGS},
+    {"local_index_file", "the local index file for m3u8",
+        OFFSET(local_index_file), AV_OPT_TYPE_STRING, {.str = NULL}, CHAR_MIN, CHAR_MAX, FLAGS},
     {"live_start_index", "segment index to start live streams at (negative values are from the end)",
         OFFSET(live_start_index), AV_OPT_TYPE_INT, {.i64 = -3}, INT_MIN, INT_MAX, FLAGS},
     {"allowed_extensions", "List of file extensions that hls is allowed to access",
