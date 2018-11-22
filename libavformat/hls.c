@@ -1929,20 +1929,21 @@ static int hls_read_header(AVFormatContext *s)
 
         /* We try to delay specified time segments */
         if (c->delay_time && c->local_index_file) {
-            struct segment *seg = pls->segments[0], *last_seg;
+            struct segment *seg = pls->segments[0];
             int last_mtime = gen_segment_time(c, NULL);
             int seg_index = 0;
 
-            c->live_start_index = 0;
             if (seg->last_mtime + c->delay_time > last_mtime) {
                 av_log(c, AV_LOG_INFO, "first mtime: %d, last mtime: %d, diff:%d\n", seg->last_mtime, last_mtime, last_mtime - seg->last_mtime);
                 goto fail;
             }
 
-            last_seg = pls->segments[pls->n_segments - 1];
+            c->live_start_index = 0;
             while (seg_index < pls->n_segments) {
                 seg = pls->segments[seg_index];
                 if (seg->last_mtime + c->delay_time >= last_mtime) {
+                    struct segment *last_seg = pls->segments[pls->n_segments - 1];
+
                     /* We MUST not go ahead if we reach a discontinuty point */
                     if (seg->discontinuty) {
                         int diff_mtime = last_seg->last_mtime - seg->last_mtime;
