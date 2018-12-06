@@ -1,8 +1,4 @@
 /*
- * Apple ProRes compatible decoder
- *
- * Copyright (c) 2010-2011 Maxim Poliakovski
- *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -19,22 +15,20 @@
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
+#ifndef AVFILTER_TRANSPOSE_H
+#define AVFILTER_TRANSPOSE_H
 
-#ifndef AVCODEC_PRORESDSP_H
-#define AVCODEC_PRORESDSP_H
+enum PassthroughType {
+    TRANSPOSE_PT_TYPE_NONE,
+    TRANSPOSE_PT_TYPE_LANDSCAPE,
+    TRANSPOSE_PT_TYPE_PORTRAIT,
+};
 
-#include <stddef.h>
-#include <stdint.h>
-#include "avcodec.h"
+enum TransposeDir {
+    TRANSPOSE_CCLOCK_FLIP,
+    TRANSPOSE_CLOCK,
+    TRANSPOSE_CCLOCK,
+    TRANSPOSE_CLOCK_FLIP,
+};
 
-typedef struct ProresDSPContext {
-    int idct_permutation_type;
-    uint8_t idct_permutation[64];
-    void (*idct_put)(uint16_t *out, ptrdiff_t linesize, int16_t *block, const int16_t *qmat);
-} ProresDSPContext;
-
-int ff_proresdsp_init(ProresDSPContext *dsp, AVCodecContext *avctx);
-
-void ff_proresdsp_init_x86(ProresDSPContext *dsp, AVCodecContext *avctx);
-
-#endif /* AVCODEC_PRORESDSP_H */
+#endif

@@ -1,8 +1,4 @@
 /*
- * Apple ProRes compatible decoder
- *
- * Copyright (c) 2010-2011 Maxim Poliakovski
- *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -19,22 +15,21 @@
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
+kernel void transpose(__write_only image2d_t dst,
+                      __read_only image2d_t src,
+                      int dir) {
+    const sampler_t sampler = (CLK_NORMALIZED_COORDS_FALSE |
+                               CLK_ADDRESS_CLAMP_TO_EDGE   |
+                               CLK_FILTER_NEAREST);
 
-#ifndef AVCODEC_PRORESDSP_H
-#define AVCODEC_PRORESDSP_H
+    int2 size = get_image_dim(dst);
+    int x = get_global_id(0);
+    int y = get_global_id(1);
 
-#include <stddef.h>
-#include <stdint.h>
-#include "avcodec.h"
+    int xin = (dir & 2) ? (size.y - 1 - y) : y;
+    int yin = (dir & 1) ? (size.x - 1 - x) : x;
+    float4 data = read_imagef(src, sampler, (int2)(xin, yin));
 
-typedef struct ProresDSPContext {
-    int idct_permutation_type;
-    uint8_t idct_permutation[64];
-    void (*idct_put)(uint16_t *out, ptrdiff_t linesize, int16_t *block, const int16_t *qmat);
-} ProresDSPContext;
-
-int ff_proresdsp_init(ProresDSPContext *dsp, AVCodecContext *avctx);
-
-void ff_proresdsp_init_x86(ProresDSPContext *dsp, AVCodecContext *avctx);
-
-#endif /* AVCODEC_PRORESDSP_H */
+    if (x < size.x && y < size.y)
+        write_imagef(dst, (int2)(x, y), data);
+}
