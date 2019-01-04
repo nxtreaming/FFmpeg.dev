@@ -1,4 +1,7 @@
+
 /*
+ * Copyright (c) 2018 gxw <guxiwei-hf@loongson.cn>
+ *
  * This file is part of FFmpeg.
  *
  * FFmpeg is free software; you can redistribute it and/or
@@ -18,23 +21,26 @@
 
 #include "config.h"
 #include "libavutil/attributes.h"
-#include "libavutil/cpu.h"
-#include "libavutil/x86/cpu.h"
-#include "libavfilter/af_afir.h"
+#include "libavcodec/avcodec.h"
+#include "libavcodec/vp3dsp.h"
+#include "vp3dsp_mips.h"
 
-void ff_fcmul_add_sse3(float *sum, const float *t, const float *c,
-                       ptrdiff_t len);
-void ff_fcmul_add_avx(float *sum, const float *t, const float *c,
-                      ptrdiff_t len);
-
-av_cold void ff_afir_init_x86(AudioFIRDSPContext *s)
+#if HAVE_MSA
+static av_cold void vp3dsp_init_msa(VP3DSPContext *c, int flags)
 {
-    int cpu_flags = av_get_cpu_flags();
+    c->put_no_rnd_pixels_l2 = ff_put_no_rnd_pixels_l2_msa;
 
-    if (EXTERNAL_SSE3(cpu_flags)) {
-        s->fcmul_add = ff_fcmul_add_sse3;
-    }
-    if (EXTERNAL_AVX_FAST(cpu_flags)) {
-        s->fcmul_add = ff_fcmul_add_avx;
-    }
+    c->idct_add      = ff_vp3_idct_add_msa;
+    c->idct_put      = ff_vp3_idct_put_msa;
+    c->idct_dc_add   = ff_vp3_idct_dc_add_msa;
+    c->v_loop_filter = ff_vp3_v_loop_filter_msa;
+    c->h_loop_filter = ff_vp3_h_loop_filter_msa;
+}
+#endif /* HAVE_MSA */
+
+av_cold void ff_vp3dsp_init_mips(VP3DSPContext *c, int flags)
+{
+#if HAVE_MSA
+    vp3dsp_init_msa(c, flags);
+#endif /* HAVE_MSA */
 }
