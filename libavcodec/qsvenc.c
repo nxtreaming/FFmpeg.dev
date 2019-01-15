@@ -226,6 +226,10 @@ static void dump_video_param(AVCodecContext *avctx, QSVEncContext *q,
     av_log(avctx, AV_LOG_VERBOSE, "\n");
 #endif
 
+#if QSV_HAVE_VDENC
+    av_log(avctx, AV_LOG_VERBOSE, "VDENC: %s\n", print_threestate(info->LowPower));
+#endif
+
 #if QSV_VERSION_ATLEAST(1, 8)
     av_log(avctx, AV_LOG_VERBOSE,
            "RepeatPPS: %s; NumMbPerSlice: %"PRIu16"; LookAheadDS: ",
@@ -475,6 +479,9 @@ static int init_video_param(AVCodecContext *avctx, QSVEncContext *q)
         }
     }
 
+#if QSV_HAVE_VDENC
+    q->param.mfx.LowPower           = q->low_power ? MFX_CODINGOPTION_ON : MFX_CODINGOPTION_OFF;
+#endif
     q->param.mfx.CodecProfile       = q->profile;
     q->param.mfx.TargetUsage        = avctx->compression_level;
     q->param.mfx.GopPicSize         = FFMAX(0, avctx->gop_size);
@@ -1334,11 +1341,10 @@ int ff_qsv_encode(AVCodecContext *avctx, QSVEncContext *q,
         new_pkt.pts  = av_rescale_q(bs->TimeStamp,       (AVRational){1, 90000}, avctx->time_base);
         new_pkt.size = bs->DataLength;
 
-        if (bs->FrameType & MFX_FRAMETYPE_IDR ||
-            bs->FrameType & MFX_FRAMETYPE_xIDR)
+        if (bs->FrameType & MFX_FRAMETYPE_IDR || bs->FrameType & MFX_FRAMETYPE_xIDR) {
             new_pkt.flags |= AV_PKT_FLAG_KEY;
-
-        if (bs->FrameType & MFX_FRAMETYPE_I || bs->FrameType & MFX_FRAMETYPE_xI)
+            pict_type = AV_PICTURE_TYPE_I;
+        } else if (bs->FrameType & MFX_FRAMETYPE_I || bs->FrameType & MFX_FRAMETYPE_xI)
             pict_type = AV_PICTURE_TYPE_I;
         else if (bs->FrameType & MFX_FRAMETYPE_P || bs->FrameType & MFX_FRAMETYPE_xP)
             pict_type = AV_PICTURE_TYPE_P;
