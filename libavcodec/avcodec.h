@@ -677,6 +677,7 @@ enum AVCodecID {
     AV_CODEC_ID_ASS,
     AV_CODEC_ID_HDMV_TEXT_SUBTITLE,
     AV_CODEC_ID_TTML,
+    AV_CODEC_ID_ARIB_CAPTION,
 
     /* other specific kind of codecs (generally used for attachments) */
     AV_CODEC_ID_FIRST_UNKNOWN = 0x18000,           ///< A dummy ID pointing at the start of various fake codecs.
@@ -2993,6 +2994,9 @@ typedef struct AVCodecContext {
 #define FF_PROFILE_PRORES_4444      4
 #define FF_PROFILE_PRORES_XQ        5
 
+#define FF_PROFILE_ARIB_PROFILE_A 0
+#define FF_PROFILE_ARIB_PROFILE_C 1
+
     /**
      * level
      * - encoding: Set by user.
@@ -3345,6 +3349,14 @@ typedef struct AVCodecContext {
      * used as reference pictures).
      */
     int extra_hw_frames;
+
+    /**
+     * The percentage of damaged samples to discard a frame.
+     *
+     * - decoding: set by user
+     * - encoding: unused
+     */
+    int discard_damaged_percentage;
 } AVCodecContext;
 
 #if FF_API_CODEC_GET_SET
