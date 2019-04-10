@@ -70,7 +70,7 @@ typedef struct {
     AVDictionary *sub_demux_options;
 } ConcatContext;
 
-static int concat_probe(AVProbeData *probe)
+static int concat_probe(const AVProbeData *probe)
 {
     return memcmp(probe->buf, "ffconcat version 1.0", 20) ?
            0 : AVPROBE_SCORE_MAX;
