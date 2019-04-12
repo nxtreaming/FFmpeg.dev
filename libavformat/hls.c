@@ -1962,6 +1962,10 @@ static int hls_read_header(AVFormatContext *s)
                     c->live_start_index = seg_index + 1;
                     if (c->live_start_index == pls->n_segments)
                         c->live_start_index--;
+                    if (c->live_start_index > 1 && c->live_start_index + 1 >= pls->n_segments) {
+                        av_log(c, AV_LOG_INFO, "We must cache at least two segments for better transmission\n");
+                        c->live_start_index--;
+                    }
                     seg = pls->segments[c->live_start_index];
                     av_log(c, AV_LOG_INFO, "selected segment:(mtime %d, index %d) last segment:(mtime %d, index %d)\n",
                             seg->last_mtime, c->live_start_index, last_seg->last_mtime, pls->n_segments - 1);
