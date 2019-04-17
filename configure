@@ -2253,6 +2253,7 @@ TOOLCHAIN_FEATURES="
 
 TYPES_LIST="
     kCMVideoCodecType_HEVC
+    kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
     socklen_t
     struct_addrinfo
     struct_group_source_req
@@ -2712,6 +2713,7 @@ jpegls_decoder_select="mjpeg_decoder"
 jv_decoder_select="blockdsp"
 lagarith_decoder_select="llviddsp"
 ljpeg_encoder_select="idctdsp jpegtables mpegvideoenc"
+lscr_decoder_deps="zlib"
 magicyuv_decoder_select="llviddsp"
 magicyuv_encoder_select="llvidencdsp"
 mdec_decoder_select="blockdsp idctdsp mpegvideo"
@@ -6013,6 +6015,7 @@ enabled avfoundation && {
 enabled videotoolbox && {
     check_lib coreservices CoreServices/CoreServices.h UTGetOSTypeFromString "-framework CoreServices"
     check_func_headers CoreMedia/CMFormatDescription.h kCMVideoCodecType_HEVC "-framework CoreMedia"
+    check_func_headers CoreVideo/CVPixelBuffer.h kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange "-framework CoreVideo"
 }
 
 check_struct "sys/time.h sys/resource.h" "struct rusage" ru_maxrss
