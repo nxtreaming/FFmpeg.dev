@@ -209,7 +209,6 @@ typedef struct HLSContext {
     int64_t cur_timestamp;
     AVIOInterruptCB *interrupt_callback;
     AVDictionary *avio_opts;
-    int strict_std_compliance;
     char *allowed_extensions;
     int max_reload;
     int http_persistent;
@@ -537,7 +536,7 @@ static struct rendition *new_rendition(HLSContext *c, struct rendition_info *inf
         return NULL;
 
     /* TODO: handle subtitles (each segment has to parsed separately) */
-    if (c->strict_std_compliance > FF_COMPLIANCE_EXPERIMENTAL)
+    if (c->ctx->strict_std_compliance > FF_COMPLIANCE_EXPERIMENTAL)
         if (type == AVMEDIA_TYPE_SUBTITLE)
             return NULL;
 
@@ -1851,7 +1850,6 @@ static int hls_read_header(AVFormatContext *s)
 
     c->ctx                = s;
     c->interrupt_callback = &s->interrupt_callback;
-    c->strict_std_compliance = s->strict_std_compliance;
 
     c->first_packet = 1;
     c->first_timestamp = AV_NOPTS_VALUE;
