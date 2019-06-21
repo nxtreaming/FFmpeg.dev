@@ -75,6 +75,8 @@ typedef struct HLSSegment {
     int discont;
     int64_t pos;
     int64_t size;
+    int64_t keyframe_pos;
+    int64_t keyframe_size;
     unsigned var_stream_idx;
 
     char key_uri[LINE_BUFFER_SIZE + 1];
@@ -99,6 +101,7 @@ typedef enum HLSFlags {
     HLS_TEMP_FILE = (1 << 11),
     HLS_PERIODIC_REKEY = (1 << 12),
     HLS_INDEPENDENT_SEGMENTS = (1 << 13),
+    HLS_I_FRAMES_ONLY = (1 << 14),
 } HLSFlags;
 
 typedef enum {
@@ -125,6 +128,9 @@ typedef struct VariantStream {
     double dpp;           // duration per packet
     int64_t start_pts;
     int64_t end_pts;
+    int64_t video_lastpos;
+    int64_t video_keyframe_pos;
+    int64_t video_keyframe_size;
     double duration;      // last segment duration computed so far, in seconds
     int64_t start_pos;    // last segment starting position
     int64_t size;         // last segment size
@@ -158,6 +164,7 @@ typedef struct VariantStream {
     char *agroup; /* audio group name */
     char *ccgroup; /* closed caption group name */
     char *baseurl;
+    char *varname; // variant name
 } VariantStream;
 
 typedef struct ClosedCaptionsStream {
@@ -334,6 +341,47 @@ fail:
     return;
 }
 
+static int replace_str_data_in_filename(char **s, const char *filename, char placeholder, const char *datastring)
+{
+    const char *p;
+    char *new_filename;
+    char c;
+    int addchar_count;
+    int found_count = 0;
+    AVBPrint buf;
+
+    av_bprint_init(&buf, 0, AV_BPRINT_SIZE_UNLIMITED);
+
+    p = filename;
+    for (;;) {
+        c = *p;
+        if (c == '\0')
+            break;
+        if (c == '%' && *(p+1) == '%')  // %%
+            addchar_count = 2;
+        else if (c == '%' && *(p+1) == placeholder) {
+            av_bprintf(&buf, "%s", datastring);
+            p += 2;
+            addchar_count = 0;
+            found_count ++;
+        } else
+            addchar_count = 1;
+
+        if (addchar_count > 0) {
+            av_bprint_append_data(&buf, p, addchar_count);
+            p += addchar_count;
+        }
+    }
+    if (!av_bprint_is_complete(&buf)) {
+        av_bprint_finalize(&buf, NULL);
+        return -1;
+    }
+    if (av_bprint_finalize(&buf, &new_filename) < 0 || !new_filename)
+        return -1;
+    *s = new_filename;
+    return found_count;
+}
+
 static int replace_int_data_in_filename(char **s, const char *filename, char placeholder, int64_t number)
 {
     const char *p;
@@ -468,20 +516,27 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
 
     }
 
-    while (segment) {
+    /* if %v is present in the file's directory
+     * all segment belongs to the same variant, so do it only once before the loop*/
+    if (dirname && av_stristr(dirname, "%v")) {
         char * r_dirname = dirname;
-
-        /* if %v is present in the file's directory */
-        if (dirname && av_stristr(dirname, "%v")) {
-
+        if (!vs->varname) {
             if (replace_int_data_in_filename(&r_dirname, dirname, 'v', segment->var_stream_idx) < 1) {
                 ret = AVERROR(EINVAL);
                 goto fail;
             }
-            av_free(dirname);
-            dirname = r_dirname;
+        } else {
+            if (replace_str_data_in_filename(&r_dirname, dirname, 'v', vs->varname) < 1) {
+                ret = AVERROR(EINVAL);
+                goto fail;
+            }
         }
 
+        av_free(dirname);
+        dirname = r_dirname;
+    }
+
+    while (segment) {
         av_log(hls, AV_LOG_DEBUG, "deleting old segment %s\n",
                                   segment->filename);
         path_size =  (hls->use_localtime_mkdir ? 0 : strlen(dirname)) + strlen(segment->filename) + 1;
@@ -994,6 +1049,8 @@ static int hls_append_segment(struct AVFormatContext *s, HLSContext *hls,
     en->duration = duration;
     en->pos      = pos;
     en->size     = size;
+    en->keyframe_pos      = vs->video_keyframe_pos;
+    en->keyframe_size     = vs->video_keyframe_size;
     en->next     = NULL;
     en->discont  = 0;
 
@@ -1411,7 +1468,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
 
     vs->discontinuity_set = 0;
     ff_hls_write_playlist_header(hls->m3u8_out, hls->version, hls->allowcache,
-                                 target_duration, sequence, hls->pl_type);
+                                 target_duration, sequence, hls->pl_type, hls->flags & HLS_I_FRAMES_ONLY);
 
     if((hls->flags & HLS_DISCONT_START) && sequence==hls->start_sequence && vs->discontinuity_set==0 ){
         avio_printf(hls->m3u8_out, "#EXT-X-DISCONTINUITY\n");
@@ -1439,7 +1496,7 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
         ret = ff_hls_write_file_entry(hls->m3u8_out, en->discont, byterange_mode,
                                       en->duration, hls->flags & HLS_ROUND_DURATIONS,
                                       en->size, en->pos, vs->baseurl,
-                                      en->filename, prog_date_time_p);
+                                      en->filename, prog_date_time_p, en->keyframe_size, en->keyframe_pos, hls->flags & HLS_I_FRAMES_ONLY);
         if (ret < 0) {
             av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
         }
@@ -1455,11 +1512,11 @@ static int hls_window(AVFormatContext *s, int last, VariantStream *vs)
             goto fail;
         }
         ff_hls_write_playlist_header(hls->sub_m3u8_out, hls->version, hls->allowcache,
-                                     target_duration, sequence, PLAYLIST_TYPE_NONE);
+                                     target_duration, sequence, PLAYLIST_TYPE_NONE, 0);
         for (en = vs->segments; en; en = en->next) {
             ret = ff_hls_write_file_entry(hls->sub_m3u8_out, 0, byterange_mode,
                                           en->duration, 0, en->size, en->pos,
-                                          vs->baseurl, en->sub_filename, NULL);
+                                          vs->baseurl, en->sub_filename, NULL, 0, 0, 0);
             if (ret < 0) {
                 av_log(s, AV_LOG_WARNING, "ff_hls_write_file_entry get error\n");
             }
@@ -1753,14 +1810,11 @@ fail:
     return ret;
 }
 
-static int format_name(char *buf, int buf_len, int index)
+static int format_name(const char *buf, char **s, int index, const char *varname)
 {
     const char *proto, *dir;
-    char *orig_buf_dup = NULL, *mod_buf = NULL, *mod_buf_dup = NULL;
+    char *orig_buf_dup = NULL, *mod_buf_dup = NULL;
     int ret = 0;
-
-    if (!av_stristr(buf, "%v"))
-        return ret;
 
     orig_buf_dup = av_strdup(buf);
     if (!orig_buf_dup) {
@@ -1768,18 +1822,29 @@ static int format_name(char *buf, int buf_len, int index)
         goto fail;
     }
 
-    if (replace_int_data_in_filename(&mod_buf, orig_buf_dup, 'v', index) < 1) {
-        ret = AVERROR(EINVAL);
-        goto fail;
+    if (!av_stristr(buf, "%v")) {
+        *s = orig_buf_dup;
+        return ret;
     }
-    av_strlcpy(buf, mod_buf, buf_len);
+
+    if (!varname) {
+        if (replace_int_data_in_filename(s, orig_buf_dup, 'v', index) < 1) {
+            ret = AVERROR(EINVAL);
+            goto fail;
+        }
+    } else {
+        if (replace_str_data_in_filename(s, orig_buf_dup, 'v', varname) < 1) {
+            ret = AVERROR(EINVAL);
+            goto fail;
+        }
+    }
 
     proto = avio_find_protocol_name(orig_buf_dup);
     dir = av_dirname(orig_buf_dup);
 
     /* if %v is present in the file's directory, create sub-directory */
     if (av_stristr(dir, "%v") && proto && !strcmp(proto, "file")) {
-        mod_buf_dup = av_strdup(buf);
+        mod_buf_dup = av_strdup(*s);
         if (!mod_buf_dup) {
             ret = AVERROR(ENOMEM);
             goto fail;
@@ -1795,7 +1860,6 @@ static int format_name(char *buf, int buf_len, int index)
 fail:
     av_freep(&orig_buf_dup);
     av_freep(&mod_buf_dup);
-    av_freep(&mod_buf);
     return ret;
 }
 
@@ -1889,6 +1953,11 @@ static int parse_variant_stream_mapstring(AVFormatContext *s)
                 vs->is_default = (!av_strncasecmp(val, "YES", strlen("YES")) ||
                                   (!av_strncasecmp(val, "1", strlen("1"))));
                 hls->has_default_key = 1;
+                continue;
+            } else if (av_strstart(keyval, "name:", &val)) {
+                vs->varname = av_strdup(val);
+                if (!vs->varname)
+                    return AVERROR(ENOMEM);
                 continue;
             } else if (av_strstart(keyval, "agroup:", &val)) {
                 vs->agroup = av_strdup(val);
@@ -2205,7 +2274,7 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
         vs->start_pts = pkt->pts;
     }
 
-    if (vs->has_video) {
+   if (vs->has_video) {
         can_split = st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
                     ((pkt->flags & AV_PKT_FLAG_KEY) || (hls->flags & HLS_SPLIT_BY_TIME));
         is_ref_pkt = (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) && (pkt->stream_index == vs->reference_stream_index);
@@ -2240,6 +2309,7 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
         av_write_frame(vs->avf, NULL); /* Flush any buffered data */
 
         new_start_pos = avio_tell(vs->avf->pb);
+
         if (hls->segment_type != SEGMENT_TYPE_FMP4) {
             avio_flush(oc->pb);
             vs->size = new_start_pos - vs->start_pos;
@@ -2368,6 +2438,13 @@ static int hls_write_packet(AVFormatContext *s, AVPacket *pkt)
     vs->packets_written++;
     if (oc->pb) {
         ret = ff_write_chained(oc, stream_index, pkt, s, 0);
+        if ((st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) && (pkt->flags & AV_PKT_FLAG_KEY)) {
+            vs->video_keyframe_size = avio_tell(oc->pb) - vs->video_lastpos;
+            vs->video_keyframe_pos = vs->start_pos;
+        } else {
+            vs->video_lastpos = avio_tell(oc->pb);
+        }
+
         if (hls->ignore_io_errors)
             ret = 0;
     }
@@ -2401,6 +2478,7 @@ static void hls_free_variant_streams(struct HLSContext *hls)
         av_freep(&vs->language);
         av_freep(&vs->ccgroup);
         av_freep(&vs->baseurl);
+        av_freep(&vs->varname);
     }
 }
 
@@ -2613,12 +2691,7 @@ static int hls_init(AVFormatContext *s)
     for (i = 0; i < hls->nb_varstreams; i++) {
         vs = &hls->var_streams[i];
 
-        vs->m3u8_name = av_strdup(s->url);
-        if (!vs->m3u8_name ) {
-            ret = AVERROR(ENOMEM);
-            goto fail;
-        }
-        ret = format_name(vs->m3u8_name, strlen(s->url) + 1, i);
+        ret = format_name(s->url, &vs->m3u8_name, i, vs->varname);
         if (ret < 0)
             goto fail;
 
@@ -2679,17 +2752,10 @@ static int hls_init(AVFormatContext *s)
             }
         }
         if (hls->segment_filename) {
-            basename_size = strlen(hls->segment_filename) + 1;
-            vs->basename = av_malloc(basename_size);
-            if (!vs->basename) {
-                ret = AVERROR(ENOMEM);
-                goto fail;
-            }
-
-            av_strlcpy(vs->basename, hls->segment_filename, basename_size);
-            ret = format_name(vs->basename, basename_size, i);
+            ret = format_name(hls->segment_filename, &vs->basename, i, vs->varname);
             if (ret < 0)
                 goto fail;
+            basename_size = strlen(vs->basename) + 1;
         } else {
             if (hls->flags & HLS_SINGLE_FILE) {
                 if (hls->segment_type == SEGMENT_TYPE_FMP4) {
@@ -2742,7 +2808,8 @@ static int hls_init(AVFormatContext *s)
                            fmp4_init_filename_len);
                 if (hls->nb_varstreams > 1) {
                     if (av_stristr(vs->fmp4_init_filename, "%v")) {
-                        format_name(vs->fmp4_init_filename, fmp4_init_filename_len, i);
+                        av_freep(&vs->fmp4_init_filename);
+                        format_name(hls->fmp4_init_filename, &vs->fmp4_init_filename, i, vs->varname);
                     } else {
                         ret = append_postfix(vs->fmp4_init_filename, fmp4_init_filename_len, i);
                     }
@@ -2806,8 +2873,8 @@ static int hls_init(AVFormatContext *s)
                 *p = '\0';
 
             if ( hls->subtitle_filename ) {
-                strcpy(vs->vtt_m3u8_name, hls->subtitle_filename);
-                ret = format_name(vs->vtt_m3u8_name, vtt_basename_size, i);
+                av_freep(&vs->vtt_m3u8_name);
+                ret = format_name(hls->subtitle_filename, &vs->vtt_m3u8_name, i, vs->varname);
                 if (ret < 0)
                     goto fail;
             } else {
@@ -2858,6 +2925,7 @@ fail:
             av_freep(&vs->agroup);
             av_freep(&vs->ccgroup);
             av_freep(&vs->baseurl);
+            av_freep(&vs->varname);
             if (vs->avf)
                 avformat_free_context(vs->avf);
             if (vs->vtt_avf)
@@ -2919,6 +2987,7 @@ static const AVOption options[] = {
     {"second_level_segment_size", "include segment size in segment filenames when use_localtime", 0, AV_OPT_TYPE_CONST, {.i64 = HLS_SECOND_LEVEL_SEGMENT_SIZE }, 0, UINT_MAX,   E, "flags"},
     {"periodic_rekey", "reload keyinfo file periodically for re-keying", 0, AV_OPT_TYPE_CONST, {.i64 = HLS_PERIODIC_REKEY }, 0, UINT_MAX,   E, "flags"},
     {"independent_segments", "add EXT-X-INDEPENDENT-SEGMENTS, whenever applicable", 0, AV_OPT_TYPE_CONST, { .i64 = HLS_INDEPENDENT_SEGMENTS }, 0, UINT_MAX, E, "flags"},
+    {"iframes_only", "add EXT-X-I-FRAMES-ONLY, whenever applicable", 0, AV_OPT_TYPE_CONST, { .i64 = HLS_I_FRAMES_ONLY }, 0, UINT_MAX, E, "flags"},
 #if FF_API_HLS_USE_LOCALTIME
     {"use_localtime", "set filename expansion with strftime at segment creation(will be deprecated )", OFFSET(use_localtime), AV_OPT_TYPE_BOOL, {.i64 = 0 }, 0, 1, E },
 #endif
