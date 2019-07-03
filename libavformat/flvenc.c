@@ -664,11 +664,9 @@ end:
     return ret;
 }
 
-
-static int flv_write_header(AVFormatContext *s)
+static int flv_init(struct AVFormatContext *s)
 {
     int i;
-    AVIOContext *pb = s->pb;
     FLVContext *flv = s->priv_data;
 
     for (i = 0; i < s->nb_streams; i++) {
@@ -746,6 +744,15 @@ static int flv_write_header(AVFormatContext *s)
     }
 
     flv->delay = AV_NOPTS_VALUE;
+
+    return 0;
+}
+
+static int flv_write_header(AVFormatContext *s)
+{
+    int i;
+    AVIOContext *pb = s->pb;
+    FLVContext *flv = s->priv_data;
 
     avio_write(pb, "FLV", 3);
     avio_w8(pb, 1);
@@ -1085,6 +1092,18 @@ static int flv_write_packet(AVFormatContext *s, AVPacket *pkt)
     return pb->error;
 }
 
+static int flv_check_bitstream(struct AVFormatContext *s, const AVPacket *pkt)
+{
+    int ret = 1;
+    AVStream *st = s->streams[pkt->stream_index];
+
+    if (st->codecpar->codec_id == AV_CODEC_ID_AAC) {
+        if (pkt->size > 2 && (AV_RB16(pkt->data) & 0xfff0) == 0xfff0)
+            ret = ff_stream_add_bitstream_filter(st, "aac_adtstoasc", NULL);
+    }
+    return ret;
+}
+
 static const AVOption options[] = {
     { "videodatarate", "Setup the videodatarate metadata explictly", offsetof(FLVContext, videodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
     { "audiodatarate", "Setup the audiodatarate metadata explictly", offsetof(FLVContext, audiodatarate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, AV_OPT_FLAG_ENCODING_PARAM },
@@ -1112,9 +1131,11 @@ AVOutputFormat ff_flv_muxer = {
     .priv_data_size = sizeof(FLVContext),
     .audio_codec    = CONFIG_LIBMP3LAME ? AV_CODEC_ID_MP3 : AV_CODEC_ID_ADPCM_SWF,
     .video_codec    = AV_CODEC_ID_FLV1,
+    .init           = flv_init,
     .write_header   = flv_write_header,
     .write_packet   = flv_write_packet,
     .write_trailer  = flv_write_trailer,
+    .check_bitstream= flv_check_bitstream,
     .codec_tag      = (const AVCodecTag* const []) {
                           flv_video_codec_ids, flv_audio_codec_ids, 0
                       },

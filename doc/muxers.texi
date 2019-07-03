@@ -656,7 +656,8 @@ This example will produce the playlists segment file sets:
 @file{file_1_000.ts}, @file{file_1_001.ts}, @file{file_1_002.ts}, etc.
 
 The string "%v" may be present in the filename or in the last directory name
-containing the file. If the string is present in the directory name, then
+containing the file, but only in one of them. (Additionally, %v may appear multiple times in the last
+sub-directory or filename.) If the string %v is present in the directory name, then
 sub-directories are created after expanding the directory name pattern. This
 enables creation of segments corresponding to different variant streams in
 subdirectories.
@@ -892,7 +893,11 @@ This will produce segments like this:
 @item temp_file
 Write segment data to filename.tmp and rename to filename only once the segment is complete. A webserver
 serving up segments can be configured to reject requests to *.tmp to prevent access to in-progress segments
-before they have been added to the m3u8 playlist.
+before they have been added to the m3u8 playlist. This flag also affects how m3u8 playlist files are created.
+If this flag is set, all playlist files will written into temporary file and renamed after they are complete, similarly as segments are handled.
+But playlists with @code{file} protocol and with type (@code{hls_playlist_type}) other than @code{vod}
+are always written into temporary file regardles of this flag. Master playlist files (@code{master_pl_name}), if any, with @code{file} protocol,
+are always written into temporary file regardles of this flag if @code{master_pl_publish_rate} value is other than zero.
 
 @end table
 
@@ -1087,6 +1092,9 @@ Set timeout for socket I/O operations. Applicable only for HTTP output.
 
 @item -ignore_io_errors
 Ignore IO errors during open, write and delete. Useful for long-duration runs with network output.
+
+@item headers
+Set custom HTTP headers, can override built in default headers. Applicable only for HTTP output.
 
 @end table
 
