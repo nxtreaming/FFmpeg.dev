@@ -822,7 +822,7 @@ static void write_packet(OutputFile *of, AVPacket *pkt, OutputStream *ost, int u
 
     pkt->stream_index = ost->index;
 
-    if (debug_ts) {
+    if (debug_muxer_ts) {
         av_log(NULL, AV_LOG_INFO, "muxer <- type:%s "
                 "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s size:%d\n",
                 av_get_media_type_string(ost->enc_ctx->codec_type),
@@ -949,7 +949,7 @@ static void do_audio_out(OutputFile *of, OutputStream *ost,
 
     av_assert0(pkt.size || !pkt.data);
     update_benchmark(NULL);
-    if (debug_ts) {
+    if (debug_audio_ts) {
         av_log(NULL, AV_LOG_INFO, "encoder <- type:audio "
                "frame_pts:%s frame_pts_time:%s time_base:%d/%d\n",
                av_ts2str(frame->pts), av_ts2timestr(frame->pts, &enc->time_base),
@@ -971,7 +971,7 @@ static void do_audio_out(OutputFile *of, OutputStream *ost,
 
         av_packet_rescale_ts(&pkt, enc->time_base, ost->mux_timebase);
 
-        if (debug_ts) {
+        if (debug_audio_ts) {
             av_log(NULL, AV_LOG_INFO, "encoder -> type:audio "
                    "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s\n",
                    av_ts2str(pkt.pts), av_ts2timestr(pkt.pts, &enc->time_base),
@@ -1195,7 +1195,7 @@ static void do_video_out(OutputFile *of,
 
     if (nb0_frames == 0 && ost->last_dropped) {
         nb_frames_drop++;
-        av_log(NULL, AV_LOG_VERBOSE,
+        av_log(NULL, AV_LOG_DEBUG,
                "*** dropping frame %d from stream %d at ts %"PRId64"\n",
                ost->frame_number, ost->st->index, ost->last_frame->pts);
     }
@@ -1295,7 +1295,7 @@ static void do_video_out(OutputFile *of,
         }
 
         update_benchmark(NULL);
-        if (debug_ts) {
+        if (debug_video_ts) {
             av_log(NULL, AV_LOG_INFO, "encoder <- type:video "
                    "frame_pts:%s frame_pts_time:%s time_base:%d/%d\n",
                    av_ts2str(in_picture->pts), av_ts2timestr(in_picture->pts, &enc->time_base),
@@ -1318,7 +1318,7 @@ static void do_video_out(OutputFile *of,
             if (ret < 0)
                 goto error;
 
-            if (debug_ts) {
+            if (debug_video_ts) {
                 av_log(NULL, AV_LOG_INFO, "encoder -> type:video "
                        "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s\n",
                        av_ts2str(pkt.pts), av_ts2timestr(pkt.pts, &enc->time_base),
@@ -1330,7 +1330,7 @@ static void do_video_out(OutputFile *of,
 
             av_packet_rescale_ts(&pkt, enc->time_base, ost->mux_timebase);
 
-            if (debug_ts) {
+            if (debug_video_ts) {
                 av_log(NULL, AV_LOG_INFO, "encoder -> type:video "
                     "pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s\n",
                     av_ts2str(pkt.pts), av_ts2timestr(pkt.pts, &ost->mux_timebase),
@@ -1514,7 +1514,7 @@ static int reap_filters(int flush)
                 if (!ost->frame_aspect_ratio.num)
                     enc->sample_aspect_ratio = filtered_frame->sample_aspect_ratio;
 
-                if (debug_ts) {
+                if (debug_filter_ts) {
                     av_log(NULL, AV_LOG_INFO, "filter -> pts:%s pts_time:%s exact:%f time_base:%d/%d\n",
                             av_ts2str(filtered_frame->pts), av_ts2timestr(filtered_frame->pts, &enc->time_base),
                             float_pts,
@@ -2472,7 +2472,7 @@ static int decode_video(InputStream *ist, AVPacket *pkt, int *got_output, int64_
             ist->next_pts = ist->pts = ts;
     }
 
-    if (debug_ts) {
+    if (debug_decoder_ts) {
         av_log(NULL, AV_LOG_INFO, "decoder -> ist_index:%d type:video "
                "frame_pts:%s frame_pts_time:%s best_effort_ts:%"PRId64" best_effort_ts_time:%s keyframe:%d frame_type:%d time_base:%d/%d\n",
                ist->st->index, av_ts2str(decoded_frame->pts),
@@ -3688,6 +3688,16 @@ static int transcode_init(void)
     InputStream *ist;
     char error[1024] = {0};
 
+    /* keep the 'debug_ts' syntax */
+    if (debug_ts) {
+        debug_audio_ts = 1;
+        debug_video_ts = 1;
+        debug_demuxer_ts = 1;
+        debug_decoder_ts = 1;
+        debug_muxer_ts = 1;
+        debug_filter_ts = 1;
+    }
+
     for (i = 0; i < nb_filtergraphs; i++) {
         FilterGraph *fg = filtergraphs[i];
         for (j = 0; j < fg->nb_outputs; j++) {
@@ -4379,7 +4389,7 @@ static int process_input(int file_index)
             exit_program(1);
     }
 
-    if (debug_ts) {
+    if (debug_demuxer_ts) {
         av_log(NULL, AV_LOG_INFO, "demuxer -> ist_index:%d type:%s "
                "next_dts:%s next_dts_time:%s next_pts:%s next_pts_time:%s pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s off:%s off_time:%s\n",
                ifile->ist_index + pkt.stream_index, av_get_media_type_string(ist->dec_ctx->codec_type),
@@ -4532,7 +4542,7 @@ static int process_input(int file_index)
     if (pkt.dts != AV_NOPTS_VALUE)
         ifile->last_ts = av_rescale_q(pkt.dts, ist->st->time_base, AV_TIME_BASE_Q);
 
-    if (debug_ts) {
+    if (debug_demuxer_ts) {
         av_log(NULL, AV_LOG_INFO, "demuxer+ffmpeg -> ist_index:%d type:%s pkt_pts:%s pkt_pts_time:%s pkt_dts:%s pkt_dts_time:%s off:%s off_time:%s\n",
                ifile->ist_index + pkt.stream_index, av_get_media_type_string(ist->dec_ctx->codec_type),
                av_ts2str(pkt.pts), av_ts2timestr(pkt.pts, &ist->st->time_base),

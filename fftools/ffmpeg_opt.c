@@ -101,6 +101,12 @@ int copy_ts           = 0;
 int start_at_zero     = 0;
 int copy_tb           = -1;
 int debug_ts          = 0;
+int debug_audio_ts    = 0;
+int debug_video_ts    = 0;
+int debug_decoder_ts  = 0;
+int debug_demuxer_ts  = 0;
+int debug_muxer_ts  = 0;
+int debug_filter_ts   = 0;
 int exit_on_error     = 0;
 int abort_on_flags    = 0;
 int print_stats       = -1;
@@ -3537,6 +3543,18 @@ const OptionDef options[] = {
                         OPT_OFFSET,                                  { .off = OFFSET(loop) }, "set number of times input stream shall be looped", "loop count" },
     { "debug_ts",       OPT_BOOL | OPT_EXPERT,                       { &debug_ts },
         "print timestamp debugging info" },
+    { "debug_audio_ts", OPT_BOOL | OPT_EXPERT,                       { &debug_audio_ts },
+        "print audio encoder timestamp debugging info" },
+    { "debug_video_ts", OPT_BOOL | OPT_EXPERT,                       { &debug_video_ts },
+        "print video encoder timestamp debugging info" },
+    { "debug_decoder_ts", OPT_BOOL | OPT_EXPERT,                     { &debug_decoder_ts },
+        "print decoder timestamp debugging info" },
+    { "debug_demuxer_ts", OPT_BOOL | OPT_EXPERT,                     { &debug_demuxer_ts },
+        "print demuxer timestamp debugging info" },
+    { "debug_muxer_ts",  OPT_BOOL | OPT_EXPERT,                      { &debug_muxer_ts },
+        "print muxer timestamp debugging info" },
+    { "debug_filter_ts",  OPT_BOOL | OPT_EXPERT,                     { &debug_filter_ts },
+        "print filter timestamp debugging info" },
     { "max_error_rate",  HAS_ARG | OPT_FLOAT,                        { &max_error_rate },
         "ratio of errors (0.0: no errors, 1.0: 100% errors) above which ffmpeg returns an error instead of success.", "maximum error rate" },
     { "discard",        OPT_STRING | HAS_ARG | OPT_SPEC |
