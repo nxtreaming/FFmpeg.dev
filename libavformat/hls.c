@@ -213,6 +213,7 @@ typedef struct HLSContext {
     int max_reload;
     int http_persistent;
     int http_multiple;
+    int http_seekable;
     AVIOContext *playlist_pb;
 } HLSContext;
 
@@ -916,13 +917,9 @@ static int parse_playlist(HLSContext *c, const char *url,
             }
             if (is_segment) {
                 struct segment *seg;
-                if (!pls) {
-                    if (!new_variant(c, 0, url, NULL)) {
-                        ret = AVERROR(ENOMEM);
-                        goto fail;
-                    }
-                    pls = c->playlists[c->n_playlists - 1];
-                }
+                ret = ensure_playlist(c, &pls, url);
+                if (ret < 0)
+                    goto fail;
                 seg = av_malloc(sizeof(struct segment));
                 if (!seg) {
                     ret = AVERROR(ENOMEM);
@@ -1865,8 +1862,10 @@ static int hls_read_header(AVFormatContext *s)
     if ((ret = save_avio_options(s)) < 0)
         goto fail;
 
-    /* Some HLS servers don't like being sent the range header */
-    av_dict_set(&c->avio_opts, "seekable", "0", 0);
+    /* XXX: Some HLS servers don't like being sent the range header,
+       in this case, need to  setting http_seekable = 0 to disable
+       the range header */
+    av_dict_set_int(&c->avio_opts, "seekable", c->http_seekable, 0);
 
     init_delayed_segment(s);
 
@@ -2234,7 +2233,6 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
                     }
                 }
                 av_packet_unref(&pls->pkt);
-                reset_packet(&pls->pkt);
             }
         }
         /* Check if this stream has the packet with the lowest dts */
@@ -2263,7 +2261,6 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
         ret = update_streams_from_subdemuxer(s, pls);
         if (ret < 0) {
             av_packet_unref(&pls->pkt);
-            reset_packet(&pls->pkt);
             return ret;
         }
 
@@ -2288,7 +2285,6 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
             av_log(s, AV_LOG_ERROR, "stream index inconsistency: index %d, %d main streams, %d subdemuxer streams\n",
                    pls->pkt.stream_index, pls->n_main_streams, pls->ctx->nb_streams);
             av_packet_unref(&pls->pkt);
-            reset_packet(&pls->pkt);
             return AVERROR_BUG;
         }
 
@@ -2376,7 +2372,6 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
             ff_format_io_close(pls->parent, &pls->input_next);
         pls->input_next_requested = 0;
         av_packet_unref(&pls->pkt);
-        reset_packet(&pls->pkt);
         pls->pb.eof_reached = 0;
         /* Clear any buffered data */
         pls->pb.buf_end = pls->pb.buf_ptr = pls->pb.buffer;
@@ -2439,6 +2434,8 @@ static const AVOption hls_options[] = {
         OFFSET(http_persistent), AV_OPT_TYPE_BOOL, {.i64 = 1}, 0, 1, FLAGS },
     {"http_multiple", "Use multiple HTTP connections for fetching segments",
         OFFSET(http_multiple), AV_OPT_TYPE_BOOL, {.i64 = -1}, -1, 1, FLAGS},
+    {"http_seekable", "Use HTTP partial requests, 0 = disable, 1 = enable, -1 = auto",
+        OFFSET(http_seekable), AV_OPT_TYPE_BOOL, { .i64 = -1}, -1, 1, FLAGS},
     {NULL}
 };
 
