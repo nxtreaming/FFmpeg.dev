@@ -918,7 +918,7 @@ static int decode_var_block_data(ALSDecContext *ctx, ALSBlockData *bd)
             y = 1 << 6;
 
             for (base = begin; base < end; base++, tab++)
-                y += MUL64(bd->ltp_gain[tab], raw_samples[base]);
+                y += (uint64_t)MUL64(bd->ltp_gain[tab], raw_samples[base]);
 
             raw_samples[ltp_smp] += y >> 7;
         }
@@ -930,7 +930,7 @@ static int decode_var_block_data(ALSDecContext *ctx, ALSBlockData *bd)
             y = 1 << 19;
 
             for (sb = 0; sb < smp; sb++)
-                y += MUL64(lpc_cof[sb], raw_samples[-(sb + 1)]);
+                y += (uint64_t)MUL64(lpc_cof[sb], raw_samples[-(sb + 1)]);
 
             *raw_samples++ -= y >> 20;
             parcor_to_lpc(smp, quant_cof, lpc_cof);
@@ -1175,10 +1175,10 @@ static int decode_blocks(ALSDecContext *ctx, unsigned int ra_frame,
                 av_log(ctx->avctx, AV_LOG_WARNING, "Invalid channel pair.\n");
 
             for (s = 0; s < div_blocks[b]; s++)
-                bd[0].raw_samples[s] = bd[1].raw_samples[s] - bd[0].raw_samples[s];
+                bd[0].raw_samples[s] = bd[1].raw_samples[s] - (unsigned)bd[0].raw_samples[s];
         } else if (bd[1].js_blocks) {
             for (s = 0; s < div_blocks[b]; s++)
-                bd[1].raw_samples[s] = bd[1].raw_samples[s] + bd[0].raw_samples[s];
+                bd[1].raw_samples[s] = bd[1].raw_samples[s] + (unsigned)bd[0].raw_samples[s];
         }
 
         offset  += div_blocks[b];
@@ -1404,7 +1404,11 @@ static SoftFloat_IEEE754 multiply(SoftFloat_IEEE754 a, SoftFloat_IEEE754 b) {
         }
     }
 
-    mantissa = (unsigned int)(mantissa_temp >> cutoff_bit_count);
+    if (cutoff_bit_count >= 0) {
+        mantissa = (unsigned int)(mantissa_temp >> cutoff_bit_count);
+    } else {
+        mantissa = (unsigned int)(mantissa_temp <<-cutoff_bit_count);
+    }
 
     // Need one more shift?
     if (mantissa & 0x01000000ul) {
