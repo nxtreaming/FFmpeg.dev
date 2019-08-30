@@ -2723,6 +2723,7 @@ huffyuv_encoder_select="bswapdsp huffman huffyuvencdsp llvidencdsp"
 hymt_decoder_select="huffyuv_decoder"
 iac_decoder_select="imc_decoder"
 imc_decoder_select="bswapdsp fft mdct sinewin"
+imm5_decoder_select="h264_decoder hevc_decoder"
 indeo3_decoder_select="hpeldsp"
 indeo4_decoder_select="ividsp"
 indeo5_decoder_select="ividsp"
@@ -3018,7 +3019,7 @@ h264_mediacodec_decoder_select="h264_mp4toannexb_bsf h264_parser"
 h264_mmal_decoder_deps="mmal"
 h264_nvenc_encoder_deps="nvenc"
 h264_omx_encoder_deps="omx"
-h264_qsv_decoder_select="h264_mp4toannexb_bsf h264_parser qsvdec"
+h264_qsv_decoder_select="h264_mp4toannexb_bsf qsvdec"
 h264_qsv_encoder_select="qsvenc"
 h264_rkmpp_decoder_deps="rkmpp"
 h264_rkmpp_decoder_select="h264_mp4toannexb_bsf"
@@ -3032,7 +3033,7 @@ hevc_cuvid_decoder_select="hevc_mp4toannexb_bsf"
 hevc_mediacodec_decoder_deps="mediacodec"
 hevc_mediacodec_decoder_select="hevc_mp4toannexb_bsf hevc_parser"
 hevc_nvenc_encoder_deps="nvenc"
-hevc_qsv_decoder_select="hevc_mp4toannexb_bsf hevc_parser qsvdec"
+hevc_qsv_decoder_select="hevc_mp4toannexb_bsf qsvdec"
 hevc_qsv_encoder_select="hevcparse qsvenc"
 hevc_rkmpp_decoder_deps="rkmpp"
 hevc_rkmpp_decoder_select="hevc_mp4toannexb_bsf"
@@ -3042,6 +3043,7 @@ hevc_v4l2m2m_decoder_deps="v4l2_m2m hevc_v4l2_m2m"
 hevc_v4l2m2m_decoder_select="hevc_mp4toannexb_bsf"
 hevc_v4l2m2m_encoder_deps="v4l2_m2m hevc_v4l2_m2m"
 mjpeg_cuvid_decoder_deps="cuvid"
+mjpeg_qsv_decoder_select="qsvdec"
 mjpeg_qsv_encoder_deps="libmfx"
 mjpeg_qsv_encoder_select="qsvenc"
 mjpeg_vaapi_encoder_deps="VAEncPictureParameterBufferJPEG"
@@ -3052,7 +3054,7 @@ mpeg2_crystalhd_decoder_select="crystalhd"
 mpeg2_cuvid_decoder_deps="cuvid"
 mpeg2_mmal_decoder_deps="mmal"
 mpeg2_mediacodec_decoder_deps="mediacodec"
-mpeg2_qsv_decoder_select="qsvdec mpegvideo_parser"
+mpeg2_qsv_decoder_select="qsvdec"
 mpeg2_qsv_encoder_select="qsvenc"
 mpeg2_vaapi_encoder_select="cbs_mpeg2 vaapi_encode"
 mpeg2_v4l2m2m_decoder_deps="v4l2_m2m mpeg2_v4l2_m2m"
@@ -3069,11 +3071,11 @@ nvenc_hevc_encoder_select="hevc_nvenc_encoder"
 vc1_crystalhd_decoder_select="crystalhd"
 vc1_cuvid_decoder_deps="cuvid"
 vc1_mmal_decoder_deps="mmal"
-vc1_qsv_decoder_select="qsvdec vc1_parser"
+vc1_qsv_decoder_select="qsvdec"
 vc1_v4l2m2m_decoder_deps="v4l2_m2m vc1_v4l2_m2m"
 vp8_cuvid_decoder_deps="cuvid"
 vp8_mediacodec_decoder_deps="mediacodec"
-vp8_qsv_decoder_select="qsvdec vp8_parser"
+vp8_qsv_decoder_select="qsvdec"
 vp8_rkmpp_decoder_deps="rkmpp"
 vp8_vaapi_encoder_deps="VAEncPictureParameterBufferVP8"
 vp8_vaapi_encoder_select="vaapi_encode"
@@ -3081,6 +3083,7 @@ vp8_v4l2m2m_decoder_deps="v4l2_m2m vp8_v4l2_m2m"
 vp8_v4l2m2m_encoder_deps="v4l2_m2m vp8_v4l2_m2m"
 vp9_cuvid_decoder_deps="cuvid"
 vp9_mediacodec_decoder_deps="mediacodec"
+vp9_qsv_decoder_select="qsvdec"
 vp9_rkmpp_decoder_deps="rkmpp"
 vp9_vaapi_encoder_deps="VAEncPictureParameterBufferVP9"
 vp9_vaapi_encoder_select="vaapi_encode"
@@ -3452,6 +3455,7 @@ delogo_filter_deps="gpl"
 denoise_vaapi_filter_deps="vaapi"
 derain_filter_select="dnn"
 deshake_filter_select="pixelutils"
+deshake_opencl_filter_deps="opencl"
 dilation_opencl_filter_deps="opencl"
 drawtext_filter_deps="libfreetype"
 drawtext_filter_suggest="libfontconfig libfribidi"
@@ -6202,7 +6206,7 @@ enabled libcelt           && require libcelt celt/celt.h celt_decode -lcelt0 &&
                                die "ERROR: libcelt must be installed and version must be >= 0.11.0."; }
 enabled libcaca           && require_pkg_config libcaca caca caca.h caca_create_canvas
 enabled libcodec2         && require libcodec2 codec2/codec2.h codec2_create -lcodec2
-enabled libdav1d          && require_pkg_config libdav1d "dav1d >= 0.2.1" "dav1d/dav1d.h" dav1d_version
+enabled libdav1d          && require_pkg_config libdav1d "dav1d >= 0.4.0" "dav1d/dav1d.h" dav1d_version
 enabled libdavs2          && require_pkg_config libdavs2 "davs2 >= 1.6.0" davs2.h davs2_decoder_open
 enabled libdc1394         && require_pkg_config libdc1394 libdc1394-2 dc1394/dc1394.h dc1394_new
 enabled libdrm            && require_pkg_config libdrm libdrm xf86drm.h drmGetVersion
@@ -6355,10 +6359,10 @@ enabled opengl            && { check_lib opengl GL/glx.h glXGetProcAddress "-lGL
                                check_lib opengl ES2/gl.h glGetError "-isysroot=${sysroot} -Wl,-framework,OpenGLES" ||
                                die "ERROR: opengl not found."
                              }
-enabled omx               && require_headers OMX_Core.h
 enabled omx_rpi           && { check_headers OMX_Core.h ||
                                { ! enabled cross_compile && add_cflags -isystem/opt/vc/include/IL && check_headers OMX_Core.h ; } ||
                                die "ERROR: OpenMAX IL headers not found"; } && enable omx
+enabled omx               && require_headers OMX_Core.h
 enabled openssl           && { check_pkg_config openssl openssl openssl/ssl.h OPENSSL_init_ssl ||
                                check_pkg_config openssl openssl openssl/ssl.h SSL_library_init ||
                                check_lib openssl openssl/ssl.h SSL_library_init -lssl -lcrypto ||
