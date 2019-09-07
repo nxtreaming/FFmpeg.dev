@@ -139,6 +139,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     case AV_CODEC_ID_HNM4_VIDEO:maxpixels /= 128; break;
         // Cliping in C, generally slow even with small input
     case AV_CODEC_ID_INDEO4:    maxpixels /= 128; break;
+    case AV_CODEC_ID_TRUEMOTION2: maxpixels /= 1024; break;
     }
 
 
@@ -194,6 +195,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     // Read very simple container
     AVPacket avpkt, parsepkt;
     av_init_packet(&avpkt);
+    av_init_packet(&parsepkt);
     while (data < end && it < maxiteration) {
         // Search for the TAG
         while (data + sizeof(fuzz_tag) < end) {
