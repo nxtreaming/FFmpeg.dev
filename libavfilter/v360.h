@@ -31,6 +31,7 @@ enum Projections {
     DUAL_FISHEYE,
     BARREL,
     CUBEMAP_1_6,
+    STEREOGRAPHIC,
     NB_PROJECTIONS,
 };
 
@@ -98,13 +99,18 @@ typedef struct V360Context {
 
     float yaw, pitch, roll;
 
+    int ih_flip, iv_flip;
     int h_flip, v_flip, d_flip;
+    int in_transpose, out_transpose;
 
     float h_fov, v_fov;
     float flat_range[3];
 
+    float input_mirror_modifier[2];
+
     int planewidth[4], planeheight[4];
     int inplanewidth[4], inplaneheight[4];
+    int uv_linesize[4];
     int nb_planes;
     int nb_allocated;
 
