@@ -71,6 +71,7 @@ static const AVOption v360_options[] = {
     {      "c3x2", "cubemap 3x2",                                0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_3_2},     0,                   0, FLAGS, "out" },
     {      "c6x1", "cubemap 6x1",                                0, AV_OPT_TYPE_CONST,  {.i64=CUBEMAP_6_1},     0,                   0, FLAGS, "out" },
     {       "eac", "equi-angular cubemap",                       0, AV_OPT_TYPE_CONST,  {.i64=EQUIANGULAR},     0,                   0, FLAGS, "out" },
+    {  "dfisheye", "dual fisheye",                               0, AV_OPT_TYPE_CONST,  {.i64=DUAL_FISHEYE},    0,                   0, FLAGS, "out" },
     {      "flat", "regular video",                              0, AV_OPT_TYPE_CONST,  {.i64=FLAT},            0,                   0, FLAGS, "out" },
     {"rectilinear", "regular video",                             0, AV_OPT_TYPE_CONST,  {.i64=FLAT},            0,                   0, FLAGS, "out" },
     {  "gnomonic", "regular video",                              0, AV_OPT_TYPE_CONST,  {.i64=FLAT},            0,                   0, FLAGS, "out" },
@@ -101,6 +102,7 @@ static const AVOption v360_options[] = {
     {    "rorder", "rotation order",                OFFSET(rorder), AV_OPT_TYPE_STRING, {.str="ypr"},           0,                   0, FLAGS, "rorder"},
     {     "h_fov", "horizontal field of view",       OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},     0.00001f,               360.f, FLAGS, "h_fov"},
     {     "v_fov", "vertical field of view",         OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},     0.00001f,               360.f, FLAGS, "v_fov"},
+    {     "d_fov", "diagonal field of view",         OFFSET(d_fov), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},           0.f,               360.f, FLAGS, "d_fov"},
     {    "h_flip", "flip out video horizontally",   OFFSET(h_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1, FLAGS, "h_flip"},
     {    "v_flip", "flip out video vertically",     OFFSET(v_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1, FLAGS, "v_flip"},
     {    "d_flip", "flip out video indepth",        OFFSET(d_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1, FLAGS, "d_flip"},
@@ -1043,8 +1045,8 @@ static void process_cube_coordinates(const V360Context *s,
  * Calculate 3D coordinates on sphere for corresponding frame position in cubemap3x2 format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1163,8 +1165,8 @@ static void xyz_to_cube3x2(const V360Context *s,
  * Calculate 3D coordinates on sphere for corresponding frame position in cubemap1x6 format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1191,8 +1193,8 @@ static void cube1x6_to_xyz(const V360Context *s,
  * Calculate 3D coordinates on sphere for corresponding frame position in cubemap6x1 format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1373,8 +1375,8 @@ static void xyz_to_cube6x1(const V360Context *s,
  * Calculate 3D coordinates on sphere for corresponding frame position in equirectangular format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1407,8 +1409,8 @@ static int prepare_stereographic_out(AVFilterContext *ctx)
 {
     V360Context *s = ctx->priv;
 
-    const float h_angle = tan(FFMIN(s->h_fov, 359.f) * M_PI / 720.f);
-    const float v_angle = tan(FFMIN(s->v_fov, 359.f) * M_PI / 720.f);
+    const float h_angle = tanf(FFMIN(s->h_fov, 359.f) * M_PI / 720.f);
+    const float v_angle = tanf(FFMIN(s->v_fov, 359.f) * M_PI / 720.f);
 
     s->flat_range[0] = h_angle;
     s->flat_range[1] = v_angle;
@@ -1420,8 +1422,8 @@ static int prepare_stereographic_out(AVFilterContext *ctx)
  * Calculate 3D coordinates on sphere for corresponding frame position in stereographic format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1609,8 +1611,8 @@ static int prepare_eac_out(AVFilterContext *ctx)
  * Calculate 3D coordinates on sphere for corresponding frame position in equi-angular cubemap format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1776,14 +1778,9 @@ static int prepare_flat_out(AVFilterContext *ctx)
     const float h_angle = 0.5f * s->h_fov * M_PI / 180.f;
     const float v_angle = 0.5f * s->v_fov * M_PI / 180.f;
 
-    const float sin_phi   = sinf(h_angle);
-    const float cos_phi   = cosf(h_angle);
-    const float sin_theta = sinf(v_angle);
-    const float cos_theta = cosf(v_angle);
-
-    s->flat_range[0] =  cos_theta * sin_phi;
-    s->flat_range[1] =  sin_theta;
-    s->flat_range[2] = -cos_theta * cos_phi;
+    s->flat_range[0] =  tanf(h_angle);
+    s->flat_range[1] =  tanf(v_angle);
+    s->flat_range[2] = -1.f;
 
     return 0;
 }
@@ -1792,8 +1789,8 @@ static int prepare_flat_out(AVFilterContext *ctx)
  * Calculate 3D coordinates on sphere for corresponding frame position in flat format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1809,6 +1806,41 @@ static void flat_to_xyz(const V360Context *s,
     vec[0] = l_x;
     vec[1] = l_y;
     vec[2] = l_z;
+
+    normalize_vector(vec);
+}
+
+/**
+ * Calculate 3D coordinates on sphere for corresponding frame position in dual fisheye format.
+ *
+ * @param s filter context
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
+ * @param width frame width
+ * @param height frame height
+ * @param vec coordinates on sphere
+ */
+static void dfisheye_to_xyz(const V360Context *s,
+                            int i, int j, int width, int height,
+                            float *vec)
+{
+    const float scale = 1.f + s->out_pad;
+
+    const float ew = width / 2.f;
+    const float eh = height;
+
+    const int ei = i >= ew ? i - ew : i;
+    const float m = i >= ew ? -1.f : 1.f;
+
+    const float uf = ((2.f * ei) / ew - 1.f) * scale;
+    const float vf = ((2.f *  j) / eh - 1.f) * scale;
+
+    const float phi   = M_PI + atan2f(vf, uf * m);
+    const float theta = m * M_PI_2 * (1.f - hypotf(uf, vf));
+
+    vec[0] = cosf(theta) * cosf(phi);
+    vec[1] = cosf(theta) * sinf(phi);
+    vec[2] = sinf(theta);
 
     normalize_vector(vec);
 }
@@ -1869,8 +1901,8 @@ static void xyz_to_dfisheye(const V360Context *s,
  * Calculate 3D coordinates on sphere for corresponding frame position in barrel facebook's format.
  *
  * @param s filter context
- * @param i horizontal position on frame [0, height)
- * @param j vertical position on frame [0, width)
+ * @param i horizontal position on frame [0, width)
+ * @param j vertical position on frame [0, height)
  * @param width frame width
  * @param height frame height
  * @param vec coordinates on sphere
@@ -1883,7 +1915,7 @@ static void barrel_to_xyz(const V360Context *s,
     float l_x, l_y, l_z;
 
     if (i < 4 * width / 5) {
-        const float theta_range = M_PI / 4.f;
+        const float theta_range = M_PI_4;
 
         const int ew = 4 * width / 5;
         const int eh = height;
@@ -1955,7 +1987,7 @@ static void xyz_to_barrel(const V360Context *s,
 
     const float phi   = atan2f(vec[0], -vec[2]) * s->input_mirror_modifier[0];
     const float theta = asinf(-vec[1]) * s->input_mirror_modifier[1];
-    const float theta_range = M_PI / 4.f;
+    const float theta_range = M_PI_4;
 
     int ew, eh;
     int u_shift, v_shift;
@@ -2108,6 +2140,20 @@ static int allocate_plane(V360Context *s, int sizeof_uv, int sizeof_ker, int p)
     return 0;
 }
 
+static void fov_from_dfov(V360Context *s, float w, float h)
+{
+    const float d_angle = 0.5 * FFMIN(s->d_fov, 359.f) * M_PI / 180.f;
+    const float d = hypotf(w, h);
+
+    s->h_fov = atan2f(tanf(d_angle) * w, d) * 360.f / M_PI;
+    s->v_fov = atan2f(tanf(d_angle) * h, d) * 360.f / M_PI;
+
+    if (s->h_fov < 0.f)
+        s->h_fov += 360.f;
+    if (s->v_fov < 0.f)
+        s->v_fov += 360.f;
+}
+
 static int config_output(AVFilterLink *outlink)
 {
     AVFilterContext *ctx = outlink->src;
@@ -2130,6 +2176,7 @@ static int config_output(AVFilterLink *outlink)
                           float *vec);
     void (*calculate_kernel)(float du, float dv, const XYRemap *r_tmp,
                              uint16_t *u, uint16_t *v, int16_t *ker);
+    int (*prepare_out)(AVFilterContext *ctx);
     float rot_mat[3][3];
 
     s->input_mirror_modifier[0] = s->ih_flip ? -1.f : 1.f;
@@ -2240,7 +2287,7 @@ static int config_output(AVFilterLink *outlink)
         in_transform = xyz_to_stereographic;
         err = 0;
         wf = inlink->w;
-        hf = inlink->h;
+        hf = inlink->h / 2.f;
         break;
     default:
         av_log(ctx, AV_LOG_ERROR, "Specified input format is not handled.\n");
@@ -2254,62 +2301,61 @@ static int config_output(AVFilterLink *outlink)
     switch (s->out) {
     case EQUIRECTANGULAR:
         out_transform = equirect_to_xyz;
-        err = 0;
+        prepare_out = NULL;
         w = roundf(wf);
         h = roundf(hf);
         break;
     case CUBEMAP_3_2:
         out_transform = cube3x2_to_xyz;
-        err = prepare_cube_out(ctx);
+        prepare_out = prepare_cube_out;
         w = roundf(wf / 4.f * 3.f);
         h = roundf(hf);
         break;
     case CUBEMAP_1_6:
         out_transform = cube1x6_to_xyz;
-        err = prepare_cube_out(ctx);
+        prepare_out = prepare_cube_out;
         w = roundf(wf / 4.f);
         h = roundf(hf * 3.f);
         break;
     case CUBEMAP_6_1:
         out_transform = cube6x1_to_xyz;
-        err = prepare_cube_out(ctx);
+        prepare_out = prepare_cube_out;
         w = roundf(wf / 2.f * 3.f);
         h = roundf(hf / 2.f);
         break;
     case EQUIANGULAR:
         out_transform = eac_to_xyz;
-        err = prepare_eac_out(ctx);
+        prepare_out = prepare_eac_out;
         w = roundf(wf);
         h = roundf(hf / 8.f * 9.f);
         break;
     case FLAT:
         out_transform = flat_to_xyz;
-        err = prepare_flat_out(ctx);
+        prepare_out = prepare_flat_out;
         w = roundf(wf);
         h = roundf(hf);
         break;
     case DUAL_FISHEYE:
-        av_log(ctx, AV_LOG_ERROR, "Dual fisheye format is not accepted as output.\n");
-        return AVERROR(EINVAL);
+        out_transform = dfisheye_to_xyz;
+        prepare_out = NULL;
+        w = roundf(wf);
+        h = roundf(hf);
+        break;
     case BARREL:
         out_transform = barrel_to_xyz;
-        err = 0;
+        prepare_out = NULL;
         w = roundf(wf / 4.f * 5.f);
         h = roundf(hf);
         break;
     case STEREOGRAPHIC:
         out_transform = stereographic_to_xyz;
-        err = prepare_stereographic_out(ctx);
-        w = FFMAX(roundf(wf), roundf(hf));
-        h = w;
+        prepare_out = prepare_stereographic_out;
+        w = roundf(wf);
+        h = roundf(hf * 2.f);
         break;
     default:
         av_log(ctx, AV_LOG_ERROR, "Specified output format is not handled.\n");
         return AVERROR_BUG;
-    }
-
-    if (err != 0) {
-        return err;
     }
 
     // Override resolution with user values if specified
@@ -2325,6 +2371,15 @@ static int config_output(AVFilterLink *outlink)
 
         if (s->in_transpose)
             FFSWAP(int, w, h);
+    }
+
+    if (s->d_fov > 0.f)
+        fov_from_dfov(s, w, h);
+
+    if (prepare_out) {
+        err = prepare_out(ctx);
+        if (err != 0)
+            return err;
     }
 
     s->planeheight[1] = s->planeheight[2] = FF_CEIL_RSHIFT(h, desc->log2_chroma_h);

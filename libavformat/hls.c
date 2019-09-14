@@ -260,11 +260,9 @@ static void free_playlist_list(HLSContext *c)
         av_freep(&pls->init_sec_buf);
         av_packet_unref(&pls->pkt);
         av_freep(&pls->pb.buffer);
-        if (pls->input)
-            ff_format_io_close(c->ctx, &pls->input);
+        ff_format_io_close(c->ctx, &pls->input);
         pls->input_read_done = 0;
-        if (pls->input_next)
-            ff_format_io_close(c->ctx, &pls->input_next);
+        ff_format_io_close(c->ctx, &pls->input_next);
         pls->input_next_requested = 0;
         if (pls->ctx) {
             pls->ctx->pb = NULL;
@@ -674,9 +672,6 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
     int ret;
     int is_http = 0;
 
-    av_dict_copy(&tmp, opts, 0);
-    av_dict_copy(&tmp, opts2, 0);
-
     if (av_strstart(url, "crypto", NULL)) {
         if (url[6] == '+' || url[6] == ':')
             proto_name = avio_find_protocol_name(url + 7);
@@ -709,14 +704,18 @@ static int open_url(AVFormatContext *s, AVIOContext **pb, const char *url,
     else if (strcmp(proto_name, "file") || !strncmp(url, "file,", 5))
         return AVERROR_INVALIDDATA;
 
+    av_dict_copy(&tmp, opts, 0);
+    av_dict_copy(&tmp, opts2, 0);
+
     if (is_http && c->http_persistent && *pb) {
         ret = open_url_keepalive(c->ctx, pb, url);
         if (ret == AVERROR_EXIT) {
+            av_dict_free(&tmp);
             return ret;
         } else if (ret < 0) {
             if (ret != AVERROR_EOF)
                 av_log(s, AV_LOG_WARNING,
-                    "keepalive request failed for '%s' when opening url, retrying with new connection: %s\n",
+                    "keepalive request failed for '%s' with error: '%s' when opening url, retrying with new connection\n",
                     url, av_err2str(ret));
             ret = s->io_open(s, pb, url, AVIO_FLAG_READ, &tmp);
         }
@@ -773,7 +772,7 @@ static int parse_playlist(HLSContext *c, const char *url,
         } else if (ret < 0) {
             if (ret != AVERROR_EOF)
                 av_log(c->ctx, AV_LOG_WARNING,
-                    "keepalive request failed for '%s' when parsing playlist, retrying with new connection: %s\n",
+                    "keepalive request failed for '%s' with error: '%s' when parsing playlist\n",
                     url, av_err2str(ret));
             in = NULL;
         }
@@ -1543,7 +1542,7 @@ reload:
         if (ret < 0) {
             if (ff_check_interrupt(c->interrupt_callback))
                 return AVERROR_EXIT;
-            av_log(v->parent, AV_LOG_WARNING, "Failed to open segment %d of playlist %d\n",
+            av_log(v->parent, AV_LOG_WARNING, "Failed to open next segment %d of playlist %d\n",
                    v->cur_seq_no + 1,
                    v->index);
         } else {
@@ -2021,7 +2020,6 @@ static int hls_read_header(AVFormatContext *s)
         }
         ffio_init_context(&pls->pb, pls->read_buffer, INITIAL_BUFFER_SIZE, 0, pls,
                           read_data, NULL, NULL);
-        pls->pb.seekable = 0;
         ret = av_probe_input_buffer(&pls->pb, &in_fmt, pls->segments[0]->url,
                                     NULL, 0, 0);
         if (ret < 0) {
@@ -2120,11 +2118,9 @@ static int recheck_discard_flags(AVFormatContext *s, int first)
             }
             av_log(s, AV_LOG_INFO, "Now receiving playlist %d, segment %d\n", i, pls->cur_seq_no);
         } else if (first && !cur_needed && pls->needed) {
-            if (pls->input)
-                ff_format_io_close(pls->parent, &pls->input);
+            ff_format_io_close(pls->parent, &pls->input);
             pls->input_read_done = 0;
-            if (pls->input_next)
-                ff_format_io_close(pls->parent, &pls->input_next);
+            ff_format_io_close(pls->parent, &pls->input_next);
             pls->input_next_requested = 0;
             pls->needed = 0;
             changed = 1;
@@ -2365,11 +2361,9 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
     for (i = 0; i < c->n_playlists; i++) {
         /* Reset reading */
         struct playlist *pls = c->playlists[i];
-        if (pls->input)
-            ff_format_io_close(pls->parent, &pls->input);
+        ff_format_io_close(pls->parent, &pls->input);
         pls->input_read_done = 0;
-        if (pls->input_next)
-            ff_format_io_close(pls->parent, &pls->input_next);
+        ff_format_io_close(pls->parent, &pls->input_next);
         pls->input_next_requested = 0;
         av_packet_unref(&pls->pkt);
         pls->pb.eof_reached = 0;
