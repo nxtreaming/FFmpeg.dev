@@ -164,8 +164,6 @@ static void decode_block(uint8_t *src, uint8_t *dest, unsigned size,
     }
 
     if (s >= 4) {
-        if (!align)
-            align = 4;
         xor_block(src + a2, dest + a2, s & ~3,
                   key, key_ptr);
         s &= 3;
@@ -220,7 +218,7 @@ static uint8_t *read_vblock(AVIOContext *src, uint32_t *size,
     memcpy(buf, tmp, 4);
 
     if (avio_read(src, buf + 4, n) == n) {
-        decode_block(buf + 4, buf + 4, n, key, k2, align + 4);
+        decode_block(buf + 4, buf + 4, n, key, k2, align);
     } else {
         av_free(buf);
         buf = NULL;

@@ -128,6 +128,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     maxpixels = maxpixels_per_frame * maxiteration;
     switch (c->id) {
         // Allows a small input to generate gigantic output
+    case AV_CODEC_ID_BINKVIDEO: maxpixels /= 32; break;
     case AV_CODEC_ID_DIRAC:     maxpixels /= 8192; break;
     case AV_CODEC_ID_MSRLE:     maxpixels /= 16;  break;
     case AV_CODEC_ID_QTRLE:     maxpixels /= 16;  break;
@@ -140,6 +141,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         // Cliping in C, generally slow even with small input
     case AV_CODEC_ID_INDEO4:    maxpixels /= 128; break;
     case AV_CODEC_ID_LSCR:        maxpixels /= 16; break;
+    case AV_CODEC_ID_MOTIONPIXELS:maxpixels /= 256; break;
+    case AV_CODEC_ID_SNOW:        maxpixels /= 128; break;
     case AV_CODEC_ID_TRUEMOTION2: maxpixels /= 1024; break;
     }
 
