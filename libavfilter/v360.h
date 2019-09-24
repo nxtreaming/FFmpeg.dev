@@ -40,6 +40,8 @@ enum Projections {
     CUBEMAP_1_6,
     STEREOGRAPHIC,
     MERCATOR,
+    BALL,
+    HAMMER,
     NB_PROJECTIONS,
 };
 
@@ -112,6 +114,7 @@ typedef struct V360Context {
     int in_stereo, out_stereo;
 
     float in_pad, out_pad;
+    int fin_pad, fout_pad;
 
     float yaw, pitch, roll;
 
@@ -120,12 +123,15 @@ typedef struct V360Context {
     int in_transpose, out_transpose;
 
     float h_fov, v_fov, d_fov;
-    float flat_range[3];
+    float flat_range[2];
 
     float rot_mat[3][3];
 
     float input_mirror_modifier[2];
     float output_mirror_modifier[3];
+
+    int in_width, in_height;
+    int out_width, out_height;
 
     int pr_width[4], pr_height[4];
 
@@ -139,8 +145,8 @@ typedef struct V360Context {
     int nb_allocated;
     int elements;
 
-    uint16_t *u[4], *v[4];
-    int16_t *ker[4];
+    uint16_t *u[2], *v[2];
+    int16_t *ker[2];
     unsigned map[4];
 
     void (*in_transform)(const struct V360Context *s,
