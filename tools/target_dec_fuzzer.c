@@ -145,6 +145,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     case AV_CODEC_ID_INDEO4:    maxpixels /= 128; break;
     case AV_CODEC_ID_LSCR:        maxpixels /= 16; break;
     case AV_CODEC_ID_MOTIONPIXELS:maxpixels /= 256; break;
+    case AV_CODEC_ID_MSS2:        maxpixels /= 16384; break;
     case AV_CODEC_ID_SNOW:        maxpixels /= 128; break;
     case AV_CODEC_ID_TRUEMOTION2: maxpixels /= 1024; break;
     }
@@ -258,7 +259,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             av_frame_unref(frame);
             int ret = decode_handler(ctx, frame, &got_frame, &avpkt);
 
-            ec_pixels += ctx->width * ctx->height;
+            ec_pixels += (ctx->width + 32LL) * (ctx->height + 32LL);
             if (it > 20 || ec_pixels > 4 * ctx->max_pixels)
                 ctx->error_concealment = 0;
             if (ec_pixels > maxpixels)
