@@ -939,7 +939,7 @@ static void assert_file_overwrite(const char *filename)
     if (!file_overwrite) {
         if (proto_name && !strcmp(proto_name, "file") && avio_check(filename, 0) == 0) {
             if (stdin_interaction && !no_file_overwrite) {
-                fprintf(stderr,"File '%s' already exists. Overwrite ? [y/N] ", filename);
+                fprintf(stderr,"File '%s' already exists. Overwrite? [y/N] ", filename);
                 fflush(stderr);
                 term_exit();
                 signal(SIGINT, SIG_DFL);
@@ -3457,7 +3457,7 @@ const OptionDef options[] = {
     { "stdin",          OPT_BOOL | OPT_EXPERT,                       { &stdin_interaction },
       "enable or disable interaction on standard input" },
     { "timelimit",      HAS_ARG | OPT_EXPERT,                        { .func_arg = opt_timelimit },
-        "set max runtime in seconds", "limit" },
+        "set max runtime in seconds in CPU user time", "limit" },
     { "dump",           OPT_BOOL | OPT_EXPERT,                       { &do_pkt_dump },
         "dump each input packet" },
     { "hex",            OPT_BOOL | OPT_EXPERT,                       { &do_hex_dump },

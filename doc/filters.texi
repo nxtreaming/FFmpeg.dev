@@ -4699,6 +4699,14 @@ second of silence in audio:
 @example
 silenceremove=stop_periods=-1:stop_duration=1:stop_threshold=-90dB
 @end example
+
+@item
+Trim all digital silence samples, using peak detection, from beginning to end
+where there is more than 0 samples of digital silence in audio and digital
+silence is detected in all channels at same positions in stream:
+@example
+silenceremove=window=0:detection=peak:stop_mode=all:start_mode=all:stop_periods=-1:stop_threshold=0
+@end example
 @end itemize
 
 @section sofalizer
@@ -8839,6 +8847,13 @@ drawbox=x=-t:y=0.5*(ih-iw/2.4)-t:w=iw+t*2:h=iw/2.4+t*2:t=2:c=red
 @end example
 @end itemize
 
+@subsection Commands
+This filter supports same commands as options.
+The command accepts the same syntax of the corresponding option.
+
+If the specified expression is not valid, it is kept at its current
+value.
+
 @section drawgrid
 
 Draw a grid on the input image.
@@ -8923,6 +8938,13 @@ Draw a white 3x3 grid with an opacity of 50%:
 drawgrid=w=iw/3:h=ih/3:t=2:c=white@@0.5
 @end example
 @end itemize
+
+@subsection Commands
+This filter supports same commands as options.
+The command accepts the same syntax of the corresponding option.
+
+If the specified expression is not valid, it is kept at its current
+value.
 
 @anchor{drawtext}
 @section drawtext
@@ -14032,6 +14054,26 @@ Filter selects among @samp{t}, @samp{b} and @samp{p} using image analysis only.
 @end table
 @end table
 
+@section photosensitivity
+Reduce various flashes in video, so to help users with epilepsy.
+
+It accepts the following options:
+@table @option
+@item frames, f
+Set how many frames to use when filtering. Default is 30.
+
+@item threshold, t
+Set detection threshold factor. Default is 1.
+Lower is stricter.
+
+@item skip
+Set how many pixels to skip when sampling frames. Defalt is 1.
+Allowed range is from 1 to 1024.
+
+@item bypass
+Leave frames unchanged. Default is disabled.
+@end table
+
 @section pixdesctest
 
 Pixel format descriptor test filter, mainly useful for internal
@@ -15641,6 +15683,26 @@ Scale a logo to 1/10th the height of a video, while preserving its display aspec
 [logo-in][video-in]scale2ref=w=oh*mdar:h=ih/10[logo-out][video-out]
 @end example
 @end itemize
+
+@section scroll
+Scroll input video horizontally and/or vertically by constant speed.
+
+The filter accepts the following options:
+@table @option
+@item horizontal, h
+Set the horizontal scrolling speed. Default is 0. Allowed range is from -1 to 1.
+Negative values changes scrolling direction.
+
+@item vertical, v
+Set the vertical scrolling speed. Default is 0. Allowed range is from -1 to 1.
+Negative values changes scrolling direction.
+
+@item hpos
+Set the initial horizontal scrolling position. Default is 0. Allowed range is from 0 to 1.
+
+@item vpos
+Set the initial vertical scrolling position. Default is 0. Allowed range is from 0 to 1.
+@end table
 
 @anchor{selectivecolor}
 @section selectivecolor
@@ -18072,6 +18134,9 @@ Ball format, gives significant distortion toward the back.
 @item hammer
 Hammer-Aitoff map projection format.
 
+@item sinusoidal
+Sinusoidal map projection format.
+
 @end table
 
 @item interp
@@ -19044,6 +19109,11 @@ where X is video input from which to take width or height.
 Multiple values can be used when separated by '+'. In such
 case values are summed together.
 
+Note that if inputs are of different sizes gaps may appear, as not all of
+the output video frame will be filled. Similarly, videos can overlap each
+other if their position doesn't leave enough space for the full frame of
+adjoining videos.
+
 For 2 inputs, a default layout of @code{0_0|w0_0} is set. In all other cases,
 a layout must be set by the user.
 
@@ -19057,27 +19127,70 @@ terminates. Default value is 0.
 @itemize
 @item
 Display 4 inputs into 2x2 grid.
-Note that if inputs are of different sizes unused gaps might appear,
-as not all of output video is used.
+
+Layout:
+@example
+input1(0, 0)  | input3(w0, 0)
+input2(0, h0) | input4(w0, h0)
+@end example
+
 @example
 xstack=inputs=4:layout=0_0|0_h0|w0_0|w0_h0
 @end example
 
+Note that if inputs are of different sizes, gaps or overlaps may occur.
+
 @item
 Display 4 inputs into 1x4 grid.
-Note that if inputs are of different sizes unused gaps might appear,
-as not all of output video is used.
+
+Layout:
+@example
+input1(0, 0)
+input2(0, h0)
+input3(0, h0+h1)
+input4(0, h0+h1+h2)
+@end example
+
 @example
 xstack=inputs=4:layout=0_0|0_h0|0_h0+h1|0_h0+h1+h2
 @end example
 
+Note that if inputs are of different widths, unused space will appear.
+
 @item
 Display 9 inputs into 3x3 grid.
-Note that if inputs are of different sizes unused gaps might appear,
-as not all of output video is used.
+
+Layout:
 @example
-xstack=inputs=9:layout=w3_0|w3_h0+h2|w3_h0|0_h4|0_0|w3+w1_0|0_h1+h2|w3+w1_h0|w3+w1_h1+h2
+input1(0, 0)       | input4(w0, 0)      | input7(w0+w3, 0)
+input2(0, h0)      | input5(w0, h0)     | input8(w0+w3, h0)
+input3(0, h0+h1)   | input6(w0, h0+h1)  | input9(w0+w3, h0+h1)
 @end example
+
+@example
+xstack=inputs=9:layout=0_0|0_h0|0_h0+h1|w0_0|w0_h0|w0_h0+h1|w0+w3_0|w0+w3_h0|w0+w3_h0+h1
+@end example
+
+Note that if inputs are of different sizes, gaps or overlaps may occur.
+
+@item
+Display 16 inputs into 4x4 grid.
+
+Layout:
+@example
+input1(0, 0)       | input5(w0, 0)       | input9 (w0+w4, 0)       | input13(w0+w4+w8, 0)
+input2(0, h0)      | input6(w0, h0)      | input10(w0+w4, h0)      | input14(w0+w4+w8, h0)
+input3(0, h0+h1)   | input7(w0, h0+h1)   | input11(w0+w4, h0+h1)   | input15(w0+w4+w8, h0+h1)
+input4(0, h0+h1+h2)| input8(w0, h0+h1+h2)| input12(w0+w4, h0+h1+h2)| input16(w0+w4+w8, h0+h1+h2)
+@end example
+
+@example
+xstack=inputs=16:layout=0_0|0_h0|0_h0+h1|0_h0+h1+h2|w0_0|w0_h0|w0_h0+h1|w0_h0+h1+h2|w0+w4_0|
+w0+w4_h0|w0+w4_h0+h1|w0+w4_h0+h1+h2|w0+w4+w8_0|w0+w4+w8_h0|w0+w4+w8_h0+h1|w0+w4+w8_h0+h1+h2
+@end example
+
+Note that if inputs are of different sizes, gaps or overlaps may occur.
+
 @end itemize
 
 @anchor{yadif}
@@ -21005,6 +21118,31 @@ __kernel void sierpinski_carpet(__write_only image2d_t dst,
 
 @end itemize
 
+@section sierpinski
+
+Generate a Sierpinski carpet/triangle fractal, and randomly pan around.
+
+This source accepts the following options:
+
+@table @option
+@item size, s
+Set frame size. For the syntax of this option, check the @ref{video size syntax,,"Video
+size" section in the ffmpeg-utils manual,ffmpeg-utils}. Default value is "640x480".
+
+@item rate, r
+Set frame rate, expressed as number of frames per second. Default
+value is "25".
+
+@item seed
+Set seed which is used for random panning.
+
+@item jump
+Set max jump for single pan destination. Allowed range is from 1 to 10000.
+
+@item type
+Set fractal type, can be default @code{carpet} or @code{triangle}.
+@end table
+
 @c man end VIDEO SOURCES
 
 @chapter Video Sinks
@@ -21775,6 +21913,10 @@ Values are interpreted as floats, returns true if metadata value is greater than
 @item expr
 Values are interpreted as floats, returns true if expression from option @code{expr}
 evaluates to true.
+
+@item ends_with
+Values are interpreted as strings, returns true if metadata value ends with
+the @code{value} option string.
 @end table
 
 @item expr

@@ -93,6 +93,9 @@ const uint32_t maxiteration = 8096;
 const uint64_t maxpixels_per_frame = 4096 * 4096;
 uint64_t maxpixels;
 
+const uint64_t maxsamples_per_frame = 256*1024*32;
+uint64_t maxsamples;
+
 static const uint64_t FUZZ_TAG = 0x4741542D5A5A5546ULL;
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
@@ -101,6 +104,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     const uint8_t *end = data + size;
     uint32_t it = 0;
     uint64_t ec_pixels = 0;
+    uint64_t nb_samples = 0;
     int (*decode_handler)(AVCodecContext *avctx, AVFrame *picture,
                           int *got_picture_ptr,
                           const AVPacket *avpkt) = NULL;
@@ -129,6 +133,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     case AVMEDIA_TYPE_SUBTITLE: decode_handler = subtitle_handler     ; break;
     }
     maxpixels = maxpixels_per_frame * maxiteration;
+    maxsamples = maxsamples_per_frame * maxiteration;
     switch (c->id) {
         // Allows a small input to generate gigantic output
     case AV_CODEC_ID_BINKVIDEO: maxpixels /= 32; break;
@@ -148,6 +153,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     case AV_CODEC_ID_MSS2:        maxpixels /= 16384; break;
     case AV_CODEC_ID_SNOW:        maxpixels /= 128; break;
     case AV_CODEC_ID_TRUEMOTION2: maxpixels /= 1024; break;
+    case AV_CODEC_ID_VP7:         maxpixels /= 256;  break;
     }
 
 
@@ -159,6 +165,8 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (ctx->max_pixels == 0 || ctx->max_pixels > maxpixels_per_frame)
         ctx->max_pixels = maxpixels_per_frame; //To reduce false positive OOM and hangs
     ctx->refcounted_frames = 1; //To reduce false positive timeouts and focus testing on the refcounted API
+
+    ctx->max_samples = maxsamples_per_frame;
 
     if (size > 1024) {
         GetByteContext gbc;
@@ -265,6 +273,10 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             if (ec_pixels > maxpixels)
                 goto maximums_reached;
 
+            nb_samples += frame->nb_samples;
+            if (nb_samples > maxsamples)
+                goto maximums_reached;
+
             if (ret <= 0 || ret > avpkt.size)
                break;
             if (ctx->codec_type != AVMEDIA_TYPE_AUDIO)
@@ -286,7 +298,7 @@ maximums_reached:
         decode_handler(ctx, frame, &got_frame, &avpkt);
     } while (got_frame == 1 && it++ < maxiteration);
 
-    fprintf(stderr, "pixels decoded: %"PRId64", iterations: %d\n", ec_pixels, it);
+    fprintf(stderr, "pixels decoded: %"PRId64", samples decoded: %"PRId64", iterations: %d\n", ec_pixels, nb_samples, it);
 
     av_frame_free(&frame);
     avcodec_free_context(&ctx);
