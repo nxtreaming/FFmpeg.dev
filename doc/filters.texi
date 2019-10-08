@@ -688,6 +688,10 @@ Unused delays will be silently ignored. If number of given delays is
 smaller than number of channels all remaining channels will not be delayed.
 If you want to delay exact number of samples, append 'S' to number.
 If you want instead to delay in seconds, append 's' to number.
+
+@item all
+Use last set delay for all remaining channels. By default is disabled.
+This option if enabled changes how option @code{delays} is interpreted.
 @end table
 
 @subsection Examples
@@ -705,6 +709,12 @@ Delay second channel by 500 samples, the third channel by 700 samples and leave
 the first channel (and any other channels that may be present) unchanged.
 @example
 adelay=0|500S|700S
+@end example
+
+@item
+Delay all channels by same number of samples:
+@example
+adelay=delays=64S:all=1
 @end example
 @end itemize
 
@@ -1813,6 +1823,58 @@ Syntax for the command is : "@var{s}"
 Change output mode.
 Syntax for the command is : "i", "o" or "n" string.
 @end table
+
+@section anlms
+Apply Normalized Least-Mean-Squares algorithm to the first audio stream using the second audio stream.
+
+This adaptive filter is used to mimic a desired filter by finding the filter coefficients that
+relate to producing the least mean square of the error signal (difference between the desired,
+2nd input audio stream and the actual signal, the 1st input audio stream).
+
+A description of the accepted options follows.
+
+@table @option
+@item order
+Set filter order.
+
+@item mu
+Set filter mu.
+
+@item eps
+Set the filter eps.
+
+@item leakage
+Set the filter leakage.
+
+@item out_mode
+It accepts the following values:
+@table @option
+@item i
+Pass the 1st input.
+
+@item d
+Pass the 2nd input.
+
+@item o
+Pass filtered samples.
+
+@item n
+Pass difference between desired and filtered samples.
+
+Default value is @var{o}.
+@end table
+@end table
+
+@subsection Examples
+
+@itemize
+@item
+One of many usages of this filter is noise reduction, input audio is filtered
+with same samples that are delayed by fixed ammount, one such example for stereo audio is:
+@example
+asplit[a][b],[a]adelay=32S|32S[a],[b][a]anlms=order=128:leakage=0.0005:mu=.5:out_mode=o
+@end example
+@end itemize
 
 @section anull
 
@@ -6158,6 +6220,13 @@ Set which planes to filter. By default all planes are filtered.
 Set vertical radius size, if zero it will be same as @code{sizeX}.
 Default is @code{0}.
 @end table
+
+@subsection Commands
+This filter supports same commands as options.
+The command accepts the same syntax of the corresponding option.
+
+If the specified expression is not valid, it is kept at its current
+value.
 
 @section bbox
 
@@ -10820,6 +10889,13 @@ Set which planes to filter. By default all planes are filtered.
 Set vertical sigma, if negative it will be same as @code{sigma}.
 Default is @code{-1}.
 @end table
+
+@subsection Commands
+This filter supports same commands as options.
+The command accepts the same syntax of the corresponding option.
+
+If the specified expression is not valid, it is kept at its current
+value.
 
 @section geq
 
@@ -21318,7 +21394,7 @@ Convert input audio to a video output, representing the audio vector
 scope.
 
 The filter is used to measure the difference between channels of stereo
-audio stream. A monoaural signal, consisting of identical left and right
+audio stream. A monaural signal, consisting of identical left and right
 signal, results in straight vertical line. Any stereo separation is visible
 as a deviation from this line, creating a Lissajous figure.
 If the straight (or deviation from it) but horizontal line appears this
@@ -23686,7 +23762,7 @@ in @file{libavutil/frame.h}. For example, to choose
 
 @section spectrumsynth
 
-Sythesize audio from 2 input video spectrums, first input stream represents
+Synthesize audio from 2 input video spectrums, first input stream represents
 magnitude across time and second represents phase across time.
 The filter will transform from frequency domain as displayed in videos back
 to time domain as presented in audio output.
