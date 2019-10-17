@@ -1231,8 +1231,11 @@ static int adpcm_decode_frame(AVCodecContext *avctx, void *data,
                 return AVERROR_INVALIDDATA;
             }
         }
-        for (i=0; i<=st; i++)
+        for (i=0; i<=st; i++) {
             c->status[i].predictor  = bytestream2_get_le32u(&gb);
+            if (FFABS(c->status[i].predictor) > (1<<16))
+                return AVERROR_INVALIDDATA;
+        }
 
         for (n = nb_samples >> (1 - st); n > 0; n--) {
             int byte   = bytestream2_get_byteu(&gb);
@@ -1380,10 +1383,10 @@ static int adpcm_decode_frame(AVCodecContext *avctx, void *data,
 
                     for (count2=0; count2<28; count2++) {
                         if (count2 & 1)
-                            next_sample = sign_extend(byte,    4) << shift;
+                            next_sample = (unsigned)sign_extend(byte,    4) << shift;
                         else {
                             byte = bytestream2_get_byte(&gb);
-                            next_sample = sign_extend(byte >> 4, 4) << shift;
+                            next_sample = (unsigned)sign_extend(byte >> 4, 4) << shift;
                         }
 
                         next_sample += (current_sample  * coeff1) +

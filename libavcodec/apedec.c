@@ -609,6 +609,10 @@ static void decode_array_0000(APEContext *ctx, GetBitContext *gb,
     ksummax = 1 << rice->k + 7;
     ksummin = rice->k ? (1 << rice->k + 6) : 0;
     for (; i < blockstodecode; i++) {
+        if (get_bits_left(&ctx->gb) < 1) {
+            ctx->error = 1;
+            return ;
+        }
         out[i] = get_rice_ook(&ctx->gb, rice->k);
         rice->ksum += out[i] - out[i - 64];
         while (rice->ksum < ksummin) {
@@ -1051,7 +1055,7 @@ static av_always_inline int predictor_update_3930(APEPredictor *p,
                   d3 * p->coeffsA[filter][3];
 
     p->lastA[filter] = decoded + (predictionA >> 9);
-    p->filterA[filter] = p->lastA[filter] + ((p->filterA[filter] * 31) >> 5);
+    p->filterA[filter] = p->lastA[filter] + ((int)(p->filterA[filter] * 31U) >> 5);
 
     sign = APESIGN(decoded);
     p->coeffsA[filter][0] += ((d0 < 0) * 2 - 1) * sign;
@@ -1364,6 +1368,8 @@ static void ape_unpack_mono(APEContext *ctx, int count)
     }
 
     ctx->entropy_decode_mono(ctx, count);
+    if (ctx->error)
+        return;
 
     /* Now apply the predictor decoding */
     ctx->predictor_decode_mono(ctx, count);
@@ -1387,6 +1393,8 @@ static void ape_unpack_stereo(APEContext *ctx, int count)
     }
 
     ctx->entropy_decode_stereo(ctx, count);
+    if (ctx->error)
+        return;
 
     /* Now apply the predictor decoding */
     ctx->predictor_decode_stereo(ctx, count);
