@@ -4683,7 +4683,16 @@ This filter logs a message when it detects that the input audio volume is less
 or equal to a noise tolerance value for a duration greater or equal to the
 minimum detected noise duration.
 
-The printed times and duration are expressed in seconds.
+The printed times and duration are expressed in seconds. The
+@code{lavfi.silence_start} or @code{lavfi.silence_start.X} metadata key
+is set on the first frame whose timestamp equals or exceeds the detection
+duration and it contains the timestamp of the first frame of the silence.
+
+The @code{lavfi.silence_duration} or @code{lavfi.silence_duration.X}
+and @code{lavfi.silence_end} or @code{lavfi.silence_end.X} metadata
+keys are set on the first frame after the silence. If @option{mono} is
+enabled, and each channel is evaluated separately, the @code{.X}
+suffixed keys are used, and @code{X} corresponds to the channel number.
 
 The filter accepts the following options:
 
@@ -4693,7 +4702,9 @@ Set noise tolerance. Can be specified in dB (in case "dB" is appended to the
 specified value) or amplitude ratio. Default is -60dB, or 0.001.
 
 @item duration, d
-Set silence duration until notification (default is 2 seconds).
+Set silence duration until notification (default is 2 seconds). See
+@ref{time duration syntax,,the Time duration section in the ffmpeg-utils(1) manual,ffmpeg-utils}
+for the accepted syntax.
 
 @item mono, m
 Process each channel separately, instead of combined. By default is disabled.
@@ -6271,7 +6282,19 @@ number in range [5, 129].
 
 @item p
 Set what planes of frame filter will use for averaging. Default is all.
+
+@item a
+Set what variant of algorithm filter will use for averaging. Default is @code{p} parallel.
+Alternatively can be set to @code{s} serial.
+
+Parallel can be faster then serial, while other way around is never true.
+Parallel will abort early on first change being greater then thresholds, while serial
+will continue processing other side of frames if they are equal or bellow thresholds.
 @end table
+
+@subsection Commands
+This filter supports same @ref{commands} as options except option @code{s}.
+The command accepts the same syntax of the corresponding option.
 
 @section avgblur
 
@@ -6313,6 +6336,23 @@ The filter accepts the following option:
 @table @option
 @item min_val
 Set the minimal luminance value. Default is @code{16}.
+@end table
+
+@section bilateral
+Apply bilateral filter, spatial smoothing while preserving edges.
+
+The filter accepts the following options:
+@table @option
+@item sigmaS
+Set sigma of gaussian function to calculate spatial weight.
+Allowed range is 0 to 10. Default is 0.1.
+
+@item sigmaR
+Set sigma of gaussian function to calculate range weight.
+Allowed range is 0 to 1. Default is 0.1.
+
+@item planes
+Set planes to filter. Default is first only.
 @end table
 
 @section bitplanenoise
@@ -10113,6 +10153,8 @@ field and second number tells from which frame to pick up bottom field.
 If optionally followed by @code{+} output frame will be marked as interlaced,
 else if followed by @code{-} output frame will be marked as progressive, else
 it will be marked same as input frame.
+If optionally followed by @code{t} output frame will use only top field, or in
+case of @code{b} it will use only bottom field.
 If line starts with @code{#} or @code{;} that line is skipped.
 
 @item mode
@@ -20897,6 +20939,9 @@ Set the number or the name of the test to perform. Supported tests are:
 @item ring1
 @item ring2
 @item all
+
+@item max_frames, m
+Set the maximum number of frames generated for each test, default value is 30.
 
 @end table
 

@@ -585,6 +585,8 @@ static int hls_delete_old_segments(AVFormatContext *s, HLSContext *hls,
             av_strlcpy(sub_path, vtt_dirname, sub_path_size);
             av_strlcat(sub_path, segment->sub_filename, sub_path_size);
 
+            av_freep(&vtt_dirname);
+
             if (hls->method || (proto && !av_strcasecmp(proto, "http"))) {
                 av_dict_set(&options, "method", "DELETE", 0);
                 if ((ret = vs->vtt_avf->io_open(vs->vtt_avf, &out, sub_path, AVIO_FLAG_WRITE, &options)) < 0) {
@@ -1884,6 +1886,9 @@ static int parse_variant_stream_mapstring(AVFormatContext *s)
      * agroup: is key to specify audio group. A string can be given as value.
      */
     p = av_strdup(hls->var_stream_map);
+    if (!p)
+        return AVERROR(ENOMEM);
+
     q = p;
     while (av_strtok(q, " \t", &saveptr1)) {
         q = NULL;
@@ -2005,6 +2010,9 @@ static int parse_cc_stream_mapstring(AVFormatContext *s)
     ClosedCaptionsStream *ccs;
 
     p = av_strdup(hls->cc_stream_map);
+    if(!p)
+        return AVERROR(ENOMEM);
+
     q = p;
     while (av_strtok(q, " \t", &saveptr1)) {
         q = NULL;
