@@ -9037,6 +9037,111 @@ The command accepts the same syntax of the corresponding option.
 If the specified expression is not valid, it is kept at its current
 value.
 
+@anchor{drawgraph}
+@section drawgraph
+Draw a graph using input video metadata.
+
+It accepts the following parameters:
+
+@table @option
+@item m1
+Set 1st frame metadata key from which metadata values will be used to draw a graph.
+
+@item fg1
+Set 1st foreground color expression.
+
+@item m2
+Set 2nd frame metadata key from which metadata values will be used to draw a graph.
+
+@item fg2
+Set 2nd foreground color expression.
+
+@item m3
+Set 3rd frame metadata key from which metadata values will be used to draw a graph.
+
+@item fg3
+Set 3rd foreground color expression.
+
+@item m4
+Set 4th frame metadata key from which metadata values will be used to draw a graph.
+
+@item fg4
+Set 4th foreground color expression.
+
+@item min
+Set minimal value of metadata value.
+
+@item max
+Set maximal value of metadata value.
+
+@item bg
+Set graph background color. Default is white.
+
+@item mode
+Set graph mode.
+
+Available values for mode is:
+@table @samp
+@item bar
+@item dot
+@item line
+@end table
+
+Default is @code{line}.
+
+@item slide
+Set slide mode.
+
+Available values for slide is:
+@table @samp
+@item frame
+Draw new frame when right border is reached.
+
+@item replace
+Replace old columns with new ones.
+
+@item scroll
+Scroll from right to left.
+
+@item rscroll
+Scroll from left to right.
+
+@item picture
+Draw single picture.
+@end table
+
+Default is @code{frame}.
+
+@item size
+Set size of graph video. For the syntax of this option, check the
+@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
+The default value is @code{900x256}.
+
+The foreground color expressions can use the following variables:
+@table @option
+@item MIN
+Minimal value of metadata value.
+
+@item MAX
+Maximal value of metadata value.
+
+@item VAL
+Current metadata key value.
+@end table
+
+The color is defined as 0xAABBGGRR.
+@end table
+
+Example using metadata from @ref{signalstats} filter:
+@example
+signalstats,drawgraph=lavfi.signalstats.YAVG:min=0:max=255
+@end example
+
+Example using metadata from @ref{ebur128} filter:
+@example
+ebur128=metadata=1,adrawgraph=lavfi.r128.M:min=-120:max=5
+@end example
+
 @section drawgrid
 
 Draw a grid on the input image.
@@ -11202,7 +11307,8 @@ gradfun=radius=8
 
 @end itemize
 
-@section graphmonitor, agraphmonitor
+@anchor{graphmonitor}
+@section graphmonitor
 Show various filtergraph stats.
 
 With this filter one can debug complete filtergraph.
@@ -12264,6 +12370,9 @@ Enables confidence interval.
 
 This filter also supports the @ref{framesync} options.
 
+@subsection Examples
+@itemize
+@item
 On the below examples the input file @file{main.mpg} being processed is
 compared with the reference file @file{ref.mpg}.
 
@@ -12271,10 +12380,18 @@ compared with the reference file @file{ref.mpg}.
 ffmpeg -i main.mpg -i ref.mpg -lavfi libvmaf -f null -
 @end example
 
+@item
 Example with options:
 @example
 ffmpeg -i main.mpg -i ref.mpg -lavfi libvmaf="psnr=1:log_fmt=json" -f null -
 @end example
+
+@item
+Example with options and different containers:
+@example
+ffmpeg -i main.mpg -i ref.mkv -lavfi "[0:v]settb=1/AVTB,setpts=PTS-STARTPTS[main];[1:v]settb=1/AVTB,setpts=PTS-STARTPTS[ref];[main][ref]libvmaf=psnr=1:log_fmt=json" -f null -
+@end example
+@end itemize
 
 @section limiter
 
@@ -12672,6 +12789,22 @@ copied from first stream.
 By default value 0xf, all planes will be processed.
 @end table
 
+@section maskedmax
+
+Merge the second and third input stream into output stream using absolute differences
+between second input stream and first input stream and absolute difference between
+third input stream and first input stream. The picked value will be from second input
+stream if second absolute difference is greater than first one or from third input stream
+otherwise.
+
+This filter accepts the following options:
+@table @option
+@item planes
+Set which planes will be processed as bitmap, unprocessed planes will be
+copied from first stream.
+By default value 0xf, all planes will be processed.
+@end table
+
 @section maskedmerge
 
 Merge the first input stream with the second input stream using per pixel
@@ -12682,6 +12815,22 @@ from first stream is returned unchanged, while maximum value (eg. 255 for
 8-bit videos) means that pixel component from second stream is returned
 unchanged. Intermediate values define the amount of merging between both
 input stream's pixel components.
+
+This filter accepts the following options:
+@table @option
+@item planes
+Set which planes will be processed as bitmap, unprocessed planes will be
+copied from first stream.
+By default value 0xf, all planes will be processed.
+@end table
+
+@section maskedmin
+
+Merge the second and third input stream into output stream using absolute differences
+between second input stream and first input stream and absolute difference between
+third input stream and first input stream. The picked value will be from second input
+stream if second absolute difference is less than first one or from third input stream
+otherwise.
 
 This filter accepts the following options:
 @table @option
@@ -12760,6 +12909,26 @@ encoder.
 
 Higher values should result in a smoother motion vector field but less
 optimal individual vectors. Default value is 1.
+@end table
+
+@section median
+
+Pick median pixel from certain rectangle defined by radius.
+
+This filter accepts the following options:
+
+@table @option
+@item radius
+Set horizontal radius size. Default value is @code{1}.
+Allowed range is integer from 1 to 127.
+
+@item planes
+Set which planes to process. Default is @code{15}, which is all available planes.
+
+@item radiusV
+Set vertical radius size. Default value is @code{0}.
+Allowed range is integer from 0 to 127.
+If it is 0, value will be picked from horizontal @code{radius} option.
 @end table
 
 @section mergeplanes
@@ -14267,7 +14436,7 @@ Set detection threshold factor. Default is 1.
 Lower is stricter.
 
 @item skip
-Set how many pixels to skip when sampling frames. Defalt is 1.
+Set how many pixels to skip when sampling frames. Default is 1.
 Allowed range is from 1 to 1024.
 
 @item bypass
@@ -14825,6 +14994,9 @@ Maximum allowed value for each channel, and average over all
 channels.
 @end table
 
+@subsection Examples
+@itemize
+@item
 For example:
 @example
 movie=ref_movie.mpg, setpts=PTS-STARTPTS [main];
@@ -14834,6 +15006,13 @@ movie=ref_movie.mpg, setpts=PTS-STARTPTS [main];
 On this example the input file being processed is compared with the
 reference file @file{ref_movie.mpg}. The PSNR of each individual frame
 is stored in @file{stats.log}.
+
+@item
+Another example with different containers:
+@example
+ffmpeg -i main.mpg -i ref.mkv -lavfi  "[0:v]settb=1/AVTB,setpts=PTS-STARTPTS[main];[1:v]settb=1/AVTB,setpts=PTS-STARTPTS[ref];[main][ref]psnr" -f null -
+@end example
+@end itemize
 
 @anchor{pullup}
 @section pullup
@@ -16876,6 +17055,9 @@ Same as above but in dB representation.
 
 This filter also supports the @ref{framesync} options.
 
+@subsection Examples
+@itemize
+@item
 For example:
 @example
 movie=ref_movie.mpg, setpts=PTS-STARTPTS [main];
@@ -16886,10 +17068,18 @@ On this example the input file being processed is compared with the
 reference file @file{ref_movie.mpg}. The SSIM of each individual frame
 is stored in @file{stats.log}.
 
+@item
 Another example with both psnr and ssim at same time:
 @example
 ffmpeg -i main.mpg -i ref.mpg -lavfi  "ssim;[0:v][1:v]psnr" -f null -
 @end example
+
+@item
+Another example with different containers:
+@example
+ffmpeg -i main.mpg -i ref.mkv -lavfi  "[0:v]settb=1/AVTB,setpts=PTS-STARTPTS[main];[1:v]settb=1/AVTB,setpts=PTS-STARTPTS[ref];[main][ref]ssim" -f null -
+@end example
+@end itemize
 
 @section stereo3d
 
@@ -18867,8 +19057,8 @@ This filter tries to detect if the input is variable or constant frame rate.
 
 At end it will output number of frames detected as having variable delta pts,
 and ones with constant delta pts.
-If there was frames with variable delta, than it will also show min and max delta
-encountered.
+If there was frames with variable delta, than it will also show min, max and
+average delta encountered.
 
 @section vibrance
 
@@ -20318,7 +20508,7 @@ Set the x coordinate of the overlaid video on the main video.
 Default value is @code{0}.
 
 @item y
-Set the x coordinate of the overlaid video on the main video.
+Set the y coordinate of the overlaid video on the main video.
 Default value is @code{0}.
 
 @end table
@@ -21418,6 +21608,15 @@ draw channels. Unrecognized or missing colors will be replaced
 by white color.
 @end table
 
+@section adrawgraph
+Draw a graph using input audio metadata.
+
+See @ref{drawgraph}
+
+@section agraphmonitor
+
+See @ref{graphmonitor}.
+
 @section ahistogram
 
 Convert input audio to a video output, displaying the volume histogram.
@@ -21778,111 +21977,6 @@ This filter supports the following commands:
 @item next
 Close the current segment and step to the next one
 @end table
-
-@section drawgraph, adrawgraph
-
-Draw a graph using input video or audio metadata.
-
-It accepts the following parameters:
-
-@table @option
-@item m1
-Set 1st frame metadata key from which metadata values will be used to draw a graph.
-
-@item fg1
-Set 1st foreground color expression.
-
-@item m2
-Set 2nd frame metadata key from which metadata values will be used to draw a graph.
-
-@item fg2
-Set 2nd foreground color expression.
-
-@item m3
-Set 3rd frame metadata key from which metadata values will be used to draw a graph.
-
-@item fg3
-Set 3rd foreground color expression.
-
-@item m4
-Set 4th frame metadata key from which metadata values will be used to draw a graph.
-
-@item fg4
-Set 4th foreground color expression.
-
-@item min
-Set minimal value of metadata value.
-
-@item max
-Set maximal value of metadata value.
-
-@item bg
-Set graph background color. Default is white.
-
-@item mode
-Set graph mode.
-
-Available values for mode is:
-@table @samp
-@item bar
-@item dot
-@item line
-@end table
-
-Default is @code{line}.
-
-@item slide
-Set slide mode.
-
-Available values for slide is:
-@table @samp
-@item frame
-Draw new frame when right border is reached.
-
-@item replace
-Replace old columns with new ones.
-
-@item scroll
-Scroll from right to left.
-
-@item rscroll
-Scroll from left to right.
-
-@item picture
-Draw single picture.
-@end table
-
-Default is @code{frame}.
-
-@item size
-Set size of graph video. For the syntax of this option, check the
-@ref{video size syntax,,"Video size" section in the ffmpeg-utils manual,ffmpeg-utils}.
-The default value is @code{900x256}.
-
-The foreground color expressions can use the following variables:
-@table @option
-@item MIN
-Minimal value of metadata value.
-
-@item MAX
-Maximal value of metadata value.
-
-@item VAL
-Current metadata key value.
-@end table
-
-The color is defined as 0xAABBGGRR.
-@end table
-
-Example using metadata from @ref{signalstats} filter:
-@example
-signalstats,drawgraph=lavfi.signalstats.YAVG:min=0:max=255
-@end example
-
-Example using metadata from @ref{ebur128} filter:
-@example
-ebur128=metadata=1,adrawgraph=lavfi.r128.M:min=-120:max=5
-@end example
 
 @anchor{ebur128}
 @section ebur128
