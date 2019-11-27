@@ -390,6 +390,8 @@ static void mkv_deinit(AVFormatContext *s)
 {
     MatroskaMuxContext *mkv = s->priv_data;
 
+    av_packet_unref(&mkv->cur_audio_pkt);
+
     ffio_free_dyn_buf(&mkv->cluster_bc);
     ffio_free_dyn_buf(&mkv->info_bc);
     ffio_free_dyn_buf(&mkv->tracks_bc);
@@ -2452,8 +2454,6 @@ static int mkv_write_packet(AVFormatContext *s, AVPacket *pkt)
         cluster_time = pkt->pts - mkv->cluster_pts;
     cluster_time += mkv->tracks[pkt->stream_index].ts_offset;
 
-    // start a new cluster every 5 MB or 5 sec, or 32k / 1 sec for streaming or
-    // after 4k and on a keyframe
     cluster_size = avio_tell(mkv->cluster_bc);
 
     if (mkv->is_dash && codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -2534,7 +2534,6 @@ static int mkv_write_trailer(AVFormatContext *s)
     // check if we have an audio packet cached
     if (mkv->cur_audio_pkt.size > 0) {
         ret = mkv_write_packet_internal(s, &mkv->cur_audio_pkt, 0);
-        av_packet_unref(&mkv->cur_audio_pkt);
         if (ret < 0) {
             av_log(s, AV_LOG_ERROR,
                    "Could not write cached audio packet ret:%d\n", ret);
