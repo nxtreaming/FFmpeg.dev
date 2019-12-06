@@ -194,6 +194,14 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
             parser = av_parser_init(c->id);
         if (flags & 2)
             ctx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+        if (flags & 4) {
+            ctx->err_recognition = AV_EF_AGGRESSIVE | AV_EF_COMPLIANT | AV_EF_CAREFUL;
+            if (flags & 8)
+                ctx->err_recognition |= AV_EF_EXPLODE;
+        }
+        if (flags & 0x10)
+            ctx->flags2 |= AV_CODEC_FLAG2_FAST;
+
 
         extradata_size = bytestream2_get_le32(&gbc);
 

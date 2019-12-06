@@ -21,13 +21,18 @@ FATE_CBS_AV1_CONFORMANCE_SAMPLES = \
     av1-1-b8-04-cdfupdate.ivf      \
     av1-1-b8-05-mv.ivf             \
     av1-1-b8-06-mfmv.ivf           \
+    av1-1-b8-22-svc-L1T2.ivf       \
+    av1-1-b8-22-svc-L2T1.ivf       \
+    av1-1-b8-22-svc-L2T2.ivf       \
     av1-1-b8-23-film_grain-50.ivf  \
     av1-1-b10-23-film_grain-50.ivf
 
 FATE_CBS_AV1_SAMPLES =              \
+    decode_model.ivf                \
     frames_refs_short_signaling.ivf \
     non_uniform_tiling.ivf          \
-    seq_hdr_op_param_info.ivf
+    seq_hdr_op_param_info.ivf       \
+    switch_frame.ivf
 
 $(foreach N,$(FATE_CBS_AV1_CONFORMANCE_SAMPLES),$(eval $(call FATE_CBS_TEST,av1,$(basename $(N)),av1-test-vectors/$(N),ivf)))
 $(foreach N,$(FATE_CBS_AV1_SAMPLES),$(eval $(call FATE_CBS_TEST,av1,$(basename $(N)),av1/$(N),ivf)))
