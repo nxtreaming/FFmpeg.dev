@@ -8354,6 +8354,9 @@ Draw rows and columns numbers on left and top of video.
 
 @item opacity
 Set background opacity.
+
+@item format
+Set display number format. Can be @code{hex}, or @code{dec}. Default is @code{hex}.
 @end table
 
 @section dctdnoiz
@@ -16210,6 +16213,46 @@ Supersampling
 @item lanczos
 @end table
 
+@item force_original_aspect_ratio
+Enable decreasing or increasing output video width or height if necessary to
+keep the original aspect ratio. Possible values:
+
+@table @samp
+@item disable
+Scale the video as specified and disable this feature.
+
+@item decrease
+The output video dimensions will automatically be decreased if needed.
+
+@item increase
+The output video dimensions will automatically be increased if needed.
+
+@end table
+
+One useful instance of this option is that when you know a specific device's
+maximum allowed resolution, you can use this to limit the output video to
+that, while retaining the aspect ratio. For example, device A allows
+1280x720 playback, and your video is 1920x800. Using this option (set it to
+decrease) and specifying 1280x720 to the command line makes the output
+1280x533.
+
+Please note that this is a different thing than specifying -1 for @option{w}
+or @option{h}, you still need to specify the output resolution for this option
+to work.
+
+@item force_divisible_by
+Ensures that both the output dimensions, width and height, are divisible by the
+given integer when used together with @option{force_original_aspect_ratio}. This
+works similar to using @code{-n} in the @option{w} and @option{h} options.
+
+This option respects the value set for @option{force_original_aspect_ratio},
+increasing or decreasing the resolution accordingly. The video's aspect ratio
+may be slightly modified.
+
+This option can be handy if you need to have a video fit within or exceed
+a defined resolution using @option{force_original_aspect_ratio} but also have
+encoder restrictions on width or height divisibility.
+
 @end table
 
 @section scale2ref
@@ -18079,10 +18122,12 @@ Enable complex vertical low-pass filtering.
 This will slightly less reduce interlace 'twitter' and Moire
 patterning but better retain detail and subjective sharpness impression.
 
+@item bypass_il
+Bypass already interlaced frames, only adjust the frame rate.
 @end table
 
-Vertical low-pass filtering can only be enabled for @option{mode}
-@var{interleave_top} and @var{interleave_bottom}.
+Vertical low-pass filtering and bypassing already interlaced frames can only be
+enabled for @option{mode} @var{interleave_top} and @var{interleave_bottom}.
 
 @end table
 
@@ -19918,6 +19963,28 @@ Only deinterlace frames marked as interlaced.
 The default value is @code{all}.
 @end table
 
+@section yaepblur
+
+Apply blur filter while preserving edges ("yaepblur" means "yet another edge preserving blur filter").
+The algorithm is described in
+"J. S. Lee, Digital image enhancement and noise filtering by use of local statistics, IEEE Trans. Pattern Anal. Mach. Intell. PAMI-2, 1980."
+
+It accepts the following parameters:
+
+@table @option
+@item radius, r
+Set the window radius. Default value is 3.
+
+@item planes, p
+Set which planes to filter. Default is only the first plane.
+
+@item sigma, s
+Set blur strength. Default value is 128.
+@end table
+
+@subsection Commands
+This filter supports same @ref{commands} as options.
+
 @section zoompan
 
 Apply Zoom & Pan effect.
@@ -20971,6 +21038,65 @@ Apply a strong blur of both luma and chroma parameters:
 @end itemize
 
 @c man end OPENCL VIDEO FILTERS
+
+@chapter VAAPI Video Filters
+@c man begin VAAPI VIDEO FILTERS
+
+VAAPI Video filters are usually used with VAAPI decoder and VAAPI encoder. Below is a description of VAAPI video filters.
+
+To enable compilation of these filters you need to configure FFmpeg with
+@code{--enable-vaapi}.
+
+To use vaapi filters, you need to setup the vaapi device correctly. For more information, please read @url{https://trac.ffmpeg.org/wiki/Hardware/VAAPI}
+
+@section tonemap_vappi
+
+Perform HDR(High Dynamic Range) to SDR(Standard Dynamic Range) conversion with tone-mapping.
+It maps the dynamic range of HDR10 content to the SDR content.
+It currently only accepts HDR10 as input.
+
+It accepts the following parameters:
+
+@table @option
+@item format
+Specify the output pixel format.
+
+Currently supported formats are:
+@table @var
+@item p010
+@item nv12
+@end table
+
+Default is nv12.
+
+@item primaries, p
+Set the output color primaries.
+
+Default is same as input.
+
+@item transfer, t
+Set the output transfer characteristics.
+
+Default is bt709.
+
+@item matrix, m
+Set the output colorspace matrix.
+
+Default is same as input.
+
+@end table
+
+@subsection Example
+
+@itemize
+@item
+Convert HDR(HDR10) video to bt2020-transfer-characteristic p010 format
+@example
+tonemap_vaapi=format=p010:t=bt2020-10
+@end example
+@end itemize
+
+@c man end VAAPI VIDEO FILTERS
 
 @chapter Video Sources
 @c man begin VIDEO SOURCES

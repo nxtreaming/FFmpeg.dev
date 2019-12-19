@@ -482,6 +482,7 @@ Developer options (useful when working on FFmpeg itself):
   --ignore-tests=TESTS     comma-separated list (without "fate-" prefix
                            in the name) of tests whose result is ignored
   --enable-linux-perf      enable Linux Performance Monitor API
+  --disable-large-tests    disable tests that use a large amount of memory
 
 NOTE: Object files are built at the place where configure is launched.
 EOF
@@ -1931,6 +1932,7 @@ CONFIG_LIST="
     $SUBSYSTEM_LIST
     autodetect
     fontconfig
+    large_tests
     linux_perf
     memory_poisoning
     neon_clobber_test
@@ -2194,6 +2196,7 @@ SYSTEM_FUNCS="
     getaddrinfo
     gethrtime
     getopt
+    GetModuleHandle
     GetProcessAffinityMask
     GetProcessMemoryInfo
     GetProcessTimes
@@ -2223,6 +2226,7 @@ SYSTEM_FUNCS="
     SecItemImport
     SetConsoleTextAttribute
     SetConsoleCtrlHandler
+    SetDllDirectory
     setmode
     setrlimit
     Sleep
@@ -3576,6 +3580,7 @@ tinterlace_filter_deps="gpl"
 tinterlace_merge_test_deps="tinterlace_filter"
 tinterlace_pad_test_deps="tinterlace_filter"
 tonemap_filter_deps="const_nan"
+tonemap_vaapi_filter_deps="vaapi VAProcPipelineParameterBuffer_output_hdr_metadata"
 tonemap_opencl_filter_deps="opencl const_nan"
 transpose_opencl_filter_deps="opencl"
 transpose_vaapi_filter_deps="vaapi VAProcPipelineCaps_rotation_flags"
@@ -3724,6 +3729,7 @@ enable asm
 enable debug
 enable doc
 enable faan faandct faanidct
+enable large_tests
 enable optimizations
 enable runtime_cpudetect
 enable safe_bitstream_reader
@@ -6032,6 +6038,7 @@ check_func_headers mach/mach_time.h mach_absolute_time
 check_func_headers stdlib.h getenv
 check_func_headers sys/stat.h lstat
 
+check_func_headers windows.h GetModuleHandle
 check_func_headers windows.h GetProcessAffinityMask
 check_func_headers windows.h GetProcessTimes
 check_func_headers windows.h GetSystemTimeAsFileTime
@@ -6040,6 +6047,7 @@ check_func_headers windows.h MapViewOfFile
 check_func_headers windows.h PeekNamedPipe
 check_func_headers windows.h SetConsoleTextAttribute
 check_func_headers windows.h SetConsoleCtrlHandler
+check_func_headers windows.h SetDllDirectory
 check_func_headers windows.h Sleep
 check_func_headers windows.h VirtualAlloc
 check_func_headers glob.h glob
@@ -6403,6 +6411,7 @@ enabled omx_rpi           && { test_code cc OMX_Core.h OMX_IndexConfigBrcmVideoR
 enabled omx               && require_headers OMX_Core.h
 enabled openssl           && { check_pkg_config openssl openssl openssl/ssl.h OPENSSL_init_ssl ||
                                check_pkg_config openssl openssl openssl/ssl.h SSL_library_init ||
+                               check_lib openssl openssl/ssl.h OPENSSL_init_ssl -lssl -lcrypto ||
                                check_lib openssl openssl/ssl.h SSL_library_init -lssl -lcrypto ||
                                check_lib openssl openssl/ssl.h SSL_library_init -lssl32 -leay32 ||
                                check_lib openssl openssl/ssl.h SSL_library_init -lssl -lcrypto -lws2_32 -lgdi32 ||
@@ -6576,6 +6585,7 @@ if enabled vaapi; then
 
     check_type "va/va.h va/va_dec_hevc.h" "VAPictureParameterBufferHEVC"
     check_struct "va/va.h" "VADecPictureParameterBufferVP9" bit_depth
+    check_struct "va/va.h va/va_vpp.h" "VAProcPipelineParameterBuffer" output_hdr_metadata
     check_struct "va/va.h va/va_vpp.h" "VAProcPipelineCaps" rotation_flags
     check_type "va/va.h va/va_enc_hevc.h" "VAEncPictureParameterBufferHEVC"
     check_type "va/va.h va/va_enc_jpeg.h" "VAEncPictureParameterBufferJPEG"

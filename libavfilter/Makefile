@@ -359,12 +359,12 @@ OBJS-$(CONFIG_ROBERTS_OPENCL_FILTER)         += vf_convolution_opencl.o opencl.o
                                                 opencl/convolution.o
 OBJS-$(CONFIG_ROTATE_FILTER)                 += vf_rotate.o
 OBJS-$(CONFIG_SAB_FILTER)                    += vf_sab.o
-OBJS-$(CONFIG_SCALE_FILTER)                  += vf_scale.o scale.o
-OBJS-$(CONFIG_SCALE_CUDA_FILTER)             += vf_scale_cuda.o vf_scale_cuda.ptx.o scale.o
-OBJS-$(CONFIG_SCALE_NPP_FILTER)              += vf_scale_npp.o scale.o
+OBJS-$(CONFIG_SCALE_FILTER)                  += vf_scale.o scale_eval.o
+OBJS-$(CONFIG_SCALE_CUDA_FILTER)             += vf_scale_cuda.o vf_scale_cuda.ptx.o scale_eval.o
+OBJS-$(CONFIG_SCALE_NPP_FILTER)              += vf_scale_npp.o scale_eval.o
 OBJS-$(CONFIG_SCALE_QSV_FILTER)              += vf_scale_qsv.o
-OBJS-$(CONFIG_SCALE_VAAPI_FILTER)            += vf_scale_vaapi.o scale.o vaapi_vpp.o
-OBJS-$(CONFIG_SCALE2REF_FILTER)              += vf_scale.o scale.o
+OBJS-$(CONFIG_SCALE_VAAPI_FILTER)            += vf_scale_vaapi.o scale_eval.o vaapi_vpp.o
+OBJS-$(CONFIG_SCALE2REF_FILTER)              += vf_scale.o scale_eval.o
 OBJS-$(CONFIG_SCROLL_FILTER)                 += vf_scroll.o
 OBJS-$(CONFIG_SELECT_FILTER)                 += f_select.o
 OBJS-$(CONFIG_SELECTIVECOLOR_FILTER)         += vf_selectivecolor.o
@@ -411,6 +411,7 @@ OBJS-$(CONFIG_TMIX_FILTER)                   += vf_mix.o framesync.o
 OBJS-$(CONFIG_TONEMAP_FILTER)                += vf_tonemap.o colorspace.o
 OBJS-$(CONFIG_TONEMAP_OPENCL_FILTER)         += vf_tonemap_opencl.o colorspace.o opencl.o \
                                                 opencl/tonemap.o opencl/colorspace_common.o
+OBJS-$(CONFIG_TONEMAP_VAAPI_FILTER)          += vf_tonemap_vaapi.o vaapi_vpp.o
 OBJS-$(CONFIG_TPAD_FILTER)                   += vf_tpad.o
 OBJS-$(CONFIG_TRANSPOSE_FILTER)              += vf_transpose.o
 OBJS-$(CONFIG_TRANSPOSE_NPP_FILTER)          += vf_transpose_npp.o
@@ -443,6 +444,7 @@ OBJS-$(CONFIG_XSTACK_FILTER)                 += vf_stack.o framesync.o
 OBJS-$(CONFIG_YADIF_FILTER)                  += vf_yadif.o yadif_common.o
 OBJS-$(CONFIG_YADIF_CUDA_FILTER)             += vf_yadif_cuda.o vf_yadif_cuda.ptx.o \
                                                 yadif_common.o
+OBJS-$(CONFIG_YAEPBLUR_FILTER)               += vf_yaepblur.o
 OBJS-$(CONFIG_ZMQ_FILTER)                    += f_zmq.o
 OBJS-$(CONFIG_ZOOMPAN_FILTER)                += vf_zoompan.o
 OBJS-$(CONFIG_ZSCALE_FILTER)                 += vf_zscale.o

@@ -87,9 +87,7 @@ static int rm_read_extradata(AVFormatContext *s, AVIOContext *pb, AVCodecParamet
         av_log(s, AV_LOG_ERROR, "extradata size %u too large\n", size);
         return -1;
     }
-    if (ff_get_extradata(s, par, pb, size) < 0)
-        return AVERROR(ENOMEM);
-    return 0;
+    return ff_get_extradata(s, par, pb, size);
 }
 
 static void rm_read_metadata(AVFormatContext *s, AVIOContext *pb, int wide)
@@ -1171,7 +1169,7 @@ static int ivr_read_header(AVFormatContext *s)
     uint8_t key[256], val[256];
     AVIOContext *pb = s->pb;
     AVStream *st;
-    int64_t pos, offset, temp;
+    int64_t pos, offset=0, temp;
 
     pos = avio_tell(pb);
     tag = avio_rl32(pb);
@@ -1188,6 +1186,8 @@ static int ivr_read_header(AVFormatContext *s)
             offset = temp;
             temp = avio_rb64(pb);
         }
+        if (offset <= 0)
+            return AVERROR_INVALIDDATA;
         avio_skip(pb, offset - avio_tell(pb));
         if (avio_r8(pb) != 1)
             return AVERROR_INVALIDDATA;

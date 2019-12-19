@@ -268,7 +268,7 @@ static int FUNC(sequence_header_obu)(CodedBitstreamContext *ctx, RWContext *rw,
     flag(enable_intra_edge_filter);
 
     if (current->reduced_still_picture_header) {
-        infer(enable_intraintra_compound, 0);
+        infer(enable_interintra_compound, 0);
         infer(enable_masked_compound,     0);
         infer(enable_warped_motion,       0);
         infer(enable_dual_filter,         0);
@@ -281,7 +281,7 @@ static int FUNC(sequence_header_obu)(CodedBitstreamContext *ctx, RWContext *rw,
         infer(seq_force_integer_mv,
               AV1_SELECT_INTEGER_MV);
     } else {
-        flag(enable_intraintra_compound);
+        flag(enable_interintra_compound);
         flag(enable_masked_compound);
         flag(enable_warped_motion);
         flag(enable_dual_filter);
@@ -1155,7 +1155,7 @@ static int FUNC(film_grain_params)(CodedBitstreamContext *ctx, RWContext *rw,
         return 0;
     }
 
-    fb(4, num_y_points);
+    fc(4, num_y_points, 0, 14);
     for (i = 0; i < current->num_y_points; i++) {
         fbs(8, point_y_value[i],   1, i);
         fbs(8, point_y_scaling[i], 1, i);
