@@ -3503,7 +3503,6 @@ freezedetect_filter_select="scene_sad"
 frei0r_filter_deps="frei0r libdl"
 frei0r_src_filter_deps="frei0r libdl"
 fspp_filter_deps="gpl"
-geq_filter_deps="gpl"
 headphone_filter_select="fft"
 histeq_filter_deps="gpl"
 hqdn3d_filter_deps="gpl"
@@ -7457,7 +7456,7 @@ cat > $TMPH <<EOF
 #define FFMPEG_CONFIG_H
 #define FFMPEG_CONFIGURATION "$(c_escape $FFMPEG_CONFIGURATION)"
 #define FFMPEG_LICENSE "$(c_escape $license)"
-#define CONFIG_THIS_YEAR 2019
+#define CONFIG_THIS_YEAR 2020
 #define FFMPEG_DATADIR "$(eval c_escape $datadir)"
 #define AVCONV_DATADIR "$(eval c_escape $datadir)"
 #define CC_IDENT "$(c_escape ${cc_ident:-Unknown compiler})"
