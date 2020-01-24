@@ -268,7 +268,6 @@ int ffio_limit(AVIOContext *s, int size)
  * Return the number of bytes read or an error. */
 static int append_packet_chunked(AVIOContext *s, AVPacket *pkt, int size)
 {
-    int64_t orig_pos   = pkt->pos; // av_grow_packet might reset pos
     int orig_size      = pkt->size;
     int ret;
 
@@ -301,7 +300,6 @@ static int append_packet_chunked(AVIOContext *s, AVPacket *pkt, int size)
     if (size > 0)
         pkt->flags |= AV_PKT_FLAG_CORRUPT;
 
-    pkt->pos = orig_pos;
     if (!pkt->size)
         av_packet_unref(pkt);
     return pkt->size > orig_size ? pkt->size - orig_size : ret;
@@ -883,13 +881,16 @@ int ff_read_packet(AVFormatContext *s, AVPacket *pkt)
             return err;
         }
 
-        if ((s->flags & AVFMT_FLAG_DISCARD_CORRUPT) &&
-            (pkt->flags & AV_PKT_FLAG_CORRUPT)) {
+        if (pkt->flags & AV_PKT_FLAG_CORRUPT) {
             av_log(s, AV_LOG_WARNING,
-                   "Dropped corrupted packet (stream = %d)\n",
-                   pkt->stream_index);
-            av_packet_unref(pkt);
-            continue;
+                   "Packet corrupt (stream = %d, dts = %s)",
+                   pkt->stream_index, av_ts2str(pkt->dts));
+            if (s->flags & AVFMT_FLAG_DISCARD_CORRUPT) {
+                av_log(s, AV_LOG_WARNING, ", dropping it.\n");
+                av_packet_unref(pkt);
+                continue;
+            }
+            av_log(s, AV_LOG_WARNING, ".\n");
         }
 
         av_assert0(pkt->stream_index < (unsigned)s->nb_streams &&

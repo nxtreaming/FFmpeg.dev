@@ -459,7 +459,6 @@ static int flush_dynbuf(VariantStream *vs, int *range_length)
 
     // flush
     av_write_frame(ctx, NULL);
-    avio_flush(ctx->pb);
 
     // write out to file
     *range_length = avio_close_dyn_buf(ctx->pb, &vs->temp_buffer);
@@ -643,13 +642,14 @@ static int do_encrypt(AVFormatContext *s, VariantStream *vs)
     int len;
     AVIOContext *pb;
     uint8_t key[KEYSIZE];
+    char * key_basename_source = (hls->master_m3u8_url) ? hls->master_m3u8_url : s->url;
 
-    len = strlen(s->url) + 4 + 1;
+    len = strlen(key_basename_source) + 4 + 1;
     hls->key_basename = av_mallocz(len);
     if (!hls->key_basename)
         return AVERROR(ENOMEM);
 
-    av_strlcpy(hls->key_basename, s->url, len);
+    av_strlcpy(hls->key_basename, key_basename_source, len);
     av_strlcat(hls->key_basename, ".key", len);
 
     if (hls->key_url) {
@@ -1188,6 +1188,7 @@ static int parse_playlist(AVFormatContext *s, const char *url, VariantStream *vs
                 is_segment = 0;
                 new_start_pos = avio_tell(vs->avf->pb);
                 vs->size = new_start_pos - vs->start_pos;
+                vs->initial_prog_date_time -= vs->duration; // this is a previously existing segment
                 ret = hls_append_segment(s, hls, vs, vs->duration, vs->start_pos, vs->size);
                 if (ret < 0)
                     goto fail;
@@ -1235,7 +1236,7 @@ static const char* get_relative_url(const char *master_url, const char *media_ur
     if (!p) p = strrchr(master_url, '\\');
 
     if (p) {
-        base_len = p + 1 - master_url;
+        base_len = p - master_url;
         if (av_strncasecmp(master_url, media_url, base_len)) {
             av_log(NULL, AV_LOG_WARNING, "Unable to find relative url\n");
             return NULL;
@@ -2548,7 +2549,6 @@ static int hls_write_trailer(struct AVFormatContext *s)
             if (!vs->init_range_length) {
                 uint8_t *buffer = NULL;
                 av_write_frame(oc, NULL); /* Flush any buffered data */
-                avio_flush(oc->pb);
 
                 range_length = avio_close_dyn_buf(oc->pb, &buffer);
                 avio_write(vs->out, buffer, range_length);

@@ -2000,8 +2000,6 @@ static int mkv_write_header(AVFormatContext *s)
     mkv->cur_audio_pkt.size = 0;
     mkv->cluster_pos = -1;
 
-    avio_flush(pb);
-
     // start a new cluster every 5 MB or 5 sec, or 32k / 1 sec for streaming or
     // after 4k and on a keyframe
     if (pb->seekable & AVIO_SEEKABLE_NORMAL) {
@@ -2165,9 +2163,9 @@ static void mkv_write_block(AVFormatContext *s, AVIOContext *pb,
         av_free(data);
 
     if (blockid == MATROSKA_ID_BLOCK && !keyframe) {
-        put_ebml_sint(pb, MATROSKA_ID_BLOCKREFERENCE, track->last_timestamp);
+        put_ebml_sint(pb, MATROSKA_ID_BLOCKREFERENCE, track->last_timestamp - ts);
     }
-    track->last_timestamp = ts - mkv->cluster_pts;
+    track->last_timestamp = ts;
 
     if (discard_padding) {
         put_ebml_sint(pb, MATROSKA_ID_DISCARDPADDING, discard_padding);
@@ -2237,7 +2235,7 @@ static void mkv_end_cluster(AVFormatContext *s)
 
     end_ebml_master_crc32(s->pb, &mkv->cluster_bc, mkv);
     mkv->cluster_pos = -1;
-    avio_flush(s->pb);
+    avio_write_marker(s->pb, AV_NOPTS_VALUE, AVIO_DATA_MARKER_FLUSH_POINT);
 }
 
 static int mkv_check_new_extra_data(AVFormatContext *s, AVPacket *pkt)
