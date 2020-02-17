@@ -5374,7 +5374,7 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
     AVCodecParameters *par = trk->par;
     AVProducerReferenceTime *prft;
     unsigned int samples_in_chunk = 0;
-    int size = pkt->size, ret = 0;
+    int size = pkt->size, ret = 0, offset = 0;
     int prft_size;
     uint8_t *reformatted_data = NULL;
 
@@ -5461,8 +5461,10 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
         /* from x264 or from bytestream H.264 */
         /* NAL reformatting needed */
         if (trk->hint_track >= 0 && trk->hint_track < mov->nb_streams) {
-            ff_avc_parse_nal_units_buf(pkt->data, &reformatted_data,
-                                       &size);
+            ret = ff_avc_parse_nal_units_buf(pkt->data, &reformatted_data,
+                                             &size);
+            if (ret < 0)
+                return ret;
             avio_write(pb, reformatted_data, size);
         } else {
             if (trk->cenc.aes_ctr) {
@@ -5479,14 +5481,20 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
                (AV_RB24(trk->vos_data) == 1 || AV_RB32(trk->vos_data) == 1)) {
         /* extradata is Annex B, assume the bitstream is too and convert it */
         if (trk->hint_track >= 0 && trk->hint_track < mov->nb_streams) {
-            ff_hevc_annexb2mp4_buf(pkt->data, &reformatted_data, &size, 0, NULL);
+            ret = ff_hevc_annexb2mp4_buf(pkt->data, &reformatted_data,
+                                         &size, 0, NULL);
+            if (ret < 0)
+                return ret;
             avio_write(pb, reformatted_data, size);
         } else {
             size = ff_hevc_annexb2mp4(pb, pkt->data, pkt->size, 0, NULL);
         }
     } else if (par->codec_id == AV_CODEC_ID_AV1) {
         if (trk->hint_track >= 0 && trk->hint_track < mov->nb_streams) {
-            ff_av1_filter_obus_buf(pkt->data, &reformatted_data, &size);
+            ret = ff_av1_filter_obus_buf(pkt->data, &reformatted_data,
+                                         &size, &offset);
+            if (ret < 0)
+                return ret;
             avio_write(pb, reformatted_data, size);
         } else {
             size = ff_av1_filter_obus(pb, pkt->data, pkt->size);
@@ -5660,12 +5668,14 @@ int ff_mov_write_packet(AVFormatContext *s, AVPacket *pkt)
 
     if (trk->hint_track >= 0 && trk->hint_track < mov->nb_streams)
         ff_mov_add_hinted_packet(s, pkt, trk->hint_track, trk->entry,
-                                 reformatted_data, size);
+                                 reformatted_data ? reformatted_data + offset
+                                                  : NULL, size);
 
 end:
 err:
 
-    av_free(reformatted_data);
+    if (pkt->data != reformatted_data)
+        av_free(reformatted_data);
     return ret;
 }
 
@@ -6389,6 +6399,8 @@ static int mov_init(AVFormatContext *s)
             }
             if (mov->video_track_timescale) {
                 track->timescale = mov->video_track_timescale;
+                if (mov->mode == MODE_ISM && mov->video_track_timescale != 10000000)
+                    av_log(s, AV_LOG_WARNING, "Warning: some tools, like mp4split, assume a timescale of 10000000 for ISMV.\n");
             } else {
                 track->timescale = st->time_base.den;
                 while(track->timescale < 10000)
@@ -6486,10 +6498,14 @@ static int mov_init(AVFormatContext *s)
         }
         if (!track->height)
             track->height = st->codecpar->height;
-        /* The ism specific timescale isn't mandatory, but is assumed by
-         * some tools, such as mp4split. */
-        if (mov->mode == MODE_ISM)
-            track->timescale = 10000000;
+        /* The Protected Interoperable File Format (PIFF) standard, used by ISMV recommends but
+           doesn't mandate a track timescale of 10,000,000. The muxer allows a custom timescale
+           for video tracks, so if user-set, it isn't overwritten */
+        if (mov->mode == MODE_ISM &&
+            (st->codecpar->codec_type != AVMEDIA_TYPE_VIDEO ||
+            (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && !mov->video_track_timescale))) {
+             track->timescale = 10000000;
+        }
 
         avpriv_set_pts_info(st, 64, 1, track->timescale);
 

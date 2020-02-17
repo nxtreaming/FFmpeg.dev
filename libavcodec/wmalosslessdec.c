@@ -532,7 +532,8 @@ static int decode_channel_residues(WmallDecodeCtx *s, int ch, int tile_size)
         i++;
     }
     for (; i < tile_size; i++) {
-        int quo = 0, rem, rem_bits, residue;
+        int rem, rem_bits;
+        unsigned quo = 0, residue;
         while(get_bits1(&s->gb)) {
             quo++;
             if (get_bits_left(&s->gb) <= 0)
@@ -771,7 +772,7 @@ static void revert_cdlms ## bits (WmallDecodeCtx *s, int ch, \
                                                         s->cdlms[ch][ilms].recent, \
                                                         FFALIGN(s->cdlms[ch][ilms].order, ROUND), \
                                                         WMASIGN(residue)); \
-            input = residue + (pred >> s->cdlms[ch][ilms].scaling); \
+            input = residue + (unsigned)(pred >> s->cdlms[ch][ilms].scaling); \
             lms_update ## bits(s, ch, ilms, input); \
             s->channel_residues[ch][icoef] = input; \
         } \
@@ -822,8 +823,11 @@ static void revert_acfilter(WmallDecodeCtx *s, int tile_size)
             pred >>= scaling;
             s->channel_residues[ich][i] += (unsigned)pred;
         }
-        for (j = 0; j < order; j++)
-            prevvalues[j] = s->channel_residues[ich][tile_size - j - 1];
+        for (j = order - 1; j >= 0; j--)
+            if (tile_size <= j) {
+                prevvalues[j] = prevvalues[j - tile_size];
+            }else
+                prevvalues[j] = s->channel_residues[ich][tile_size - j - 1];
     }
 }
 
@@ -988,7 +992,7 @@ static int decode_subframe(WmallDecodeCtx *s)
             if (s->bits_per_sample == 16) {
                 *s->samples_16[c]++ = (int16_t) s->channel_residues[c][j] * (1 << padding_zeroes);
             } else {
-                *s->samples_32[c]++ = s->channel_residues[c][j] * (256 << padding_zeroes);
+                *s->samples_32[c]++ = s->channel_residues[c][j] * (256U << padding_zeroes);
             }
         }
     }

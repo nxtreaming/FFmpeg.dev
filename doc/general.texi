@@ -846,6 +846,8 @@ following image formats are supported:
     @tab Codec used in Delphine Software International games.
 @item Discworld II BMV Video @tab     @tab  X
 @item Canopus Lossless Codec @tab     @tab  X
+@item CDToons                @tab     @tab  X
+    @tab Codec used in various Broderbund games.
 @item Cinepak                @tab     @tab  X
 @item Cirrus Logic AccuPak   @tab  X  @tab  X
     @tab fourcc: CLJR
@@ -1079,6 +1081,7 @@ following image formats are supported:
 @item ACELP.KELVIN           @tab     @tab  X
 @item ADPCM 4X Movie         @tab     @tab  X
 @item APDCM Yamaha AICA      @tab     @tab  X
+@item ADPCM Argonaut Games   @tab     @tab  X
 @item ADPCM CDROM XA         @tab     @tab  X
 @item ADPCM Creative Technology @tab     @tab  X
     @tab 16 -> 4, 8 -> 4, 8 -> 3, 8 -> 2
