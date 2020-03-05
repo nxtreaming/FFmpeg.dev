@@ -128,7 +128,7 @@ typedef struct OutputStream {
     char full_path[1024];
     char temp_path[1024];
     double availability_time_offset;
-    int64_t producer_reference_time;
+    AVProducerReferenceTime producer_reference_time;
     char producer_reference_time_str[100];
     int total_pkt_size;
     int64_t total_pkt_duration;
@@ -818,7 +818,7 @@ static int write_adaptation_set(AVFormatContext *s, AVIOContext *out, int as_ind
         avio_printf(out, " lang=\"%s\"", lang->value);
     avio_printf(out, ">\n");
 
-    if (!final && c->ldash && as->max_frag_duration)
+    if (!final && c->ldash && as->max_frag_duration && !(c->profile & MPD_PROFILE_DVB))
         avio_printf(out, "\t\t\t<Resync dT=\"%"PRId64"\" type=\"0\"/>\n", as->max_frag_duration);
     if (as->trick_idx >= 0)
         avio_printf(out, "\t\t\t<EssentialProperty id=\"%d\" schemeIdUri=\"http://dashif.org/guidelines/trickmode\" value=\"%d\"/>\n", as->id, as->trick_idx);
@@ -864,12 +864,12 @@ static int write_adaptation_set(AVFormatContext *s, AVIOContext *out, int as_ind
                 s->streams[i]->codecpar->channels);
         }
         if (!final && c->write_prft && os->producer_reference_time_str[0]) {
-            avio_printf(out, "\t\t\t\t<ProducerReferenceTime id=\"%d\" inband=\"true\" type=\"encoder\" wallclockTime=\"%s\" presentationTime=\"%"PRId64"\">\n",
-                        i, os->producer_reference_time_str, c->presentation_time_offset);
+            avio_printf(out, "\t\t\t\t<ProducerReferenceTime id=\"%d\" inband=\"true\" type=\"%s\" wallclockTime=\"%s\" presentationTime=\"%"PRId64"\">\n",
+                        i, os->producer_reference_time.flags ? "captured" : "encoder", os->producer_reference_time_str, c->presentation_time_offset);
             avio_printf(out, "\t\t\t\t\t<UTCTiming schemeIdUri=\"urn:mpeg:dash:utc:http-xsdate:2014\" value=\"%s\"/>\n", c->utc_timing_url);
             avio_printf(out, "\t\t\t\t</ProducerReferenceTime>\n");
         }
-        if (!final && c->ldash && os->gop_size && os->frag_type != FRAG_TYPE_NONE &&
+        if (!final && c->ldash && os->gop_size && os->frag_type != FRAG_TYPE_NONE && !(c->profile & MPD_PROFILE_DVB) &&
             (os->frag_type != FRAG_TYPE_DURATION || os->frag_duration != os->seg_duration))
             avio_printf(out, "\t\t\t\t<Resync dT=\"%"PRId64"\" type=\"1\"/>\n", os->gop_size);
         output_segment_list(os, out, s, i, final);
@@ -1394,6 +1394,12 @@ static int dash_init(AVFormatContext *s)
         c->frag_type = FRAG_TYPE_EVERY_FRAME;
     }
 
+    if (c->write_prft < 0) {
+        c->write_prft = c->ldash;
+        if (c->ldash)
+            av_log(s, AV_LOG_VERBOSE, "Enabling Producer Reference Time element for Low Latency mode\n");
+    }
+
     if (c->write_prft && !c->utc_timing_url) {
         av_log(s, AV_LOG_WARNING, "Producer Reference Time element option will be ignored as utc_timing_url is not set\n");
         c->write_prft = 0;
@@ -1402,6 +1408,10 @@ static int dash_init(AVFormatContext *s)
     if (c->write_prft && !c->streaming) {
         av_log(s, AV_LOG_WARNING, "Producer Reference Time element option will be ignored as streaming is not enabled\n");
         c->write_prft = 0;
+    }
+
+    if (c->ldash && !c->write_prft) {
+        av_log(s, AV_LOG_WARNING, "Low Latency mode enabled without Producer Reference Time element option! Resulting manifest may not be complaint\n");
     }
 
     if (c->target_latency && !c->write_prft) {
@@ -1907,12 +1917,8 @@ static int dash_flush(AVFormatContext *s, int final, int stream)
                 continue;
         }
 
-        if (!c->single_file) {
-            if (os->segment_type == SEGMENT_TYPE_MP4 && !os->written_len)
-                write_styp(os->ctx->pb);
-        } else {
+        if (c->single_file)
             snprintf(os->full_path, sizeof(os->full_path), "%s%s", c->dirname, os->initfile);
-        }
 
         ret = flush_dynbuf(c, os, &range_length);
         if (ret < 0)
@@ -2002,6 +2008,32 @@ static int dash_flush(AVFormatContext *s, int final, int stream)
     return ret;
 }
 
+static int dash_parse_prft(DASHContext *c, AVPacket *pkt)
+{
+    OutputStream *os = &c->streams[pkt->stream_index];
+    AVProducerReferenceTime *prft;
+    int side_data_size;
+
+    prft = (AVProducerReferenceTime *)av_packet_get_side_data(pkt, AV_PKT_DATA_PRFT, &side_data_size);
+    if (!prft || side_data_size != sizeof(AVProducerReferenceTime) || (prft->flags && prft->flags != 24)) {
+        // No encoder generated or user provided capture time AVProducerReferenceTime side data. Instead
+        // of letting the mov muxer generate one, do it here so we can also use it for the manifest.
+        prft = (AVProducerReferenceTime *)av_packet_new_side_data(pkt, AV_PKT_DATA_PRFT,
+                                                                  sizeof(AVProducerReferenceTime));
+        if (!prft)
+            return AVERROR(ENOMEM);
+        prft->wallclock = av_gettime();
+        prft->flags = 24;
+    }
+    if (os->first_pts == AV_NOPTS_VALUE) {
+        os->producer_reference_time = *prft;
+        if (c->target_latency_refid < 0)
+            c->target_latency_refid = pkt->stream_index;
+    }
+
+    return 0;
+}
+
 static int dash_write_packet(AVFormatContext *s, AVPacket *pkt)
 {
     DASHContext *c = s->priv_data;
@@ -2033,15 +2065,13 @@ static int dash_write_packet(AVFormatContext *s, AVPacket *pkt)
         pkt->dts  = 0;
     }
 
+    if (c->write_prft) {
+        ret = dash_parse_prft(c, pkt);
+        if (ret < 0)
+            return ret;
+    }
+
     if (os->first_pts == AV_NOPTS_VALUE) {
-        int side_data_size;
-        AVProducerReferenceTime *prft = (AVProducerReferenceTime *)av_packet_get_side_data(pkt, AV_PKT_DATA_PRFT,
-                                                                                           &side_data_size);
-        if (prft && side_data_size == sizeof(AVProducerReferenceTime) && !prft->flags) {
-            os->producer_reference_time = prft->wallclock;
-            if (c->target_latency_refid < 0)
-                c->target_latency_refid = pkt->stream_index;
-        }
         os->first_pts = pkt->pts;
     }
     os->last_pts = pkt->pts;
@@ -2118,10 +2148,10 @@ static int dash_write_packet(AVFormatContext *s, AVPacket *pkt)
         }
         }
 
-        if (c->write_prft && os->producer_reference_time && !os->producer_reference_time_str[0])
+        if (c->write_prft && os->producer_reference_time.wallclock && !os->producer_reference_time_str[0])
             format_date(os->producer_reference_time_str,
                         sizeof(os->producer_reference_time_str),
-                        os->producer_reference_time);
+                        os->producer_reference_time.wallclock);
 
         if ((ret = dash_flush(s, 0, pkt->stream_index)) < 0)
             return ret;
@@ -2184,6 +2214,8 @@ static int dash_write_packet(AVFormatContext *s, AVPacket *pkt)
         AVDictionary *opts = NULL;
         const char *proto = avio_find_protocol_name(s->url);
         int use_rename = proto && !strcmp(proto, "file");
+        if (os->segment_type == SEGMENT_TYPE_MP4)
+            write_styp(os->ctx->pb);
         os->filename[0] = os->full_path[0] = os->temp_path[0] = '\0';
         ff_dash_fill_tmpl_params(os->filename, sizeof(os->filename),
                                  os->media_seg_name, pkt->stream_index,
@@ -2208,8 +2240,6 @@ static int dash_write_packet(AVFormatContext *s, AVPacket *pkt)
     if (c->streaming && os->segment_type == SEGMENT_TYPE_MP4) {
         int len = 0;
         uint8_t *buf = NULL;
-        if (!os->written_len)
-            write_styp(os->ctx->pb);
         avio_flush(os->ctx->pb);
         len = avio_get_dyn_buf (os->ctx->pb, &buf);
         if (os->out) {
@@ -2328,7 +2358,7 @@ static const AVOption options[] = {
     { "lhls", "Enable Low-latency HLS(Experimental). Adds #EXT-X-PREFETCH tag with current segment's URI", OFFSET(lhls), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
     { "ldash", "Enable Low-latency dash. Constrains the value of a few elements", OFFSET(ldash), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, E },
     { "master_m3u8_publish_rate", "Publish master playlist every after this many segment intervals", OFFSET(master_publish_rate), AV_OPT_TYPE_INT, {.i64 = 0}, 0, UINT_MAX, E},
-    { "write_prft", "Write producer reference time element", OFFSET(write_prft), AV_OPT_TYPE_BOOL, {.i64 = 0}, 0, 1, E},
+    { "write_prft", "Write producer reference time element", OFFSET(write_prft), AV_OPT_TYPE_BOOL, {.i64 = -1}, -1, 1, E},
     { "mpd_profile", "Set profiles. Elements and values used in the manifest may be constrained by them", OFFSET(profile), AV_OPT_TYPE_FLAGS, {.i64 = MPD_PROFILE_DASH }, 0, UINT_MAX, E, "mpd_profile"},
     { "dash", "MPEG-DASH ISO Base media file format live profile", 0, AV_OPT_TYPE_CONST, {.i64 = MPD_PROFILE_DASH }, 0, UINT_MAX, E, "mpd_profile"},
     { "dvb_dash", "DVB-DASH profile", 0, AV_OPT_TYPE_CONST, {.i64 = MPD_PROFILE_DVB }, 0, UINT_MAX, E, "mpd_profile"},

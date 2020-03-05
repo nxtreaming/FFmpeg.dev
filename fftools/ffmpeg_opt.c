@@ -74,9 +74,6 @@ const HWAccel hwaccels[] = {
 #if CONFIG_LIBMFX
     { "qsv",   qsv_init,   HWACCEL_QSV,   AV_PIX_FMT_QSV },
 #endif
-#if CONFIG_CUVID
-    { "cuvid", cuvid_init, HWACCEL_CUVID, AV_PIX_FMT_CUDA },
-#endif
     { 0 },
 };
 AVBufferRef *hw_device_ctx;
@@ -829,7 +826,7 @@ static void add_input_streams(OptionsContext *o, AVFormatContext *ic)
             MATCH_PER_STREAM_OPT(hwaccels, str, hwaccel, ic, st);
             if (hwaccel) {
                 // The NVDEC hwaccels use a CUDA device, so remap the name here.
-                if (!strcmp(hwaccel, "nvdec"))
+                if (!strcmp(hwaccel, "nvdec") || !strcmp(hwaccel, "cuvid"))
                     hwaccel = "cuda";
 
                 if (!strcmp(hwaccel, "none"))
@@ -3292,6 +3289,7 @@ static int open_files(OptionGroupList *l, const char *inout,
         if (ret < 0) {
             av_log(NULL, AV_LOG_ERROR, "Error parsing options for %s file "
                    "%s.\n", inout, g->arg);
+            uninit_options(&o);
             return ret;
         }
 
