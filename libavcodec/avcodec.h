@@ -552,6 +552,7 @@ enum AVCodecID {
     AV_CODEC_ID_ADPCM_IMA_SSI,
     AV_CODEC_ID_ADPCM_ZORK,
     AV_CODEC_ID_ADPCM_IMA_APM,
+    AV_CODEC_ID_ADPCM_IMA_ALP,
 
     /* AMR */
     AV_CODEC_ID_AMR_NB = 0x12000,
@@ -1449,6 +1450,12 @@ enum AVPacketSideDataType {
      * AVCodecContext export_side_data field).
      */
     AV_PKT_DATA_PRFT,
+
+    /**
+     * ICC profile data consisting of an opaque octet buffer following the
+     * format described by ISO 15076-1.
+     */
+    AV_PKT_DATA_ICC_PROFILE,
 
     /**
      * The number of side data types.
