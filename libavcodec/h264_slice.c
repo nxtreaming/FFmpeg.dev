@@ -29,7 +29,6 @@
 #include "libavutil/display.h"
 #include "libavutil/imgutils.h"
 #include "libavutil/stereo3d.h"
-#include "libavutil/timer.h"
 #include "internal.h"
 #include "cabac.h"
 #include "cabac_functions.h"
@@ -865,7 +864,7 @@ static enum AVPixelFormat get_pixel_format(H264Context *h, int force_callback)
 }
 
 /* export coded and cropped frame dimensions to AVCodecContext */
-static int init_dimensions(H264Context *h)
+static void init_dimensions(H264Context *h)
 {
     const SPS *sps = (const SPS*)h->ps.sps;
     int cr = sps->crop_right;
@@ -903,8 +902,6 @@ static int init_dimensions(H264Context *h)
     h->crop_left           = cl;
     h->crop_top            = ct;
     h->crop_bottom         = cb;
-
-    return 0;
 }
 
 static int h264_slice_header_init(H264Context *h)
@@ -1069,9 +1066,7 @@ static int h264_init_ps(H264Context *h, const H264SliceContext *sl, int first_sl
         h->width  = 16 * h->mb_width;
         h->height = 16 * h->mb_height;
 
-        ret = init_dimensions(h);
-        if (ret < 0)
-            return ret;
+        init_dimensions(h);
 
         if (sps->video_signal_type_present_flag) {
             h->avctx->color_range = sps->full_range > 0 ? AVCOL_RANGE_JPEG
@@ -2621,7 +2616,6 @@ static int decode_slice(struct AVCodecContext *avctx, void *arg)
         ff_h264_init_cabac_states(h, sl);
 
         for (;;) {
-            // START_TIMER
             int ret, eos;
             if (sl->mb_x + sl->mb_y * h->mb_width >= sl->next_slice_idx) {
                 av_log(h->avctx, AV_LOG_ERROR, "Slice overlaps with next at %d\n",
@@ -2632,7 +2626,6 @@ static int decode_slice(struct AVCodecContext *avctx, void *arg)
             }
 
             ret = ff_h264_decode_mb_cabac(h, sl);
-            // STOP_TIMER("decode_mb_cabac")
 
             if (ret >= 0)
                 ff_h264_hl_decode_mb(h, sl);
