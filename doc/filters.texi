@@ -14387,6 +14387,38 @@ testsrc=s=100x100, split=4 [in0][in1][in2][in3];
 
 @end itemize
 
+@anchor{overlay_cuda}
+@section overlay_cuda
+
+Overlay one video on top of another.
+
+This is the CUDA cariant of the @ref{overlay} filter.
+It only accepts CUDA frames. The underlying input pixel formats have to match.
+
+It takes two inputs and has one output. The first input is the "main"
+video on which the second input is overlaid.
+
+It accepts the following parameters:
+
+@table @option
+@item x
+@item y
+Set the x and y coordinates of the overlaid video on the main video.
+Default value is "0" for both expressions.
+
+@item eof_action
+See @ref{framesync}.
+
+@item shortest
+See @ref{framesync}.
+
+@item repeatlast
+See @ref{framesync}.
+
+@end table
+
+This filter also supports the @ref{framesync} options.
+
 @section owdenoise
 
 Apply Overcomplete Wavelet denoiser.
@@ -18487,29 +18519,31 @@ The filter accepts the following options:
 
 @table @option
 @item start
-Specify number of delay frames before input video stream.
+Specify number of delay frames before input video stream. Default is 0.
 
 @item stop
 Specify number of padding frames after input video stream.
-Set to -1 to pad indefinitely.
+Set to -1 to pad indefinitely. Default is 0.
 
 @item start_mode
 Set kind of frames added to beginning of stream.
 Can be either @var{add} or @var{clone}.
 With @var{add} frames of solid-color are added.
 With @var{clone} frames are clones of first frame.
+Default is @var{add}.
 
 @item stop_mode
 Set kind of frames added to end of stream.
 Can be either @var{add} or @var{clone}.
 With @var{add} frames of solid-color are added.
 With @var{clone} frames are clones of last frame.
+Default is @var{add}.
 
 @item start_duration, stop_duration
 Specify the duration of the start/stop delay. See
 @ref{time duration syntax,,the Time duration section in the ffmpeg-utils(1) manual,ffmpeg-utils}
 for the accepted syntax.
-These options override @var{start} and @var{stop}.
+These options override @var{start} and @var{stop}. Default is 0.
 
 @item color
 Specify the color of the padded area. For the syntax of this option,
