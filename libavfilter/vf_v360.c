@@ -74,6 +74,7 @@ static const AVOption v360_options[] = {
     {    "hammer", "hammer",                                     0, AV_OPT_TYPE_CONST,  {.i64=HAMMER},          0,                   0, FLAGS, "in" },
     {"sinusoidal", "sinusoidal",                                 0, AV_OPT_TYPE_CONST,  {.i64=SINUSOIDAL},      0,                   0, FLAGS, "in" },
     {   "fisheye", "fisheye",                                    0, AV_OPT_TYPE_CONST,  {.i64=FISHEYE},         0,                   0, FLAGS, "in" },
+    {   "pannini", "pannini",                                    0, AV_OPT_TYPE_CONST,  {.i64=PANNINI},         0,                   0, FLAGS, "in" },
     {"cylindrical", "cylindrical",                               0, AV_OPT_TYPE_CONST,  {.i64=CYLINDRICAL},     0,                   0, FLAGS, "in" },
     {"tetrahedron", "tetrahedron",                               0, AV_OPT_TYPE_CONST,  {.i64=TETRAHEDRON},     0,                   0, FLAGS, "in" },
     {"barrelsplit", "barrel split facebook's 360 format",        0, AV_OPT_TYPE_CONST,  {.i64=BARREL_SPLIT},    0,                   0, FLAGS, "in" },
@@ -112,6 +113,7 @@ static const AVOption v360_options[] = {
     {   "nearest", "nearest neighbour",                          0, AV_OPT_TYPE_CONST,  {.i64=NEAREST},         0,                   0, FLAGS, "interp" },
     {      "line", "bilinear interpolation",                     0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
     {    "linear", "bilinear interpolation",                     0, AV_OPT_TYPE_CONST,  {.i64=BILINEAR},        0,                   0, FLAGS, "interp" },
+    { "lagrange9", "lagrange9 interpolation",                    0, AV_OPT_TYPE_CONST,  {.i64=LAGRANGE9},       0,                   0, FLAGS, "interp" },
     {      "cube", "bicubic interpolation",                      0, AV_OPT_TYPE_CONST,  {.i64=BICUBIC},         0,                   0, FLAGS, "interp" },
     {     "cubic", "bicubic interpolation",                      0, AV_OPT_TYPE_CONST,  {.i64=BICUBIC},         0,                   0, FLAGS, "interp" },
     {      "lanc", "lanczos interpolation",                      0, AV_OPT_TYPE_CONST,  {.i64=LANCZOS},         0,                   0, FLAGS, "interp" },
@@ -139,9 +141,9 @@ static const AVOption v360_options[] = {
     {     "pitch", "pitch rotation",                 OFFSET(pitch), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f,TFLAGS, "pitch"},
     {      "roll", "roll rotation",                   OFFSET(roll), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},        -180.f,               180.f,TFLAGS, "roll"},
     {    "rorder", "rotation order",                OFFSET(rorder), AV_OPT_TYPE_STRING, {.str="ypr"},           0,                   0,TFLAGS, "rorder"},
-    {     "h_fov", "horizontal field of view",       OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},     0.00001f,               360.f,TFLAGS, "h_fov"},
-    {     "v_fov", "vertical field of view",         OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},     0.00001f,               360.f,TFLAGS, "v_fov"},
-    {     "d_fov", "diagonal field of view",         OFFSET(d_fov), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},           0.f,               360.f,TFLAGS, "d_fov"},
+    {     "h_fov", "output horizontal field of view",OFFSET(h_fov), AV_OPT_TYPE_FLOAT,  {.dbl=90.f},     0.00001f,               360.f,TFLAGS, "h_fov"},
+    {     "v_fov", "output vertical field of view",  OFFSET(v_fov), AV_OPT_TYPE_FLOAT,  {.dbl=45.f},     0.00001f,               360.f,TFLAGS, "v_fov"},
+    {     "d_fov", "output diagonal field of view",  OFFSET(d_fov), AV_OPT_TYPE_FLOAT,  {.dbl=0.f},           0.f,               360.f,TFLAGS, "d_fov"},
     {    "h_flip", "flip out video horizontally",   OFFSET(h_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1,TFLAGS, "h_flip"},
     {    "v_flip", "flip out video vertically",     OFFSET(v_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1,TFLAGS, "v_flip"},
     {    "d_flip", "flip out video indepth",        OFFSET(d_flip), AV_OPT_TYPE_BOOL,   {.i64=0},               0,                   1,TFLAGS, "d_flip"},
@@ -313,9 +315,11 @@ static int remap##ws##_##bits##bit_slice(AVFilterContext *ctx, void *arg, int jo
 
 DEFINE_REMAP(1,  8)
 DEFINE_REMAP(2,  8)
+DEFINE_REMAP(3,  8)
 DEFINE_REMAP(4,  8)
 DEFINE_REMAP(1, 16)
 DEFINE_REMAP(2, 16)
+DEFINE_REMAP(3, 16)
 DEFINE_REMAP(4, 16)
 
 #define DEFINE_REMAP_LINE(ws, bits, div)                                                      \
@@ -346,8 +350,10 @@ static void remap##ws##_##bits##bit_line_c(uint8_t *dst, int width, const uint8_
 }
 
 DEFINE_REMAP_LINE(2,  8, 1)
+DEFINE_REMAP_LINE(3,  8, 1)
 DEFINE_REMAP_LINE(4,  8, 1)
 DEFINE_REMAP_LINE(2, 16, 2)
+DEFINE_REMAP_LINE(3, 16, 2)
 DEFINE_REMAP_LINE(4, 16, 2)
 
 void ff_v360_init(V360Context *s, int depth)
@@ -358,6 +364,9 @@ void ff_v360_init(V360Context *s, int depth)
         break;
     case BILINEAR:
         s->remap_line = depth <= 8 ? remap2_8bit_line_c : remap2_16bit_line_c;
+        break;
+    case LAGRANGE9:
+        s->remap_line = depth <= 8 ? remap3_8bit_line_c : remap3_16bit_line_c;
         break;
     case BICUBIC:
     case LANCZOS:
@@ -415,6 +424,47 @@ static void bilinear_kernel(float du, float dv, const XYRemap *rmap,
     ker[1] = lrintf(       du  * (1.f - dv) * 16385.f);
     ker[2] = lrintf((1.f - du) *        dv  * 16385.f);
     ker[3] = lrintf(       du  *        dv  * 16385.f);
+}
+
+/**
+ * Calculate 1-dimensional lagrange coefficients.
+ *
+ * @param t relative coordinate
+ * @param coeffs coefficients
+ */
+static inline void calculate_lagrange_coeffs(float t, float *coeffs)
+{
+    coeffs[0] = (t - 1.f) * (t - 2.f) * 0.5f;
+    coeffs[1] = -t * (t - 2.f);
+    coeffs[2] =  t * (t - 1.f) * 0.5f;
+}
+
+/**
+ * Calculate kernel for lagrange interpolation.
+ *
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ * @param rmap calculated 4x4 window
+ * @param u u remap data
+ * @param v v remap data
+ * @param ker ker remap data
+ */
+static void lagrange_kernel(float du, float dv, const XYRemap *rmap,
+                            int16_t *u, int16_t *v, int16_t *ker)
+{
+    float du_coeffs[3];
+    float dv_coeffs[3];
+
+    calculate_lagrange_coeffs(du, du_coeffs);
+    calculate_lagrange_coeffs(dv, dv_coeffs);
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            u[i * 3 + j] = rmap->u[i + 1][j + 1];
+            v[i * 3 + j] = rmap->v[i + 1][j + 1];
+            ker[i * 3 + j] = lrintf(du_coeffs[j] * dv_coeffs[i] * 16385.f);
+        }
+    }
 }
 
 /**
@@ -2642,6 +2692,52 @@ static int pannini_to_xyz(const V360Context *s,
 }
 
 /**
+ * Calculate frame position in pannini format for corresponding 3D coordinates on sphere.
+ *
+ * @param s filter private context
+ * @param vec coordinates on sphere
+ * @param width frame width
+ * @param height frame height
+ * @param us horizontal coordinates for interpolation window
+ * @param vs vertical coordinates for interpolation window
+ * @param du horizontal relative coordinate
+ * @param dv vertical relative coordinate
+ */
+static int xyz_to_pannini(const V360Context *s,
+                          const float *vec, int width, int height,
+                          int16_t us[4][4], int16_t vs[4][4], float *du, float *dv)
+{
+    const float phi   = atan2f(vec[0], vec[2]) * s->input_mirror_modifier[0];
+    const float theta = asinf(vec[1]) * s->input_mirror_modifier[1];
+
+    const float d = s->ih_fov;
+    const float S = (d + 1.f) / (d + cosf(phi));
+
+    const float x = S * sinf(phi);
+    const float y = S * tanf(theta);
+
+    const float uf = (x + 1.f) * width  / 2.f;
+    const float vf = (y + 1.f) * height / 2.f;
+
+    const int ui = floorf(uf);
+    const int vi = floorf(vf);
+
+    const int visible = vi >= 0 && vi < height && ui >= 0 && ui < width && vec[2] >= 0.f;
+
+    *du = uf - ui;
+    *dv = vf - vi;
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            us[i][j] = visible ? av_clip(ui + j - 1, 0, width  - 1) : 0;
+            vs[i][j] = visible ? av_clip(vi + i - 1, 0, height - 1) : 0;
+        }
+    }
+
+    return visible;
+}
+
+/**
  * Prepare data for processing cylindrical output format.
  *
  * @param ctx filter context
@@ -3689,6 +3785,13 @@ static int config_output(AVFilterLink *outlink)
         sizeof_uv = sizeof(int16_t) * s->elements;
         sizeof_ker = sizeof(int16_t) * s->elements;
         break;
+    case LAGRANGE9:
+        s->calculate_kernel = lagrange_kernel;
+        s->remap_slice = depth <= 8 ? remap3_8bit_slice : remap3_16bit_slice;
+        s->elements = 3 * 3;
+        sizeof_uv = sizeof(int16_t) * s->elements;
+        sizeof_ker = sizeof(int16_t) * s->elements;
+        break;
     case BICUBIC:
         s->calculate_kernel = bicubic_kernel;
         s->remap_slice = depth <= 8 ? remap4_8bit_slice : remap4_16bit_slice;
@@ -3821,7 +3924,6 @@ static int config_output(AVFilterLink *outlink)
         hf = h;
         break;
     case PERSPECTIVE:
-    case PANNINI:
         av_log(ctx, AV_LOG_ERROR, "Supplied format is not accepted as input.\n");
         return AVERROR(EINVAL);
     case DUAL_FISHEYE:
@@ -3870,6 +3972,12 @@ static int config_output(AVFilterLink *outlink)
         s->in_transform = xyz_to_fisheye;
         err = prepare_fisheye_in(ctx);
         wf = w * 2;
+        hf = h;
+        break;
+    case PANNINI:
+        s->in_transform = xyz_to_pannini;
+        err = 0;
+        wf = w;
         hf = h;
         break;
     case CYLINDRICAL:

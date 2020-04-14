@@ -2790,6 +2790,7 @@ msmpeg4v3_decoder_select="h263_decoder"
 msmpeg4v3_encoder_select="h263_encoder"
 mss2_decoder_select="mpegvideo qpeldsp vc1_decoder"
 mts2_decoder_select="mss34dsp"
+mv30_decoder_select="blockdsp"
 mvha_decoder_deps="zlib"
 mvha_decoder_select="llviddsp"
 mwsc_decoder_deps="zlib"
@@ -3498,6 +3499,7 @@ derain_filter_select="dnn"
 deshake_filter_select="pixelutils"
 deshake_opencl_filter_deps="opencl"
 dilation_opencl_filter_deps="opencl"
+dnn_processing_filter_deps="swscale"
 dnn_processing_filter_select="dnn"
 drawtext_filter_deps="libfreetype"
 drawtext_filter_suggest="libfontconfig libfribidi"
@@ -4438,6 +4440,7 @@ msvc_common_flags(){
             -l*)                  echo ${flag#-l}.lib ;;
             -LARGEADDRESSAWARE)   echo $flag ;;
             -L*)                  echo -libpath:${flag#-L} ;;
+            -Wl,*)                ;;
             *)                    echo $flag ;;
         esac
     done
@@ -4797,7 +4800,7 @@ fi
 
 if test "$cpu" = host; then
     enabled cross_compile &&
-        die "--cpu=host makes no sense when cross-compiling."
+        warn "--cpu=host makes no sense when cross-compiling."
 
     case "$cc_type" in
         gcc|llvm_gcc)
@@ -6244,6 +6247,7 @@ for func in $COMPLEX_FUNCS; do
 done
 
 # these are off by default, so fail if requested and not available
+enabled avisynth          && require_headers "avisynth/avisynth_c.h"
 enabled cuda_nvcc         && { check_nvcc cuda_nvcc || die "ERROR: failed checking for nvcc."; }
 enabled chromaprint       && require chromaprint chromaprint.h chromaprint_get_version -lchromaprint
 enabled decklink          && { require_headers DeckLinkAPI.h &&
