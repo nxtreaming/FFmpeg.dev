@@ -20,29 +20,16 @@
  */
 
 #include "avformat.h"
-#include "avio_internal.h"
 #include "internal.h"
 #include "libavcodec/internal.h"
-#include "libavcodec/bytestream.h"
 #include "libavutil/opt.h"
 #include "libavutil/dict.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/timestamp.h"
-#include "metadata.h"
-#include "id3v2.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/internal.h"
 #include "libavutil/mathematics.h"
-#include "libavutil/parseutils.h"
-#include "libavutil/time.h"
-#include "riff.h"
-#include "audiointerleave.h"
-#include "url.h"
-#include <stdarg.h>
-#if CONFIG_NETWORK
-#include "network.h"
-#endif
 
 /**
  * @file
@@ -824,7 +811,7 @@ static int prepare_input_packet(AVFormatContext *s, AVPacket *pkt)
 
 static int do_packet_auto_bsf(AVFormatContext *s, AVPacket *pkt) {
     AVStream *st = s->streams[pkt->stream_index];
-    int i, ret;
+    int ret;
 
     if (!(s->flags & AVFMT_FLAG_AUTO_BSF))
         return 1;
@@ -838,8 +825,8 @@ static int do_packet_auto_bsf(AVFormatContext *s, AVPacket *pkt) {
         }
     }
 
-    for (i = 0; i < st->internal->nb_bsfcs; i++) {
-        AVBSFContext *ctx = st->internal->bsfcs[i];
+    if (st->internal->bsfc) {
+        AVBSFContext *ctx = st->internal->bsfc;
         // TODO: when any bitstream filter requires flushing at EOF, we'll need to
         // flush each stream's BSF chain on write_trailer.
         if ((ret = av_bsf_send_packet(ctx, pkt)) < 0) {
