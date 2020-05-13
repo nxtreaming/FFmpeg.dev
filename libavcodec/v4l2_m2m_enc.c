@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>
 #include <search.h>
 #include "libavcodec/avcodec.h"
+#include "libavcodec/internal.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/pixfmt.h"
 #include "libavutil/opt.h"
@@ -204,11 +205,11 @@ static int v4l2_prepare_encoder(V4L2m2mContext *s)
     switch (avctx->codec_id) {
     case AV_CODEC_ID_H264:
         if (avctx->profile != FF_PROFILE_UNKNOWN) {
-        val = v4l2_h264_profile_from_ff(avctx->profile);
-        if (val < 0)
-            av_log(avctx, AV_LOG_WARNING, "h264 profile not found\n");
-        else
-            v4l2_set_ext_ctrl(s, MPEG_CID(H264_PROFILE), val, "h264 profile", 1);
+            val = v4l2_h264_profile_from_ff(avctx->profile);
+            if (val < 0)
+                av_log(avctx, AV_LOG_WARNING, "h264 profile not found\n");
+            else
+                v4l2_set_ext_ctrl(s, MPEG_CID(H264_PROFILE), val, "h264 profile", 1);
         }
         qmin_cid = MPEG_CID(H264_MIN_QP);
         qmax_cid = MPEG_CID(H264_MAX_QP);
@@ -217,11 +218,11 @@ static int v4l2_prepare_encoder(V4L2m2mContext *s)
         break;
     case AV_CODEC_ID_MPEG4:
         if (avctx->profile != FF_PROFILE_UNKNOWN) {
-        val = v4l2_mpeg4_profile_from_ff(avctx->profile);
-        if (val < 0)
-            av_log(avctx, AV_LOG_WARNING, "mpeg4 profile not found\n");
-        else
-            v4l2_set_ext_ctrl(s, MPEG_CID(MPEG4_PROFILE), val, "mpeg4 profile", 1);
+            val = v4l2_mpeg4_profile_from_ff(avctx->profile);
+            if (val < 0)
+                av_log(avctx, AV_LOG_WARNING, "mpeg4 profile not found\n");
+            else
+                v4l2_set_ext_ctrl(s, MPEG_CID(MPEG4_PROFILE), val, "mpeg4 profile", 1);
         }
         qmin_cid = MPEG_CID(MPEG4_MIN_QP);
         qmax_cid = MPEG_CID(MPEG4_MAX_QP);
@@ -252,11 +253,18 @@ static int v4l2_prepare_encoder(V4L2m2mContext *s)
         return 0;
     }
 
-    if (qmin != avctx->qmin || qmax != avctx->qmax)
-        av_log(avctx, AV_LOG_WARNING, "Encoder adjusted: qmin (%d), qmax (%d)\n", qmin, qmax);
+    if (avctx->qmin >= 0 && avctx->qmax >= 0 && avctx->qmin > avctx->qmax) {
+        av_log(avctx, AV_LOG_WARNING, "Invalid qmin:%d qmax:%d. qmin should not "
+                                      "exceed qmax\n", avctx->qmin, avctx->qmax);
+    } else {
+        qmin = avctx->qmin >= 0 ? avctx->qmin : qmin;
+        qmax = avctx->qmax >= 0 ? avctx->qmax : qmax;
+    }
 
-    v4l2_set_ext_ctrl(s, qmin_cid, qmin, "minimum video quantizer scale", 0);
-    v4l2_set_ext_ctrl(s, qmax_cid, qmax, "maximum video quantizer scale", 0);
+    v4l2_set_ext_ctrl(s, qmin_cid, qmin, "minimum video quantizer scale",
+                      avctx->qmin >= 0);
+    v4l2_set_ext_ctrl(s, qmax_cid, qmax, "maximum video quantizer scale",
+                      avctx->qmax >= 0);
 
     return 0;
 }
@@ -369,6 +377,12 @@ static const AVOption options[] = {
     { NULL },
 };
 
+static const AVCodecDefault v4l2_m2m_defaults[] = {
+    { "qmin", "-1" },
+    { "qmax", "-1" },
+    { NULL },
+};
+
 #define M2MENC_CLASS(NAME) \
     static const AVClass v4l2_m2m_ ## NAME ## _enc_class = { \
         .class_name = #NAME "_v4l2m2m_encoder", \
@@ -390,6 +404,7 @@ static const AVOption options[] = {
         .send_frame     = v4l2_send_frame, \
         .receive_packet = v4l2_receive_packet, \
         .close          = v4l2_encode_close, \
+        .defaults       = v4l2_m2m_defaults, \
         .capabilities   = AV_CODEC_CAP_HARDWARE | AV_CODEC_CAP_DELAY, \
         .wrapper_name   = "v4l2m2m", \
     };

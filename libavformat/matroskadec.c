@@ -1135,7 +1135,7 @@ static int is_ebml_id_valid(uint32_t id)
  * an entry already exists, return the existing entry.
  */
 static MatroskaLevel1Element *matroska_find_level1_elem(MatroskaDemuxContext *matroska,
-                                                        uint32_t id)
+                                                        uint32_t id, int64_t pos)
 {
     int i;
     MatroskaLevel1Element *elem;
@@ -1147,19 +1147,18 @@ static MatroskaLevel1Element *matroska_find_level1_elem(MatroskaDemuxContext *ma
     if (id == MATROSKA_ID_CLUSTER)
         return NULL;
 
-    // There can be multiple seekheads.
-    if (id != MATROSKA_ID_SEEKHEAD) {
-        for (i = 0; i < matroska->num_level1_elems; i++) {
-            if (matroska->level1_elems[i].id == id)
+    // There can be multiple SeekHeads and Tags.
+    for (i = 0; i < matroska->num_level1_elems; i++) {
+        if (matroska->level1_elems[i].id == id) {
+            if (matroska->level1_elems[i].pos == pos ||
+                id != MATROSKA_ID_SEEKHEAD && id != MATROSKA_ID_TAGS)
                 return &matroska->level1_elems[i];
         }
     }
 
     // Only a completely broken file would have more elements.
-    // It also provides a low-effort way to escape from circular seekheads
-    // (every iteration will add a level1 entry).
     if (matroska->num_level1_elems >= FF_ARRAY_ELEMS(matroska->level1_elems)) {
-        av_log(matroska->ctx, AV_LOG_ERROR, "Too many level1 elements or circular seekheads.\n");
+        av_log(matroska->ctx, AV_LOG_ERROR, "Too many level1 elements.\n");
         return NULL;
     }
 
@@ -1408,7 +1407,7 @@ static int ebml_parse(MatroskaDemuxContext *matroska,
         if (id == MATROSKA_ID_CUES)
             matroska->cues_parsing_deferred = 0;
         if (syntax->type == EBML_LEVEL1 &&
-            (level1_elem = matroska_find_level1_elem(matroska, syntax->id))) {
+            (level1_elem = matroska_find_level1_elem(matroska, syntax->id, pos))) {
             if (!level1_elem->pos) {
                 // Zero is not a valid position for a level 1 element.
                 level1_elem->pos = pos;
@@ -1866,8 +1865,12 @@ static void matroska_execute_seekhead(MatroskaDemuxContext *matroska)
         MatroskaSeekhead *seekheads = seekhead_list->elem;
         uint32_t id = seekheads[i].id;
         int64_t pos = seekheads[i].pos + matroska->segment_start;
+        MatroskaLevel1Element *elem;
 
-        MatroskaLevel1Element *elem = matroska_find_level1_elem(matroska, id);
+        if (id != seekheads[i].id || pos < matroska->segment_start)
+            continue;
+
+        elem = matroska_find_level1_elem(matroska, id, pos);
         if (!elem || elem->parsed)
             continue;
 
@@ -3414,13 +3417,13 @@ static int matroska_parse_webvtt(MatroskaDemuxContext *matroska,
 
 static int matroska_parse_frame(MatroskaDemuxContext *matroska,
                                 MatroskaTrack *track, AVStream *st,
-                                AVBufferRef *buf, uint8_t **data, int pkt_size,
+                                AVBufferRef *buf, uint8_t *data, int pkt_size,
                                 uint64_t timecode, uint64_t lace_duration,
                                 int64_t pos, int is_keyframe,
                                 uint8_t *additional, uint64_t additional_id, int additional_size,
                                 int64_t discard_padding)
 {
-    uint8_t *pkt_data = *data;
+    uint8_t *pkt_data = data;
     int res = 0;
     AVPacket pktl, *pkt = &pktl;
 
@@ -3432,7 +3435,7 @@ static int matroska_parse_frame(MatroskaDemuxContext *matroska,
             goto fail;
         }
         if (!buf)
-            av_freep(data);
+            av_freep(&data);
         buf = NULL;
     }
 
@@ -3445,7 +3448,7 @@ static int matroska_parse_frame(MatroskaDemuxContext *matroska,
             goto fail;
         }
         if (!buf)
-            av_freep(data);
+            av_freep(&data);
         buf = NULL;
     }
 
@@ -3525,7 +3528,7 @@ FF_ENABLE_DEPRECATION_WARNINGS
 no_output:
 fail:
     if (!buf)
-        av_freep(data);
+        av_free(pkt_data);
     return res;
 }
 
@@ -3659,7 +3662,7 @@ static int matroska_parse_block(MatroskaDemuxContext *matroska, AVBufferRef *buf
             if (res)
                 return res;
         } else {
-            res = matroska_parse_frame(matroska, track, st, buf, &out_data,
+            res = matroska_parse_frame(matroska, track, st, buf, out_data,
                                        out_size, timecode, lace_duration,
                                        pos, !n ? is_keyframe : 0,
                                        additional, additional_id, additional_size,
