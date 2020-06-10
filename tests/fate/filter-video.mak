@@ -122,6 +122,10 @@ FATE_FILTER-$(call ALLYES, FRAMERATE_FILTER TESTSRC2_FILTER FORMAT_FILTER) += fa
 fate-filter-framerate-12bit-up: CMD = framecrc -lavfi testsrc2=r=50:d=1,format=pix_fmts=yuv422p12le,framerate=fps=60 -t 1 -pix_fmt yuv422p12le
 fate-filter-framerate-12bit-down: CMD = framecrc -lavfi testsrc2=r=60:d=1,format=pix_fmts=yuv422p12le,framerate=fps=50 -t 1 -pix_fmt yuv422p12le
 
+FATE_FILTER-$(call ALLYES, MINTERPOLATE_FILTER TESTSRC2_FILTER) += fate-filter-minterpolate-up fate-filter-minterpolate-down
+fate-filter-minterpolate-up: CMD = framecrc -lavfi testsrc2=r=2:d=10,framerate=fps=10 -t 1
+fate-filter-minterpolate-down: CMD = framecrc -lavfi testsrc2=r=2:d=10,framerate=fps=1 -t 1
+
 FATE_FILTER_VSYNTH-$(CONFIG_BOXBLUR_FILTER) += fate-filter-boxblur
 fate-filter-boxblur: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf boxblur=2:1
 
@@ -392,6 +396,9 @@ fate-filter-trim-time: CMD = framecrc -i $(SRC) -vf trim=0:0.09
 
 FATE_FILTER_VSYNTH-$(CONFIG_TRIM_FILTER) += $(FATE_TRIM)
 
+FATE_FILTER-$(call ALLYES, TESTSRC2_FILTER UNTILE_FILTER) += fate-filter-untile
+fate-filter-untile: CMD = framecrc -lavfi testsrc2=d=1:r=2,untile=2x2
+
 FATE_FILTER_VSYNTH-$(CONFIG_UNSHARP_FILTER) += fate-filter-unsharp
 fate-filter-unsharp: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf unsharp=11:11:-1.5:11:11:-1.5
 
@@ -494,6 +501,18 @@ fate-filter-colorlevels: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf format=rgb24,c
 
 FATE_FILTER_VSYNTH-$(CONFIG_COLORLEVELS_FILTER) += fate-filter-colorlevels-16
 fate-filter-colorlevels-16: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf format=rgb48,colorlevels -pix_fmt rgb48le -flags +bitexact -sws_flags +accurate_rnd+bitexact
+
+FATE_FILTER_VSYNTH-$(CONFIG_COLORBALANCE_FILTER) += fate-filter-colorbalance
+fate-filter-colorbalance: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf format=rgb24,colorbalance=rs=.2 -flags +bitexact -sws_flags +accurate_rnd+bitexact -frames:v 3
+
+FATE_FILTER_VSYNTH-$(CONFIG_COLORBALANCE_FILTER) += fate-filter-colorbalance-gbrap
+fate-filter-colorbalance-gbrap: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf format=gbrap,colorbalance=gh=.2 -flags +bitexact -sws_flags +accurate_rnd+bitexact -frames:v 3
+
+FATE_FILTER_VSYNTH-$(CONFIG_COLORBALANCE_FILTER) += fate-filter-colorbalance-rgba64
+fate-filter-colorbalance-rgba64: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf format=rgba64,colorbalance=rm=.2 -pix_fmt rgba64le -flags +bitexact -sws_flags +accurate_rnd+bitexact -frames:v 3
+
+FATE_FILTER_VSYNTH-$(CONFIG_COLORBALANCE_FILTER) += fate-filter-colorbalance-gbrap-16
+fate-filter-colorbalance-gbrap-16: CMD = framecrc -c:v pgmyuv -i $(SRC) -vf format=gbrap,colorbalance=bh=.2 -pix_fmt gbrap -flags +bitexact -sws_flags +accurate_rnd+bitexact -frames:v 3
 
 FATE_FILTER_VSYNTH-$(CONFIG_COLORMATRIX_FILTER) += fate-filter-colormatrix1
 fate-filter-colormatrix1: CMD = video_filter "colormatrix=bt601:smpte240m,colormatrix=smpte240m:fcc,colormatrix=fcc:bt601,colormatrix=bt601:fcc,colormatrix=fcc:smpte240m,colormatrix=smpte240m:bt709"
@@ -755,6 +774,12 @@ SCENEDETECT_DEPS = FFPROBE LAVFI_INDEV MOVIE_FILTER SELECT_FILTER SCALE_FILTER \
 FATE_METADATA_FILTER-$(call ALLYES, $(SCENEDETECT_DEPS)) += fate-filter-metadata-scenedetect
 fate-filter-metadata-scenedetect: SRC = $(TARGET_SAMPLES)/svq3/Vertical400kbit.sorenson3.mov
 fate-filter-metadata-scenedetect: CMD = run $(FILTER_METADATA_COMMAND) "sws_flags=+accurate_rnd+bitexact;movie='$(SRC)',select=gt(scene\,.25)"
+
+SCDET_DEPS = FFPROBE LAVFI_INDEV MOVIE_FILTER SCDET_FILTER SCALE_FILTER \
+                   AVCODEC AVDEVICE MOV_DEMUXER SVQ3_DECODER ZLIB
+FATE_METADATA_FILTER-$(call ALLYES, $(SCDET_DEPS)) += fate-filter-metadata-scdet
+fate-filter-metadata-scdet: SRC = $(TARGET_SAMPLES)/svq3/Vertical400kbit.sorenson3.mov
+fate-filter-metadata-scdet: CMD = run $(FILTER_METADATA_COMMAND) "sws_flags=+accurate_rnd+bitexact;movie='$(SRC)',scdet=s=1"
 
 CROPDETECT_DEPS = FFPROBE LAVFI_INDEV MOVIE_FILTER CROPDETECT_FILTER SCALE_FILTER \
                   AVCODEC AVDEVICE MOV_DEMUXER H264_DECODER

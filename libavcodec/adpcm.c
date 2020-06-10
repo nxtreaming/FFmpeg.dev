@@ -559,6 +559,10 @@ static int xa_decode(AVCodecContext *avctx, int16_t *out0, int16_t *out1,
             avpriv_request_sample(avctx, "unknown XA-ADPCM filter %d", filter);
             filter=0;
         }
+        if (shift < 0) {
+            avpriv_request_sample(avctx, "unknown XA-ADPCM shift %d", shift);
+            shift = 0;
+        }
         f0 = xa_adpcm_table[filter][0];
         f1 = xa_adpcm_table[filter][1];
 
@@ -584,9 +588,13 @@ static int xa_decode(AVCodecContext *avctx, int16_t *out0, int16_t *out1,
 
         shift  = 12 - (in[5+i*2] & 15);
         filter = in[5+i*2] >> 4;
-        if (filter >= FF_ARRAY_ELEMS(xa_adpcm_table)) {
+        if (filter >= FF_ARRAY_ELEMS(xa_adpcm_table) || shift < 0) {
             avpriv_request_sample(avctx, "unknown XA-ADPCM filter %d", filter);
             filter=0;
+        }
+        if (shift < 0) {
+            avpriv_request_sample(avctx, "unknown XA-ADPCM shift %d", shift);
+            shift = 0;
         }
 
         f0 = xa_adpcm_table[filter][0];
@@ -1853,8 +1861,8 @@ static int adpcm_decode_frame(AVCodecContext *avctx, void *data,
                 int byte = bytestream2_get_byteu(&gb);
                 int index = (byte >> 4) & 7;
                 unsigned int exp = byte & 0x0F;
-                int factor1 = table[ch][index * 2];
-                int factor2 = table[ch][index * 2 + 1];
+                int64_t factor1 = table[ch][index * 2];
+                int64_t factor2 = table[ch][index * 2 + 1];
 
                 /* Decode 14 samples.  */
                 for (n = 0; n < 14 && (i * 14 + n < nb_samples); n++) {

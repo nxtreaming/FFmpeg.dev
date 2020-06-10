@@ -55,9 +55,6 @@
 #include "libavutil/ffversion.h"
 #include "libavutil/version.h"
 #include "cmdutils.h"
-#if CONFIG_NETWORK
-#include "libavformat/network.h"
-#endif
 #if HAVE_SYS_RESOURCE_H
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -1423,10 +1420,6 @@ static void print_codec(const AVCodec *c)
         printf("threads ");
     if (c->capabilities & AV_CODEC_CAP_AVOID_PROBING)
         printf("avoidprobe ");
-    if (c->capabilities & AV_CODEC_CAP_INTRA_ONLY)
-        printf("intraonly ");
-    if (c->capabilities & AV_CODEC_CAP_LOSSLESS)
-        printf("lossless ");
     if (c->capabilities & AV_CODEC_CAP_HARDWARE)
         printf("hardware ");
     if (c->capabilities & AV_CODEC_CAP_HYBRID)
@@ -2217,7 +2210,7 @@ double get_rotation(AVStream *st)
     if (fabs(theta - 90*round(theta/90)) > 2)
         av_log(NULL, AV_LOG_WARNING, "Odd rotation angle.\n"
                "If you want to help, upload a sample "
-               "of this file to ftp://upload.ffmpeg.org/incoming/ "
+               "of this file to https://streams.videolan.org/upload/ "
                "and contact the ffmpeg-devel mailing list. (ffmpeg-devel@ffmpeg.org)");
 
     return theta;

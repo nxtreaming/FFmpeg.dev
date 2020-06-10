@@ -848,8 +848,8 @@ factor if negative.
 Force interlacing support in encoder (MPEG-2 and MPEG-4 only).
 Use this option if your input file is interlaced and you want
 to keep the interlaced format for minimum losses.
-The alternative is to deinterlace the input stream with
-@option{-deinterlace}, but deinterlacing introduces losses.
+The alternative is to deinterlace the input stream by use of a filter
+such as @code{yadif} or @code{bwdif}, but deinterlacing introduces losses.
 @item -psnr
 Calculate PSNR of compressed frames.
 @item -vstats
@@ -1721,6 +1721,8 @@ Stop and abort on various conditions. The following flags are available:
 @table @option
 @item empty_output
 No packets were passed to the muxer, the output is empty.
+@item empty_output_stream
+No packets were passed to the muxer in some of the output streams.
 @end table
 
 @item -xerror (@emph{global})

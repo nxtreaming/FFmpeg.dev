@@ -676,7 +676,7 @@ static void mclms_predict(WmallDecodeCtx *s, int icoef, int *pred)
         for (i = 0; i < ich; i++)
             pred[ich] += (uint32_t)s->channel_residues[i][icoef] *
                          s->mclms_coeffs_cur[i + num_channels * ich];
-        pred[ich] += (1 << s->mclms_scaling) >> 1;
+        pred[ich] += (1U << s->mclms_scaling) >> 1;
         pred[ich] >>= s->mclms_scaling;
         s->channel_residues[ich][icoef] += (unsigned)pred[ich];
     }
@@ -790,8 +790,8 @@ static void revert_inter_ch_decorr(WmallDecodeCtx *s, int tile_size)
     else if (s->is_channel_coded[0] || s->is_channel_coded[1]) {
         int icoef;
         for (icoef = 0; icoef < tile_size; icoef++) {
-            s->channel_residues[0][icoef] -= s->channel_residues[1][icoef] >> 1;
-            s->channel_residues[1][icoef] += s->channel_residues[0][icoef];
+            s->channel_residues[0][icoef] -= (unsigned)(s->channel_residues[1][icoef] >> 1);
+            s->channel_residues[1][icoef] += (unsigned) s->channel_residues[0][icoef];
         }
     }
 }

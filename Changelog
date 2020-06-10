@@ -2,6 +2,9 @@ Entries are sorted chronologically from oldest to youngest within each release,
 releases are sorted from youngest to oldest.
 
 version <next>:
+
+
+version 4.3:
 - v360 filter
 - Intel QSV-accelerated MJPEG decoding
 - Intel QSV-accelerated VP9 decoding
@@ -66,6 +69,15 @@ version <next>:
 - asubboost filter
 - Pro Pinball Series Soundbank demuxer
 - pcm_rechunk bitstream filter
+- scdet filter
+- NotchLC decoder
+- gradients source video filter
+- MediaFoundation encoder wrapper
+- untile filter
+- Simon & Schuster Interactive ADPCM encoder
+- PFM decoder
+- dblur video filter
+- Real War KVAG muxer
 
 
 version 4.2:
