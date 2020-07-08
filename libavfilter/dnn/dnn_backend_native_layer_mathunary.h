@@ -34,6 +34,15 @@ typedef enum {
     DMUO_SIN = 1,
     DMUO_COS = 2,
     DMUO_TAN = 3,
+    DMUO_ASIN = 4,
+    DMUO_ACOS = 5,
+    DMUO_ATAN = 6,
+    DMUO_SINH = 7,
+    DMUO_COSH = 8,
+    DMUO_TANH = 9,
+    DMUO_ASINH = 10,
+    DMUO_ACOSH = 11,
+    DMUO_ATANH = 12,
     DMUO_COUNT
 } DNNMathUnaryOperation;
 
@@ -41,7 +50,7 @@ typedef struct DnnLayerMathUnaryParams{
     DNNMathUnaryOperation un_op;
 } DnnLayerMathUnaryParams;
 
-int dnn_load_layer_math_unary(Layer *layer, AVIOContext *model_file_context, int file_size);
+int dnn_load_layer_math_unary(Layer *layer, AVIOContext *model_file_context, int file_size, int operands_num);
 int dnn_execute_layer_math_unary(DnnOperand *operands, const int32_t *input_operand_indexes,
                                 int32_t output_operand_index, const void *parameters);
 
