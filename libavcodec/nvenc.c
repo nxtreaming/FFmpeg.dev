@@ -31,6 +31,7 @@
 #include "libavutil/avassert.h"
 #include "libavutil/mem.h"
 #include "libavutil/pixdesc.h"
+#include "atsc_a53.h"
 #include "encode.h"
 #include "internal.h"
 #include "packet_internal.h"
@@ -424,7 +425,7 @@ static int nvenc_check_capabilities(AVCodecContext *avctx)
 
 #ifdef NVENC_HAVE_BFRAME_REF_MODE
     ret = nvenc_check_cap(avctx, NV_ENC_CAPS_SUPPORT_BFRAME_REF_MODE);
-    if (ctx->b_ref_mode == NV_ENC_BFRAME_REF_MODE_EACH && ret != 1) {
+    if (ctx->b_ref_mode == NV_ENC_BFRAME_REF_MODE_EACH && ret != 1 && ret != 3) {
         av_log(avctx, AV_LOG_WARNING, "Each B frame as reference is not supported\n");
         return AVERROR(ENOSYS);
     } else if (ctx->b_ref_mode != NV_ENC_BFRAME_REF_MODE_DISABLED && ret == 0) {
@@ -2218,7 +2219,7 @@ static int nvenc_send_frame(AVCodecContext *avctx, const AVFrame *frame)
             void *tc_data = NULL;
             size_t tc_size = 0;
 
-            if (ff_alloc_timecode_sei(frame, 0, (void**)&tc_data, &tc_size) < 0) {
+            if (ff_alloc_timecode_sei(frame, avctx->framerate, 0, (void**)&tc_data, &tc_size) < 0) {
                 av_log(ctx, AV_LOG_ERROR, "Not enough memory for timecode sei, skipping\n");
             }
 

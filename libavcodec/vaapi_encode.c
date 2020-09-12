@@ -607,11 +607,9 @@ fail_with_picture:
 fail:
     for(i = 0; i < pic->nb_param_buffers; i++)
         vaDestroyBuffer(ctx->hwctx->display, pic->param_buffers[i]);
-    for (i = 0; i < pic->nb_slices; i++) {
-        if (pic->slices) {
-            av_freep(&pic->slices[i].priv_data);
+    if (pic->slices) {
+        for (i = 0; i < pic->nb_slices; i++)
             av_freep(&pic->slices[i].codec_slice_params);
-        }
     }
 fail_at_end:
     av_freep(&pic->codec_picture_params);
@@ -742,11 +740,9 @@ static int vaapi_encode_free(AVCodecContext *avctx,
     if (pic->encode_issued)
         vaapi_encode_discard(avctx, pic);
 
-    for (i = 0; i < pic->nb_slices; i++) {
-        if (pic->slices) {
-            av_freep(&pic->slices[i].priv_data);
+    if (pic->slices) {
+        for (i = 0; i < pic->nb_slices; i++)
             av_freep(&pic->slices[i].codec_slice_params);
-        }
     }
     av_freep(&pic->codec_picture_params);
 
@@ -1248,6 +1244,9 @@ static const VAAPIEncodeRTFormat vaapi_encode_rt_formats[] = {
     { "YUV400",    VA_RT_FORMAT_YUV400,        8, 1,      },
     { "YUV420",    VA_RT_FORMAT_YUV420,        8, 3, 1, 1 },
     { "YUV422",    VA_RT_FORMAT_YUV422,        8, 3, 1, 0 },
+#if VA_CHECK_VERSION(1, 2, 0)
+    { "YUV422_10", VA_RT_FORMAT_YUV422_10,    10, 3, 1, 0 },
+#endif
     { "YUV444",    VA_RT_FORMAT_YUV444,        8, 3, 0, 0 },
     { "YUV411",    VA_RT_FORMAT_YUV411,        8, 3, 2, 0 },
 #if VA_CHECK_VERSION(0, 38, 1)
@@ -1905,9 +1904,6 @@ static av_cold int vaapi_encode_init_row_slice_structure(AVCodecContext *avctx,
         req_slices = avctx->slices;
     }
     if (slice_structure & VA_ENC_SLICE_STRUCTURE_ARBITRARY_ROWS ||
-#if VA_CHECK_VERSION(1, 8, 0)
-        slice_structure & VA_ENC_SLICE_STRUCTURE_EQUAL_MULTI_ROWS ||
-#endif
         slice_structure & VA_ENC_SLICE_STRUCTURE_ARBITRARY_MACROBLOCKS) {
         ctx->nb_slices  = req_slices;
         ctx->slice_size = ctx->slice_block_rows / ctx->nb_slices;
