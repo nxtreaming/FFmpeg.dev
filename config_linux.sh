@@ -13,6 +13,12 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 ./configure                          \
 --prefix=/usr/local                  \
 --pkg-config-flags="--static"        \
+--enable-debug=3                     \
+--disable-optimizations              \
+--disable-stripping                  \
+--enable-shared                      \
+--disable-static                     \
+--enable-pic                         \
 --disable-doc                        \
 --disable-htmlpages                  \
 --disable-manpages                   \
@@ -37,6 +43,7 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-parser=opus                 \
 --enable-decoder=png                 \
 --enable-encoder=png                 \
+--enable-parser=png                  \
 --enable-parser=mpegaudio            \
 --enable-decoder=mp3                 \
 --enable-decoder=mp3float            \
@@ -49,6 +56,9 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-libfdk-aac                  \
 --enable-encoder=libfdk_aac          \
 --enable-decoder=libfdk_aac          \
+--enable-libvpx                      \
+--enable-encoder=libvpx_vp8          \
+--enable-encoder=libvpx_vp9          \
 --enable-decoder=h264                \
 --enable-parser=h264                 \
 --enable-decoder=vp7                 \
@@ -68,6 +78,9 @@ export PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/usr/local/ssl/lib/pkgconfig:/usr/local/
 --enable-encoder=ssa                 \
 --enable-decoder=webvtt              \
 --enable-encoder=webvtt              \
+--enable-decoder=mjpeg               \
+--enable-encoder=mjpeg               \
+--enable-parser=mjpeg                \
 --extra-cflags=-I/usr/local/include  \
 --extra-ldflags=-L/usr/local/lib     \
 
