@@ -2397,6 +2397,8 @@ static int sdp_read_header(AVFormatContext *s)
             err = ffurl_open_whitelist(&rtsp_st->rtp_handle, url, AVIO_FLAG_READ,
                            &s->interrupt_callback, &opts, s->protocol_whitelist, s->protocol_blacklist, NULL);
 
+            av_log(s, AV_LOG_WARNING, "obsrtc.com: rtp url: %s\n", url);
+
             av_dict_free(&opts);
 
             if (err < 0) {
