@@ -810,11 +810,13 @@ int ff_rtsp_open_transport_ctx(AVFormatContext *s, RTSPStream *rtsp_st)
     AVStream *st = NULL;
     int reordering_queue_size = rt->reordering_queue_size;
     if (reordering_queue_size < 0) {
+        av_log(s, AV_LOG_WARNING,  "obsrtc.com: reordering_queue_size-1 : %d\n", reordering_queue_size);
         if (rt->lower_transport == RTSP_LOWER_TRANSPORT_TCP || !s->max_delay)
             reordering_queue_size = 0;
         else
             reordering_queue_size = RTP_REORDER_QUEUE_DEFAULT_SIZE;
     }
+    av_log(s, AV_LOG_WARNING,  "obsrtc.com: reordering_queue_size-2 : %d\n", reordering_queue_size);
 
     /* open the RTP context */
     if (rtsp_st->stream_index >= 0)
@@ -2027,8 +2029,12 @@ static int udp_read_packet(AVFormatContext *s, RTSPStream **prtsp_st,
     for (;;) {
         if (ff_check_interrupt(&s->interrupt_callback))
             return AVERROR_EXIT;
-        if (wait_end && wait_end - av_gettime_relative() < 0)
+        if (wait_end && wait_end - av_gettime_relative() < 0) {
+            int64_t ctime = av_gettime_relative();
+            int64_t cdiff = ctime - wait_end;
+            av_log(s, AV_LOG_WARNING, "obsrtc.com: udp_read_packet,wait_end: %ld, current:%ld diff: %ld \n",wait_end, ctime, cdiff);
             return AVERROR(EAGAIN);
+        }
         n = poll(p, rt->max_p, POLL_TIMEOUT_MS);
         if (n > 0) {
             int j = rt->rtsp_hd ? 1 : 0;
@@ -2054,9 +2060,12 @@ static int udp_read_packet(AVFormatContext *s, RTSPStream **prtsp_st,
             }
 #endif
         } else if (n == 0 && ++timeout_cnt >= MAX_TIMEOUTS) {
+            av_log(s, AV_LOG_WARNING, "obsrtc.com: udp_read_packet, etimeout\n");
             return AVERROR(ETIMEDOUT);
-        } else if (n < 0 && errno != EINTR)
+        } else if (n < 0 && errno != EINTR) {
+            av_log(s, AV_LOG_WARNING, "obsrtc.com: upd_read_packet, err\n");
             return AVERROR(errno);
+        }
     }
 }
 
@@ -2120,11 +2129,13 @@ static int read_packet(AVFormatContext *s,
 #endif
     case RTSP_LOWER_TRANSPORT_UDP:
     case RTSP_LOWER_TRANSPORT_UDP_MULTICAST:
+        //av_log(s, AV_LOG_WARNING, "obsrtc.com: rstp.c: read_packet-1\n");
         len = udp_read_packet(s, rtsp_st, rt->recvbuf, RECVBUF_SIZE, wait_end);
         if (len > 0 && (*rtsp_st)->transport_priv && rt->transport == RTSP_TRANSPORT_RTP)
             ff_rtp_check_and_send_back_rr((*rtsp_st)->transport_priv, (*rtsp_st)->rtp_handle, NULL, len);
         break;
     case RTSP_LOWER_TRANSPORT_CUSTOM:
+        av_log(s, AV_LOG_WARNING, "obsrtc.com: rstp.c: read_packet-2\n");
         if (first_queue_st && rt->transport == RTSP_TRANSPORT_RTP &&
             wait_end && wait_end < av_gettime_relative())
             len = AVERROR(EAGAIN);
@@ -2189,13 +2200,17 @@ redo:
                                !first_queue_time)) {
                 first_queue_time = queue_time;
                 first_queue_st   = rt->rtsp_streams[i];
+            } else {
+                //av_log(s, AV_LOG_WARNING, "obsrtc.com: queue_time : %ld, first_queue_time: %ld\n", queue_time, first_queue_time);
             }
         }
         if (first_queue_time) {
             wait_end = first_queue_time + s->max_delay;
+            //av_log(s, AV_LOG_WARNING, "obsrtc.com: ff_rtsp_fetch_packet-1 :wait_end: %ld, max_delay: %d\n", wait_end, s->max_delay);
         } else {
             wait_end = 0;
             first_queue_st = NULL;
+            //av_log(s, AV_LOG_WARNING, "obsrtc.com: ff_rtsp_fetch_packet-2 : wait_end: %ld, max_delay: %d\n", wait_end, s->max_delay);
         }
     }
 

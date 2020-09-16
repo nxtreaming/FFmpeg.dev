@@ -968,9 +968,11 @@ static int udp_read(URLContext *h, uint8_t *buf, int size)
                 return avail;
             } else if(s->circular_buffer_error){
                 int err = s->circular_buffer_error;
+                av_log(h, AV_LOG_WARNING, "obsrtc.com: udp_read() circular_buffer_error\n");
                 pthread_mutex_unlock(&s->mutex);
                 return err;
             } else if(nonblock) {
+                av_log(h, AV_LOG_WARNING, "obsrtc.com: udp_read() noblock-1\n");
                 pthread_mutex_unlock(&s->mutex);
                 return AVERROR(EAGAIN);
             }
@@ -985,6 +987,7 @@ static int udp_read(URLContext *h, uint8_t *buf, int size)
                     pthread_mutex_unlock(&s->mutex);
                     return AVERROR(err == ETIMEDOUT ? EAGAIN : err);
                 }
+                av_log(h, AV_LOG_WARNING, "obsrtc.com: udp_read() noblock-2\n");
                 nonblock = 1;
             }
         } while( 1);
