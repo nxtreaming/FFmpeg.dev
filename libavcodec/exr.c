@@ -201,7 +201,7 @@ static union av_intfloat32 exr_half2float(uint16_t hf)
             mantissa <<= 1;
             exp = HALF_FLOAT_MIN_BIASED_EXP_AS_SINGLE_FP_EXP;
             // check for leading 1 in denorm mantissa
-            while ((mantissa & (1 << 10))) {
+            while (!(mantissa & (1 << 10))) {
                 // for every leading 0, decrement single precision exponent by 1
                 // and shift half-float mantissa value to the left
                 mantissa <<= 1;
@@ -999,7 +999,7 @@ static int decode_block(AVCodecContext *avctx, void *tdata,
     uint64_t tile_x, tile_y, tile_level_x, tile_level_y;
     const uint8_t *src;
     int step = s->desc->flags & AV_PIX_FMT_FLAG_FLOAT ? 4 : 2 * s->desc->nb_components;
-    int bxmin, axmax, window_xoffset = 0;
+    int bxmin = 0, axmax = 0, window_xoffset = 0;
     int window_xmin, window_xmax, window_ymin, window_ymax;
     int data_xoffset, data_yoffset, data_window_offset, xsize, ysize;
     int i, x, buf_size = s->buf_size;
